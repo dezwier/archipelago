@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+
+[[services]]
+name = "api"
+root = "api"
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+
+[[services]]
+name = "web"
+root = "app"
+startCommand = "dhttpd --path build/web --port $PORT"
+
