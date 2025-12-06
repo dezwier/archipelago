@@ -26,7 +26,14 @@ async def startup_event():
 
 @app.get("/")
 async def root():
-    return {"message": "Archipelago API", "status": "running"}
+    return {
+        "message": "Archipelago API",
+        "status": "running",
+        "docs": {
+            "swagger": "/docs",
+            "redoc": "/redoc"
+        }
+    }
 
 
 @app.get("/health")
