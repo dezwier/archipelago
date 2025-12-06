@@ -11,6 +11,9 @@ app/.pub/
 api/__pycache__/
 api/venv/
 api/*.pyc
+api/.env
+.env
+.env.local
 
 # System
 .DS_Store
