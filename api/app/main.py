@@ -6,6 +6,9 @@ from app.core.database import init_db
 # Import models to register them with SQLModel
 from app.models import models  # noqa: F401
 
+# Import routers
+from app.api.v1.endpoints import auth, languages
+
 app = FastAPI(title="Archipelago API", version="1.0.0")
 
 # CORS middleware
@@ -39,4 +42,9 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+# Include routers
+app.include_router(auth.router, prefix=settings.api_v1_prefix)
+app.include_router(languages.router, prefix=settings.api_v1_prefix)
 

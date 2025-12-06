@@ -8,13 +8,15 @@ app/.pub-cache/
 app/.pub/
 
 # Python
-api/__pycache__/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
 api/venv/
-api/*.pyc
 api/.env
 .env
 .env.local
 
 # System
 .DS_Store
-

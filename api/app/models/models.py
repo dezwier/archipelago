@@ -2,6 +2,7 @@ from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+import hashlib
 
 
 class UserCardStatus(str, Enum):
@@ -77,6 +78,9 @@ class User(SQLModel, table=True):
     __tablename__ = "users"
     
     id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(unique=True, index=True)  # Unique username
+    email: str = Field(unique=True, index=True)  # Email address
+    password: str  # Hashed password
     lang_native: str  # Native language code
     lang_learning: str  # Learning language code
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -84,6 +88,15 @@ class User(SQLModel, table=True):
     # Relationships
     user_cards: List["UserCard"] = Relationship(back_populates="user")
     practices: List["UserPractice"] = Relationship(back_populates="user")
+    
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Simple password hashing using SHA256."""
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    def verify_password(self, password: str) -> bool:
+        """Verify a password against the stored hash."""
+        return self.password == self.hash_password(password)
 
 
 class UserCard(SQLModel, table=True):
