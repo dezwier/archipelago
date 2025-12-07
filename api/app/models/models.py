@@ -15,7 +15,7 @@ class UserCardStatus(str, Enum):
 
 class Topic(SQLModel, table=True):
     """Topic table for grouping concepts."""
-    __tablename__ = "topics"
+    __tablename__ = "topic"
     
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -27,15 +27,14 @@ class Topic(SQLModel, table=True):
 
 class Concept(SQLModel, table=True):
     """Concept table - represents a concept that can have multiple language cards."""
-    __tablename__ = "concepts"
+    __tablename__ = "concept"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    internal_name: str
     image_path_1: Optional[str] = None
     image_path_2: Optional[str] = None
     image_path_3: Optional[str] = None
     image_path_4: Optional[str] = None
-    topic_id: Optional[int] = Field(default=None, foreign_key="topics.id")
+    topic_id: Optional[int] = Field(default=None, foreign_key="topic.id")
     
     # Relationships
     topic: Optional[Topic] = Relationship(back_populates="concepts")
@@ -58,7 +57,7 @@ class Card(SQLModel, table=True):
     __tablename__ = "cards"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    concept_id: int = Field(foreign_key="concepts.id")
+    concept_id: int = Field(foreign_key="concept.id")
     language_code: str = Field(foreign_key="languages.code", max_length=2)
     translation: str  # The word in the target language
     description: str  # Description in the target language

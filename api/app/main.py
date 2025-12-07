@@ -7,7 +7,7 @@ from app.core.database import init_db
 from app.models import models  # noqa: F401
 
 # Import routers
-from app.api.v1.endpoints import auth, languages
+from app.api.v1.endpoints import auth, languages, flashcards
 
 app = FastAPI(title="Archipelago API", version="1.0.0")
 
@@ -47,4 +47,5 @@ async def health():
 # Include routers
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
 app.include_router(languages.router, prefix=settings.api_v1_prefix)
+app.include_router(flashcards.router, prefix=settings.api_v1_prefix)
 

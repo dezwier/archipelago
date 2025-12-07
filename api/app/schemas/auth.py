@@ -14,6 +14,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., description="Email address")
     password: str = Field(..., min_length=6, description="Password (minimum 6 characters)")
     native_language: str = Field(..., max_length=2, description="Native language code (e.g., 'en', 'fr')")
+    learning_language: Optional[str] = Field(None, max_length=2, description="Learning language code (e.g., 'en', 'fr')")
 
 
 class UserResponse(BaseModel):
@@ -27,6 +28,12 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UpdateUserLanguagesRequest(BaseModel):
+    """Update user languages request schema."""
+    lang_native: Optional[str] = Field(None, max_length=2, description="Native language code (e.g., 'en', 'fr')")
+    lang_learning: Optional[str] = Field(None, max_length=2, description="Learning language code (e.g., 'en', 'fr')")
 
 
 class AuthResponse(BaseModel):

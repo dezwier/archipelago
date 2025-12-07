@@ -1,47 +1,122 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../data/auth_service.dart';
 import '../data/language_service.dart';
 import '../domain/user.dart';
 import '../domain/language.dart';
+import '../../../utils/language_emoji.dart';
+import 'register_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final VoidCallback? onLogout;
+  final Function(Future<void> Function())? onLogoutCallbackReady;
+  final Function(bool)? onLoginStateChanged;
+  final Function(Function())? onRefreshCallbackReady;
+  
+  const ProfileScreen({
+    super.key, 
+    this.onLogout, 
+    this.onLogoutCallbackReady,
+    this.onLoginStateChanged,
+    this.onRefreshCallbackReady,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  bool _isLoginMode = true;
   bool _isLoading = false;
+  bool _isInitializing = true; // Track if we're still loading saved user
   User? _currentUser;
   List<Language> _languages = [];
-  Language? _selectedLanguage;
 
   // Login form controllers
   final _loginUsernameController = TextEditingController();
   final _loginPasswordController = TextEditingController();
 
-  // Register form controllers
-  final _registerUsernameController = TextEditingController();
-  final _registerEmailController = TextEditingController();
-  final _registerPasswordController = TextEditingController();
-  final _registerConfirmPasswordController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
+    // Load saved user data
+    _loadSavedUser();
+    // Load languages
     _loadLanguages();
+    // Register logout callback with parent
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onLogoutCallbackReady?.call(logout);
+      widget.onRefreshCallbackReady?.call(() => _loadSavedUser(force: true));
+    });
   }
 
   Future<void> _loadLanguages() async {
     final languages = await LanguageService.getLanguages();
     setState(() {
       _languages = languages;
-      if (languages.isNotEmpty) {
-        _selectedLanguage = languages.first;
-      }
     });
+  }
+
+  String _getLanguageName(String code) {
+    final language = _languages.firstWhere(
+      (lang) => lang.code == code,
+      orElse: () => Language(code: code, name: code.toUpperCase()),
+    );
+    return language.name;
+  }
+
+  Future<void> _loadSavedUser({bool force = false}) async {
+    // Don't reload if user is already loaded (unless forced)
+    if (_currentUser != null && !_isInitializing && !force) {
+      return;
+    }
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString('current_user');
+      if (userJson != null) {
+        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+        if (mounted) {
+          setState(() {
+            _currentUser = User.fromJson(userMap);
+            _isInitializing = false;
+          });
+          widget.onLoginStateChanged?.call(true);
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isInitializing = false;
+          });
+          widget.onLoginStateChanged?.call(false);
+        }
+      }
+    } catch (e) {
+      // If loading fails, just continue without user
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveUser(User user) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('current_user', jsonEncode(user.toJson()));
+    } catch (e) {
+      // If saving fails, continue anyway
+    }
+  }
+
+  Future<void> _clearSavedUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('current_user');
+    } catch (e) {
+      // If clearing fails, continue anyway
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -64,69 +139,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     if (result['success'] == true) {
+      final user = result['user'] as User;
       setState(() {
-        _currentUser = result['user'] as User;
-        _isLoginMode = false; // Switch to profile view
+        _currentUser = user;
       });
+      await _saveUser(user);
+      widget.onLoginStateChanged?.call(true);
       _showSuccess(result['message'] as String);
     } else {
       _showError(result['message'] as String);
     }
   }
 
-  Future<void> _handleRegister() async {
-    final username = _registerUsernameController.text.trim();
-    final email = _registerEmailController.text.trim();
-    final password = _registerPasswordController.text;
-    final confirmPassword = _registerConfirmPasswordController.text;
+  void _showRegisterScreen() {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return RegisterScreen(
+          onRegisterSuccess: (user) async {
+            setState(() {
+              _currentUser = user;
+            });
+            await _saveUser(user);
+            widget.onLoginStateChanged?.call(true);
+          },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        const begin = Offset(1.0, 0.0);
+        const end = Offset.zero;
+        const curve = Curves.easeInOut;
 
-    if (username.isEmpty ||
-        email.isEmpty ||
-        password.isEmpty ||
-        confirmPassword.isEmpty) {
-      _showError('Please fill in all fields');
-      return;
-    }
+        var tween = Tween(begin: begin, end: end).chain(
+          CurveTween(curve: curve),
+        );
 
-    if (password != confirmPassword) {
-      _showError('Passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      _showError('Password must be at least 6 characters');
-      return;
-    }
-
-    if (_selectedLanguage == null) {
-      _showError('Please select a native language');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    final result = await AuthService.register(
-      username,
-      email,
-      password,
-      _selectedLanguage!.code,
+        return Align(
+          alignment: Alignment.centerRight,
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width,
+            child: SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            ),
+          ),
+        );
+      },
     );
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (result['success'] == true) {
-      setState(() {
-        _currentUser = result['user'] as User;
-        _isLoginMode = false; // Switch to profile view
-      });
-      _showSuccess(result['message'] as String);
-    } else {
-      _showError(result['message'] as String);
-    }
   }
 
   void _showError(String message) {
@@ -147,71 +210,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _logout() {
+  Future<void> logout() async {
+    if (!mounted) return;
+    
     setState(() {
       _currentUser = null;
-      _isLoginMode = true;
       _loginUsernameController.clear();
       _loginPasswordController.clear();
-      _registerUsernameController.clear();
-      _registerEmailController.clear();
-      _registerPasswordController.clear();
-      _registerConfirmPasswordController.clear();
     });
+    await _clearSavedUser();
+    widget.onLoginStateChanged?.call(false);
+    
+    if (mounted) {
+      widget.onLogout?.call();
+    }
   }
 
   void _fillTestLoginData(int userNumber) {
     final testUsers = [
-      {'username': 'testuser1', 'password': 'password123'},
+      {'username': 'dezwier', 'password': 'password123'},
       {'username': 'testuser2', 'password': 'password123'},
       {'username': 'testuser3', 'password': 'password123'},
     ];
-    
-    if (userNumber >= 1 && userNumber <= 3) {
-      final user = testUsers[userNumber - 1];
-      _loginUsernameController.text = user['username']!;
-      _loginPasswordController.text = user['password']!;
-    }
-  }
 
-  void _fillTestRegisterData(int userNumber) {
-    final testUsers = [
-      {
-        'username': 'testuser1_new',
-        'email': 'testuser1@example.com',
-        'password': 'password123',
-        'language': 'en',
-      },
-      {
-        'username': 'testuser2_new',
-        'email': 'testuser2@example.com',
-        'password': 'password123',
-        'language': 'fr',
-      },
-      {
-        'username': 'testuser3_new',
-        'email': 'testuser3@example.com',
-        'password': 'password123',
-        'language': 'es',
-      },
-    ];
-    
     if (userNumber >= 1 && userNumber <= 3) {
       final user = testUsers[userNumber - 1];
-      _registerUsernameController.text = user['username']!;
-      _registerEmailController.text = user['email']!;
-      _registerPasswordController.text = user['password']!;
-      _registerConfirmPasswordController.text = user['password']!;
-      
-      // Set language
-      final langCode = user['language']!;
-      final language = _languages.firstWhere(
-        (lang) => lang.code == langCode,
-        orElse: () => _languages.isNotEmpty ? _languages.first : Language(code: 'en', name: 'English'),
+      // Use value setter which is more explicit and persists across rebuilds (same as register screen)
+      final username = user['username']!;
+      final password = user['password']!;
+      _loginUsernameController.value = TextEditingValue(
+        text: username,
+        selection: TextSelection.collapsed(offset: username.length),
       );
-      setState(() {
-        _selectedLanguage = language;
-      });
+      _loginPasswordController.value = TextEditingValue(
+        text: password,
+        selection: TextSelection.collapsed(offset: password.length),
+      );
     }
   }
 
@@ -219,15 +253,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     _loginUsernameController.dispose();
     _loginPasswordController.dispose();
-    _registerUsernameController.dispose();
-    _registerEmailController.dispose();
-    _registerPasswordController.dispose();
-    _registerConfirmPasswordController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Show loading while checking for saved user
+    if (_isInitializing) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
     // If user is logged in, show profile
     if (_currentUser != null) {
       return _buildProfileView();
@@ -239,26 +276,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfileView() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.all(12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Profile',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              IconButton(
-                icon: const Icon(Icons.logout),
-                onPressed: _logout,
-                tooltip: 'Logout',
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -292,10 +314,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const Divider(height: 32),
-                  _buildProfileItem('Native Language', _currentUser!.langNative),
+                  _buildLanguageProfileItem('Native Language', _currentUser!.langNative),
                   if (_currentUser!.langLearning != null &&
                       _currentUser!.langLearning!.isNotEmpty)
-                    _buildProfileItem(
+                    _buildLanguageProfileItem(
                         'Learning Language', _currentUser!.langLearning!),
                   _buildProfileItem('Member since',
                       _formatDate(_currentUser!.createdAt)),
@@ -315,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 160,
             child: Text(
               label,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -327,6 +349,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text(
               value,
               style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLanguageProfileItem(String label, String languageCode) {
+    final languageName = _getLanguageName(languageCode);
+    final emoji = LanguageEmoji.getEmoji(languageCode);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 160,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+          Expanded(
+            child: Row(
+              children: [
+                Text(
+                  emoji,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  languageName,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
             ),
           ),
         ],
@@ -367,16 +426,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
             // Title
             Text(
-              _isLoginMode ? 'Welcome Back' : 'Create Account',
+              'Welcome Back',
               style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
             ),
             const SizedBox(height: 6),
             Text(
-              _isLoginMode
-                  ? 'Sign in to continue your learning journey'
-                  : 'Start learning languages today',
+              'Sign in to continue your learning journey',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   ),
@@ -395,37 +452,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
-                child: _isLoginMode ? _buildLoginForm() : _buildRegisterForm(),
+                child: _buildLoginForm(),
               ),
             ),
             const SizedBox(height: 20),
-            // Toggle button
+            // Register button
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  _isLoginMode
-                      ? 'Don\'t have an account? '
-                      : 'Already have an account? ',
+                  'Don\'t have an account? ',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                       ),
                 ),
                 TextButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () {
-                          setState(() {
-                            _isLoginMode = !_isLoginMode;
-                          });
-                        },
+                  onPressed: _isLoading ? null : _showRegisterScreen,
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: Text(
-                    _isLoginMode ? 'Register' : 'Login',
+                    'Register',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: Theme.of(context).colorScheme.primary,
@@ -522,7 +571,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 16),
         // Dev test user buttons
         Text(
-          'Dev: Test Users',
+          'Test users for development',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
               ),
@@ -565,227 +614,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Expanded(
               child: OutlinedButton(
                 onPressed: _isLoading ? null : () => _fillTestLoginData(3),
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: Text(
-                  'Test 3',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRegisterForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _registerUsernameController,
-          decoration: InputDecoration(
-            labelText: 'Username',
-            hintText: 'Choose a username',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            filled: true,
-            fillColor: Theme.of(context).colorScheme.surface,
-            prefixIcon: Icon(
-              Icons.person_outline,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          ),
-          enabled: !_isLoading,
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _registerEmailController,
-          decoration: InputDecoration(
-            labelText: 'Email',
-            hintText: 'Enter your email address',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            filled: true,
-            fillColor: Theme.of(context).colorScheme.surface,
-            prefixIcon: Icon(
-              Icons.email_outlined,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          ),
-          keyboardType: TextInputType.emailAddress,
-          enabled: !_isLoading,
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _registerPasswordController,
-          decoration: InputDecoration(
-            labelText: 'Password',
-            hintText: 'Create a password',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            filled: true,
-            fillColor: Theme.of(context).colorScheme.surface,
-            prefixIcon: Icon(
-              Icons.lock_outline,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            helperText: 'Minimum 6 characters',
-            helperMaxLines: 1,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          ),
-          obscureText: true,
-          enabled: !_isLoading,
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _registerConfirmPasswordController,
-          decoration: InputDecoration(
-            labelText: 'Confirm Password',
-            hintText: 'Re-enter your password',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            filled: true,
-            fillColor: Theme.of(context).colorScheme.surface,
-            prefixIcon: Icon(
-              Icons.lock_outline,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          ),
-          obscureText: true,
-          enabled: !_isLoading,
-          style: Theme.of(context).textTheme.bodyLarge,
-          onSubmitted: (_) => _handleRegister(),
-        ),
-        const SizedBox(height: 16),
-        DropdownButtonFormField<Language>(
-          value: _selectedLanguage,
-          decoration: InputDecoration(
-            labelText: 'Native Language',
-            hintText: 'Select your native language',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            filled: true,
-            fillColor: Theme.of(context).colorScheme.surface,
-            prefixIcon: Icon(
-              Icons.language_outlined,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          ),
-          items: _languages.map((language) {
-            return DropdownMenuItem<Language>(
-              value: language,
-              child: Text(
-                language.name,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-            );
-          }).toList(),
-          onChanged: _isLoading
-              ? null
-              : (Language? value) {
-                  setState(() {
-                    _selectedLanguage = value;
-                  });
-                },
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
-        const SizedBox(height: 24),
-        SizedBox(
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _handleRegister,
-            style: ElevatedButton.styleFrom(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            ),
-            child: _isLoading
-                ? SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Theme.of(context).colorScheme.onPrimary,
-                      ),
-                    ),
-                  )
-                : Text(
-                    'Create Account',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                        ),
-                  ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Dev test user buttons
-        Text(
-          'Dev: Test Users',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _isLoading ? null : () => _fillTestRegisterData(1),
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: Text(
-                  'Test 1',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _isLoading ? null : () => _fillTestRegisterData(2),
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: Text(
-                  'Test 2',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _isLoading ? null : () => _fillTestRegisterData(3),
                 style: OutlinedButton.styleFrom(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from app.core.database import get_session
 from app.models.models import User, Language
-from app.schemas.auth import LoginRequest, RegisterRequest, AuthResponse, UserResponse
+from app.schemas.auth import LoginRequest, RegisterRequest, AuthResponse, UserResponse, UpdateUserLanguagesRequest
 from datetime import datetime
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -69,12 +69,22 @@ async def register(
         )
     
     # Verify that the native language exists
-    language = session.exec(select(Language).where(Language.code == register_data.native_language)).first()
-    if not language:
+    native_lang = session.exec(select(Language).where(Language.code == register_data.native_language)).first()
+    if not native_lang:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid language code: {register_data.native_language}"
         )
+    
+    # Verify learning language if provided
+    learning_lang_code = register_data.learning_language or ""
+    if learning_lang_code:
+        learning_lang = session.exec(select(Language).where(Language.code == learning_lang_code)).first()
+        if not learning_lang:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid language code: {learning_lang_code}"
+            )
     
     # Create new user
     hashed_password = User.hash_password(register_data.password)
@@ -83,7 +93,7 @@ async def register(
         email=register_data.email,
         password=hashed_password,
         lang_native=register_data.native_language,
-        lang_learning=""  # Can be set later
+        lang_learning=learning_lang_code
     )
     
     session.add(new_user)
@@ -100,5 +110,58 @@ async def register(
             created_at=new_user.created_at.isoformat()
         ),
         message="Registration successful"
+    )
+
+
+@router.patch("/update-languages", response_model=AuthResponse)
+async def update_user_languages(
+    user_id: int,
+    update_data: UpdateUserLanguagesRequest,
+    session: Session = Depends(get_session)
+):
+    """Update user's native and/or learning language."""
+    # Find user
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Validate and update native language if provided
+    if update_data.lang_native is not None:
+        language = session.exec(select(Language).where(Language.code == update_data.lang_native)).first()
+        if not language:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid language code: {update_data.lang_native}"
+            )
+        user.lang_native = update_data.lang_native
+    
+    # Validate and update learning language if provided
+    if update_data.lang_learning is not None:
+        if update_data.lang_learning:  # Only validate if not empty string
+            language = session.exec(select(Language).where(Language.code == update_data.lang_learning)).first()
+            if not language:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid language code: {update_data.lang_learning}"
+                )
+        user.lang_learning = update_data.lang_learning if update_data.lang_learning else ""
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    return AuthResponse(
+        user=UserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            lang_native=user.lang_native,
+            lang_learning=user.lang_learning,
+            created_at=user.created_at.isoformat()
+        ),
+        message="Languages updated successfully"
     )
 
