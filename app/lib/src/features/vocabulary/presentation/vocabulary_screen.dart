@@ -20,21 +20,54 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
   User? _currentUser;
   List<PairedVocabularyItem> _pairedItems = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   String? _errorMessage;
   String? _sourceLanguageCode;
   String? _targetLanguageCode;
+  
+  // Pagination state
+  int _currentPage = 1;
+  int _totalItems = 0;
+  bool _hasNextPage = false;
+  static const int _pageSize = 20;
+  
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadUserAndVocabulary();
   }
 
-  Future<void> _loadUserAndVocabulary() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= 
+        _scrollController.position.maxScrollExtent * 0.8) {
+      // Load more when 80% scrolled
+      _loadMoreVocabulary();
+    }
+  }
+
+  Future<void> _loadUserAndVocabulary({bool reset = false}) async {
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+        _currentPage = 1;
+        _pairedItems = [];
+      });
+    } else {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       // Load user data
@@ -53,6 +86,8 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
       if (_currentUser != null) {
         final result = await VocabularyService.getVocabulary(
           userId: _currentUser!.id,
+          page: 1,
+          pageSize: _pageSize,
         );
 
         if (result['success'] == true) {
@@ -63,6 +98,9 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
           
           setState(() {
             _pairedItems = items;
+            _currentPage = result['page'] as int;
+            _totalItems = result['total'] as int;
+            _hasNextPage = result['has_next'] as bool;
             _isLoading = false;
           });
         } else {
@@ -82,6 +120,64 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
         _errorMessage = 'Error loading vocabulary: ${e.toString()}';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadMoreVocabulary() async {
+    if (_isLoadingMore || !_hasNextPage || _currentUser == null) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final nextPage = _currentPage + 1;
+      final result = await VocabularyService.getVocabulary(
+        userId: _currentUser!.id,
+        page: nextPage,
+        pageSize: _pageSize,
+      );
+
+      if (result['success'] == true) {
+        final List<dynamic> itemsData = result['items'] as List<dynamic>;
+        final newItems = itemsData
+            .map((json) => PairedVocabularyItem.fromJson(json as Map<String, dynamic>))
+            .toList();
+        
+        setState(() {
+          _pairedItems.addAll(newItems);
+          _currentPage = result['page'] as int;
+          _totalItems = result['total'] as int;
+          _hasNextPage = result['has_next'] as bool;
+          _isLoadingMore = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingMore = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] as String? ?? 'Failed to load more vocabulary'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingMore = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading more vocabulary: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
 
@@ -149,8 +245,9 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: _loadUserAndVocabulary,
+        onRefresh: () => _loadUserAndVocabulary(reset: true),
         child: CustomScrollView(
+          controller: _scrollController,
           slivers: [
             // Header
             SliverToBoxAdapter(
@@ -161,7 +258,7 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
                   children: [
                     const SizedBox(height: 8),
                     Text(
-                      '${_pairedItems.length} phrases',
+                      '${_totalItems > 0 ? _totalItems : _pairedItems.length} phrases',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
@@ -208,6 +305,16 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ],
+                  ),
+                ),
+              ),
+            // Loading more indicator
+            if (_isLoadingMore)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(
+                    child: CircularProgressIndicator(),
                   ),
                 ),
               ),
@@ -501,7 +608,7 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
       }
 
       // Reload vocabulary to show updated data
-      await _loadUserAndVocabulary();
+      await _loadUserAndVocabulary(reset: true);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -556,7 +663,7 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
 
         if (result['success'] == true) {
           // Reload vocabulary to reflect deletion
-          await _loadUserAndVocabulary();
+          await _loadUserAndVocabulary(reset: true);
           
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

@@ -3,16 +3,25 @@ import 'package:http/http.dart' as http;
 import '../../../constants/api_config.dart';
 
 class VocabularyService {
-  /// Get all vocabulary cards for a user's source and target languages, paired by concept_id.
+  /// Get vocabulary cards for a user's source and target languages, paired by concept_id.
   /// 
   /// Returns a map with:
   /// - 'success': bool
   /// - 'items': List<Map<String, dynamic>> (if successful) - paired vocabulary items
+  /// - 'total': int (if successful) - total number of items
+  /// - 'page': int (if successful) - current page number
+  /// - 'page_size': int (if successful) - items per page
+  /// - 'has_next': bool (if successful) - whether there are more pages
+  /// - 'has_previous': bool (if successful) - whether there are previous pages
   /// - 'message': String (if error)
   static Future<Map<String, dynamic>> getVocabulary({
     required int userId,
+    int page = 1,
+    int pageSize = 20,
   }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/vocabulary?user_id=$userId');
+    final url = Uri.parse(
+      '${ApiConfig.apiBaseUrl}/flashcards/vocabulary?user_id=$userId&page=$page&page_size=$pageSize'
+    );
     
     try {
       final response = await http.get(
@@ -26,6 +35,11 @@ class VocabularyService {
         return {
           'success': true,
           'items': items,
+          'total': data['total'] as int,
+          'page': data['page'] as int,
+          'page_size': data['page_size'] as int,
+          'has_next': data['has_next'] as bool,
+          'has_previous': data['has_previous'] as bool,
         };
       } else {
         final error = jsonDecode(response.body) as Map<String, dynamic>;

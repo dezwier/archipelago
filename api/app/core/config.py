@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # Google Cloud Translation API
     google_translate_api_key: str = ""
     
+    # Google Generative AI (Gemini) API
+    google_gemini_api_key: str = ""
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -58,9 +61,11 @@ class Settings(BaseSettings):
         # Ensure we read DATABASE_URL from environment (Railway provides it uppercase)
         if not kwargs.get("database_url"):
             kwargs["database_url"] = os.getenv("DATABASE_URL", "")
-        # Read Google API key from environment (check both env var and .env file)
+        # Read Google API keys from environment (check both env var and .env file)
         if not kwargs.get("google_translate_api_key"):
             kwargs["google_translate_api_key"] = os.getenv("GOOGLE_TRANSLATE_API_KEY", "")
+        if not kwargs.get("google_gemini_api_key"):
+            kwargs["google_gemini_api_key"] = os.getenv("GOOGLE_GEMINI_API_KEY", "")
         super().__init__(**kwargs)
 
 
@@ -80,3 +85,7 @@ if not settings.google_translate_api_key:
     # Also try uppercase version (some systems use uppercase env vars)
     if not settings.google_translate_api_key:
         settings.google_translate_api_key = os.getenv("GOOGLE_TRANSLATE_API_KEY", "")
+
+# Fallback: if google_gemini_api_key is still empty, try reading directly from environment
+if not settings.google_gemini_api_key:
+    settings.google_gemini_api_key = os.getenv("GOOGLE_GEMINI_API_KEY", "")

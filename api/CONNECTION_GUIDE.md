@@ -59,3 +59,9 @@ Visit `http://localhost:8000/health` to verify it's running.
 - Railway injects this automatically when services are connected
 - For local dev, use a `.env` file (make sure it's in `.gitignore`)
 
+## API Keys
+
+For Google services (Translation and Gemini), see:
+- Translation API: Set `GOOGLE_TRANSLATE_API_KEY` in `.env` or Railway variables
+- Gemini API: See [GEMINI_API_KEY_GUIDE.md](./GEMINI_API_KEY_GUIDE.md) for detailed instructions
+

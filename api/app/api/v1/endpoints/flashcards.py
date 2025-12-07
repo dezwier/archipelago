@@ -14,6 +14,7 @@ from app.schemas.flashcard import (
     UpdateCardRequest,
 )
 from app.services.translation_service import translation_service
+from app.services.description_service import description_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -206,8 +207,65 @@ async def generate_flashcard(
     if failed_translations:
         logger.warning(f"Summary: Failed to translate for {len(failed_translations)} language(s): {sorted(failed_translations)}")
     
-    # Get all cards (either existing or newly created) for response
+    # Step 5: Generate descriptions ONLY for new cards that were just created
+    logger.info("Step 5: Generating descriptions for new cards only")
     all_cards_list = existing_cards + new_cards
+    
+    # Only generate descriptions for new cards (not existing ones)
+    if new_cards:
+        languages_needing_descriptions = {card.language_code for card in new_cards}
+        logger.info(f"Step 5: Generating descriptions for {len(new_cards)} new card(s) in {len(languages_needing_descriptions)} language(s)")
+        
+        try:
+            # Use the user's input phrase (concept_text) for description generation
+            # This is the original phrase in whatever language the user entered
+            description_result = description_service.generate_descriptions_for_multiple_languages(
+                text=concept_text,  # Use user's input phrase
+                target_languages=list(languages_needing_descriptions),
+                source_language=source_lang_code,
+                prefer_english=False  # During generation, use the input phrase directly
+            )
+            
+            generated_descriptions = description_result['descriptions']
+            failed_descriptions = description_result['failed_languages']
+            
+            logger.info(f"Step 5 summary: successful: {len(generated_descriptions)}, failed: {len(failed_descriptions)}")
+            
+            # Update new cards with generated descriptions
+            cards_updated = 0
+            for card in new_cards:
+                lang_code = card.language_code
+                if lang_code in generated_descriptions:
+                    description_text = generated_descriptions[lang_code].strip()
+                    if description_text:  # Only update if description is not empty
+                        card.description = description_text
+                        session.add(card)
+                        cards_updated += 1
+                        logger.info(f"Updated description for new card {card.id} (language: {lang_code}): '{card.description[:50]}...'")
+                    else:
+                        logger.warning(f"Generated description is empty for new card {card.id} (language: {lang_code})")
+                else:
+                    logger.warning(f"No description generated for new card {card.id} (language: {lang_code})")
+            
+            # Commit description updates
+            if cards_updated > 0:
+                session.commit()
+                # Refresh all new cards to get updated descriptions
+                for card in new_cards:
+                    session.refresh(card)
+                logger.info(f"Step 5: Successfully updated {cards_updated} new card(s) with descriptions")
+            else:
+                logger.warning("Step 5: No descriptions were generated for any new cards")
+            
+            if failed_descriptions:
+                logger.warning(f"Step 5: Failed to generate descriptions for {len(failed_descriptions)} language(s): {sorted(failed_descriptions)}")
+        except Exception as e:
+            # Don't fail the entire flashcard creation if description generation fails
+            logger.error(f"Step 5: Description generation failed completely: {str(e)}. Continuing without descriptions.")
+            import traceback
+            logger.error(traceback.format_exc())
+    else:
+        logger.info("Step 5: No new cards to generate descriptions for")
     source_card = next((card for card in all_cards_list if card.language_code == source_lang_code), None)
     target_card = next((card for card in all_cards_list if card.language_code == target_lang_code), None)
     
@@ -294,12 +352,31 @@ async def generate_flashcard(
 @router.get("/vocabulary", response_model=VocabularyResponse)
 async def get_vocabulary(
     user_id: int,
+    page: int = 1,
+    page_size: int = 20,
     session: Session = Depends(get_session)
 ):
     """
-    Get all cards for a user's source and target languages, paired by concept_id.
-    Returns paired vocabulary items that match the user's native and learning languages.
+    Get cards for a user's source and target languages, paired by concept_id.
+    Returns paginated vocabulary items that match the user's native and learning languages.
+    
+    Args:
+        user_id: The user ID
+        page: Page number (1-indexed, default: 1)
+        page_size: Number of items per page (default: 20)
     """
+    # Validate pagination parameters
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Page must be >= 1"
+        )
+    if page_size < 1 or page_size > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Page size must be between 1 and 100"
+        )
+    
     # Get user
     user = session.get(User, user_id)
     if not user:
@@ -313,21 +390,60 @@ async def get_vocabulary(
     if user.lang_learning:
         language_codes.append(user.lang_learning)
     
-    # Query cards for these languages
-    cards = session.exec(
+    # Get all cards for these languages
+    all_cards = session.exec(
         select(Card).where(Card.language_code.in_(language_codes))
     ).all()
     
     # Group cards by concept_id
-    concept_cards = {}
-    for card in cards:
-        if card.concept_id not in concept_cards:
-            concept_cards[card.concept_id] = {}
-        concept_cards[card.concept_id][card.language_code] = card
+    concept_cards_map = {}
+    for card in all_cards:
+        if card.concept_id not in concept_cards_map:
+            concept_cards_map[card.concept_id] = {}
+        concept_cards_map[card.concept_id][card.language_code] = card
     
-    # Build paired vocabulary items
+    # Get all concept_ids and sort by target language translation (alphabetically)
+    concept_sort_keys = []
+    for concept_id, lang_cards in concept_cards_map.items():
+        # Get target card for sorting (prefer target language, fallback to source)
+        target_card = lang_cards.get(user.lang_learning) if user.lang_learning else None
+        source_card = lang_cards.get(user.lang_native)
+        
+        # Use target language translation for sorting, fallback to source if no target
+        sort_text = ""
+        if target_card:
+            sort_text = target_card.translation.lower().strip()
+        elif source_card:
+            sort_text = source_card.translation.lower().strip()
+        
+        # Only include concepts that have at least one card
+        if sort_text:
+            concept_sort_keys.append((sort_text, concept_id))
+    
+    # Sort alphabetically by target language translation (case-insensitive)
+    concept_sort_keys.sort(key=lambda x: x[0])
+    all_concept_ids = [concept_id for _, concept_id in concept_sort_keys]
+    total = len(all_concept_ids)
+    
+    # Calculate pagination
+    offset = (page - 1) * page_size
+    paginated_concept_ids = all_concept_ids[offset:offset + page_size]
+    
+    # If no concept_ids in this page, return empty result
+    if not paginated_concept_ids:
+        return VocabularyResponse(
+            items=[],
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_next=False,
+            has_previous=page > 1
+        )
+    
+    # Build paired vocabulary items (maintain alphabetical order)
     paired_items = []
-    for concept_id, lang_cards in concept_cards.items():
+    for concept_id in paginated_concept_ids:
+        lang_cards = concept_cards_map.get(concept_id, {})
         source_card = lang_cards.get(user.lang_native)
         target_card = lang_cards.get(user.lang_learning) if user.lang_learning else None
         
@@ -361,10 +477,18 @@ async def get_vocabulary(
                 )
             )
     
-    # Sort by concept_id for consistent ordering
-    paired_items.sort(key=lambda x: x.concept_id)
+    # Calculate pagination metadata
+    has_next = offset + page_size < total
+    has_previous = page > 1
     
-    return VocabularyResponse(items=paired_items)
+    return VocabularyResponse(
+        items=paired_items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_next=has_next,
+        has_previous=has_previous
+    )
 
 
 @router.put("/cards/{card_id}", response_model=CardResponse)

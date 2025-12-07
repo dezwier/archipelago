@@ -135,7 +135,7 @@ class _GenerateFlashcardsScreenState extends State<GenerateFlashcardsScreen> {
               children: [
               const SizedBox(height: 8),
                   Text(
-                    'Source Language',
+                    'Concept Information',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -155,8 +155,8 @@ class _GenerateFlashcardsScreenState extends State<GenerateFlashcardsScreen> {
                   _conceptFocusNode.requestFocus();
                 },
                 decoration: InputDecoration(
-                  labelText: 'Concept',
-                  hintText: 'Enter a word or phrase',
+                  labelText: 'Translation',
+                  hintText: 'Enter a word or phrase in your source language',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -166,7 +166,7 @@ class _GenerateFlashcardsScreenState extends State<GenerateFlashcardsScreen> {
                 maxLines: 10,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a concept';
+                    return 'Please enter a translation';
                   }
                   return null;
                 },
@@ -187,7 +187,7 @@ class _GenerateFlashcardsScreenState extends State<GenerateFlashcardsScreen> {
                 },
                 decoration: InputDecoration(
                   labelText: 'Topic Island',
-                  hintText: 'Enter what the concept is about',
+                  hintText: 'Enter what the translation is about',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

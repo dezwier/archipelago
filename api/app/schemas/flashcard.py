@@ -72,6 +72,11 @@ class PairedVocabularyItem(BaseModel):
 class VocabularyResponse(BaseModel):
     """Response schema for vocabulary endpoint."""
     items: List[PairedVocabularyItem]
+    total: int = Field(..., description="Total number of items")
+    page: int = Field(..., description="Current page number (1-indexed)")
+    page_size: int = Field(..., description="Number of items per page")
+    has_next: bool = Field(..., description="Whether there are more pages")
+    has_previous: bool = Field(..., description="Whether there are previous pages")
 
 
 class UpdateCardRequest(BaseModel):
