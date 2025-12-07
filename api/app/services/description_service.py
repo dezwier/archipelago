@@ -13,7 +13,17 @@ class DescriptionService:
     def __init__(self):
         """Initialize the description service."""
         self.api_key = settings.google_gemini_api_key
-        self.base_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+        # Use gemini-2.5-flash as the primary model (fast, cost-effective, and doesn't use thinking tokens)
+        # gemini-pro-latest may use thinking tokens which consume output budget
+        # Based on ListModels API, available models are: gemini-2.5-flash and gemini-2.5-pro
+        self.model_name = "gemini-2.5-flash"
+        self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
+        
+        # Fallback model in case primary model is not available
+        self.fallback_models = [
+            "gemini-2.5-pro",  # More powerful but may use thinking tokens
+            "gemini-pro-latest",  # Last resort (may have thinking token issues)
+        ]
         
         # Debug logging
         logger.info(f"DescriptionService initialized. API key present: {bool(self.api_key)}")
@@ -105,18 +115,20 @@ class DescriptionService:
             if source_language:
                 source_lang_name = self._get_language_name(source_language)
                 prompt = (
-                    f"Generate a concise, educational description for the word or phrase '{text}' in {target_lang_name}. "
+                    f"This is for a language learning app. Generate a concise, educational description for the word or phrase '{text}' in {target_lang_name}. "
                     f"The original text is in {source_lang_name}. "
                     f"Write exactly 1 sentence if the concept is simple (common words, basic objects), or 2-3 sentences if it's more complex (abstract concepts, verbs with multiple meanings, technical terms). "
-                    f"Write the description entirely in {target_lang_name}. Do not include the word or phrase itself in the description. "
-                    f"Make it suitable for language learning - clear, informative, and helpful for understanding the meaning."
+                    f"Write the description entirely in {target_lang_name}. "
+                    f"IMPORTANT: Do not include the word or phrase itself in the description. Describe what it means without mentioning the actual words (when possible). "
+                    f"Make it suitable for language learning - clear, informative, and helpful for understanding the meaning without directly stating the word or phrase."
                 )
             else:
                 prompt = (
-                    f"Generate a concise, educational description for the word or phrase '{text}' in {target_lang_name}. "
+                    f"This is for a language learning app. Generate a concise, educational description for the word or phrase '{text}' in {target_lang_name}. "
                     f"Write exactly 1 sentence if the concept is simple (common words, basic objects), or 2-3 sentences if it's more complex (abstract concepts, verbs with multiple meanings, technical terms). "
-                    f"Write the description entirely in {target_lang_name}. Do not include the word or phrase itself in the description. "
-                    f"Make it suitable for language learning - clear, informative, and helpful for understanding the meaning."
+                    f"Write the description entirely in {target_lang_name}. "
+                    f"IMPORTANT: Do not include the word or phrase itself in the description. Describe what it means without mentioning the actual words (when possible). "
+                    f"Make it suitable for language learning - clear, informative, and helpful for understanding the meaning without directly stating the word or phrase."
                 )
             
             logger.debug(f"Generating description for '{text}' in {target_lang_name}")
@@ -132,39 +144,118 @@ class DescriptionService:
                     "temperature": 0.7,
                     "topK": 40,
                     "topP": 0.95,
-                    "maxOutputTokens": 200,
+                    "maxOutputTokens": 1024,  # Increased to account for thinking tokens in models that support it
+                    # Note: Some models support thinking tokens which count against maxOutputTokens
+                    # If thinking tokens consume too much, consider using gemini-2.5-flash which uses thinking more efficiently
                 }
             }
             
-            # Make API request
-            response = requests.post(
-                f"{self.base_url}?key={self.api_key}",
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            )
+            # Try gemini-pro first, then fallback models if needed
+            models_to_try = [self.model_name] + self.fallback_models
+            last_error = None
+            data = None
             
-            # Check for errors
-            response.raise_for_status()
-            data = response.json()
+            for model_name in models_to_try:
+                base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+                try:
+                    logger.debug(f"Trying model: {model_name}")
+                    # Make API request
+                    response = requests.post(
+                        f"{base_url}?key={self.api_key}",
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=30
+                    )
+                    
+                    # Check for errors
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    # If we get here, the model worked - update our default if using fallback
+                    if model_name != self.model_name:
+                        self.model_name = model_name
+                        self.base_url = base_url
+                        logger.info(f"Successfully using fallback model: {model_name}")
+                    else:
+                        logger.debug(f"Successfully using primary model: {model_name}")
+                    break  # Success, exit the loop
+                    
+                except requests.exceptions.HTTPError as e:
+                    if e.response and e.response.status_code == 404:
+                        # Model not found, try next one
+                        logger.warning(f"Model {model_name} not found (404), trying next model...")
+                        last_error = e
+                        continue
+                    else:
+                        # Other HTTP error, re-raise
+                        raise
+                except Exception as e:
+                    # Other error, re-raise
+                    raise
+            
+            # If we exhausted all models, provide helpful error message
+            if not data:
+                error_detail = ""
+                if last_error and hasattr(last_error, 'response') and last_error.response:
+                    try:
+                        error_data = last_error.response.json()
+                        error_detail = f" - {error_data}"
+                    except:
+                        error_detail = f" - Status: {last_error.response.status_code}"
+                
+                raise Exception(
+                    f"All Gemini models failed. Tried: {', '.join(models_to_try)}. "
+                    f"Last error: {str(last_error) if last_error else 'Unknown'}{error_detail}. "
+                    f"Please check: 1) Your API key is valid, 2) Generative Language API is enabled in your Google Cloud project, "
+                    f"3) Your API key has access to Gemini models."
+                )
             
             # Extract generated text
             if 'candidates' in data and len(data['candidates']) > 0:
                 candidate = data['candidates'][0]
-                # Check for finishReason - if it's SAFETY or other blocking reasons, handle it
-                if 'finishReason' in candidate:
-                    finish_reason = candidate['finishReason']
-                    if finish_reason not in ['STOP', 'MAX_TOKENS']:
-                        logger.warning(f"Description generation finished with reason: {finish_reason}")
                 
-                if 'content' in candidate and 'parts' in candidate['content']:
-                    if len(candidate['content']['parts']) > 0:
-                        description = candidate['content']['parts'][0].get('text', '').strip()
+                # Check for finishReason
+                finish_reason = candidate.get('finishReason', 'UNKNOWN')
+                
+                # Check if content has parts with text
+                if 'content' in candidate:
+                    content = candidate['content']
+                    
+                    # Check if parts exist and have text
+                    if 'parts' in content and len(content['parts']) > 0:
+                        description = content['parts'][0].get('text', '').strip()
                         if description:
+                            if finish_reason == 'MAX_TOKENS':
+                                logger.warning(f"Description was truncated (MAX_TOKENS) for '{text}' in {target_language}, but returning partial description")
                             logger.info(f"Generated description for '{text}' in {target_language}: '{description[:100]}...'")
                             return description
                         else:
                             logger.warning(f"Generated description is empty for '{text}' in {target_language}")
+                    else:
+                        # Content exists but no parts - might be truncated or empty
+                        if finish_reason == 'MAX_TOKENS':
+                            # Check if thinking tokens consumed the budget
+                            usage_metadata = data.get('usageMetadata', {})
+                            thoughts_tokens = usage_metadata.get('thoughtsTokenCount', 0)
+                            if thoughts_tokens > 0:
+                                logger.error(f"Description generation hit MAX_TOKENS limit. Thinking tokens used: {thoughts_tokens}. No text generated for '{text}' in {target_language}")
+                                raise Exception(f"Description generation was truncated (MAX_TOKENS). The model used {thoughts_tokens} thinking tokens, leaving no room for output text. Try increasing maxOutputTokens further or using a model without thinking capabilities.")
+                            else:
+                                logger.error(f"Description generation hit MAX_TOKENS limit and returned no text for '{text}' in {target_language}")
+                                raise Exception(f"Description generation was truncated (MAX_TOKENS) and returned no text. Try increasing maxOutputTokens or simplifying the prompt.")
+                        else:
+                            logger.warning(f"Content exists but no parts found. Finish reason: {finish_reason}")
+                else:
+                    # No content in candidate
+                    if finish_reason == 'MAX_TOKENS':
+                        logger.error(f"Description generation hit MAX_TOKENS limit for '{text}' in {target_language}")
+                        raise Exception(f"Description generation was truncated (MAX_TOKENS) and returned no content. Try increasing maxOutputTokens.")
+                    else:
+                        logger.warning(f"No content in candidate. Finish reason: {finish_reason}")
+                
+                # If we get here, something unexpected happened
+                if finish_reason not in ['STOP', 'MAX_TOKENS']:
+                    logger.warning(f"Description generation finished with unexpected reason: {finish_reason}")
             
             # Log the full response for debugging
             logger.error(f"Unexpected API response format. Response: {data}")

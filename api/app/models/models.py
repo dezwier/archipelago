@@ -3,6 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 import hashlib
+from sqlalchemy import UniqueConstraint
 
 
 class UserCardStatus(str, Enum):
@@ -55,6 +56,9 @@ class Language(SQLModel, table=True):
 class Card(SQLModel, table=True):
     """Card table - language-specific representation of a concept."""
     __tablename__ = "cards"
+    __table_args__ = (
+        UniqueConstraint('concept_id', 'language_code', 'translation', name='uq_card_concept_language_translation'),
+    )
     
     id: Optional[int] = Field(default=None, primary_key=True)
     concept_id: int = Field(foreign_key="concept.id")
@@ -65,6 +69,7 @@ class Card(SQLModel, table=True):
     audio_path: Optional[str] = None  # Pronunciation file path
     gender: Optional[str] = None  # For French/Spanish/German
     notes: Optional[str] = None  # Context specific to this language
+    creation_time: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
     concept: Concept = Relationship(back_populates="cards")

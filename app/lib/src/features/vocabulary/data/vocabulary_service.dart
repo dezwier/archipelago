@@ -18,9 +18,24 @@ class VocabularyService {
     required int userId,
     int page = 1,
     int pageSize = 20,
+    String sortBy = 'alphabetical', // Options: 'alphabetical', 'recent'
+    String? search,
+    bool searchInSource = true,
   }) async {
-    final url = Uri.parse(
-      '${ApiConfig.apiBaseUrl}/flashcards/vocabulary?user_id=$userId&page=$page&page_size=$pageSize'
+    final queryParams = <String, String>{
+      'user_id': userId.toString(),
+      'page': page.toString(),
+      'page_size': pageSize.toString(),
+      'sort_by': sortBy,
+    };
+    
+    if (search != null && search.isNotEmpty) {
+      queryParams['search'] = search;
+      queryParams['search_in_source'] = searchInSource.toString();
+    }
+    
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/vocabulary').replace(
+      queryParameters: queryParams,
     );
     
     try {
@@ -136,6 +151,133 @@ class VocabularyService {
       return {
         'success': false,
         'message': 'Error deleting concept: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Start generating descriptions for cards that don't have descriptions.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'task_id': String (if successful) - task ID for tracking progress
+  /// - 'total_concepts': int (if successful) - total concepts that need descriptions
+  /// - 'message': String (if error)
+  static Future<Map<String, dynamic>> startGenerateDescriptions({
+    int? userId,
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/generate-descriptions${userId != null ? '?user_id=$userId' : ''}');
+    
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 202) {
+        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'task_id': data['task_id'] as String,
+          'total_concepts': data['total_concepts'] as int,
+          'message': data['message'] as String?,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to start description generation',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error starting description generation: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get the status of a description generation task.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'task_id': String (if successful)
+  /// - 'status': String (if successful) - 'running', 'completed', 'cancelled', 'failed', 'cancelling'
+  /// - 'progress': Map<String, dynamic> (if successful) - progress information
+  /// - 'message': String (if error or status message)
+  static Future<Map<String, dynamic>> getDescriptionGenerationStatus({
+    required String taskId,
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/generate-descriptions/$taskId/status');
+    
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'task_id': data['task_id'] as String,
+          'status': data['status'] as String,
+          'progress': data['progress'] as Map<String, dynamic>,
+          'message': data['message'] as String?,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to get task status',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error getting task status: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Cancel a running description generation task.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'task_id': String (if successful)
+  /// - 'status': String (if successful) - updated status
+  /// - 'progress': Map<String, dynamic> (if successful) - progress information
+  /// - 'message': String (if error)
+  static Future<Map<String, dynamic>> cancelDescriptionGeneration({
+    required String taskId,
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/generate-descriptions/$taskId/cancel');
+    
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'task_id': data['task_id'] as String,
+          'status': data['status'] as String,
+          'progress': data['progress'] as Map<String, dynamic>,
+          'message': data['message'] as String?,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to cancel task',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error canceling task: ${e.toString()}',
       };
     }
   }

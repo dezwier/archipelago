@@ -84,3 +84,19 @@ class UpdateCardRequest(BaseModel):
     translation: Optional[str] = Field(None, min_length=1, description="Updated translation text")
     description: Optional[str] = Field(None, description="Updated description text")
 
+
+class GenerateDescriptionsResponse(BaseModel):
+    """Response for starting description generation."""
+    task_id: str = Field(..., description="Unique task ID for tracking progress")
+    message: str = Field(..., description="Status message")
+    total_concepts: int = Field(..., description="Total number of concepts that need descriptions")
+    status: str = Field(..., description="Task status: 'running'")
+
+
+class TaskStatusResponse(BaseModel):
+    """Response for task status."""
+    task_id: str = Field(..., description="Task ID")
+    status: str = Field(..., description="Task status: 'running', 'completed', 'cancelled', 'failed', 'cancelling'")
+    progress: dict = Field(..., description="Progress information including processed, total_concepts, cards_updated, etc.")
+    message: Optional[str] = Field(None, description="Status message")
+

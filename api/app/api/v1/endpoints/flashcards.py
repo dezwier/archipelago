@@ -1,6 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+"""
+Main flashcard CRUD endpoints.
+"""
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlmodel import Session, select
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+from datetime import datetime, timezone
 from app.core.database import get_session
 from app.models.models import Topic, Concept, Card, Language, User, UserCard
 from app.schemas.flashcard import (
@@ -14,7 +19,8 @@ from app.schemas.flashcard import (
     UpdateCardRequest,
 )
 from app.services.translation_service import translation_service
-from app.services.description_service import description_service
+from app.api.v1.endpoints.flashcard_helpers import ensure_capitalized
+from app.api.v1.endpoints.flashcard_background_tasks import generate_descriptions_background
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,19 +28,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/flashcards", tags=["flashcards"])
 
 
-def ensure_capitalized(text: str) -> str:
-    """
-    Ensure the first letter is capitalized while preserving the rest of the case.
-    If text is empty, return as is.
-    """
-    if not text:
-        return text
-    return text[0].upper() + text[1:] if len(text) > 0 else text
-
-
 @router.post("/generate", response_model=GenerateFlashcardResponse, status_code=status.HTTP_201_CREATED)
 async def generate_flashcard(
     request: GenerateFlashcardRequest,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session)
 ):
     """
@@ -186,6 +183,21 @@ async def generate_flashcard(
                 continue
             logger.info(f"Creating card for language '{lang_code}' with translation: '{translation_text}'")
         
+        # Check if card already exists (graceful handling of duplicates)
+        existing_card = session.exec(
+            select(Card).where(
+                Card.concept_id == concept_id,
+                Card.language_code == lang_code,
+                Card.translation == translation_text
+            )
+        ).first()
+        
+        if existing_card:
+            logger.info(f"Card already exists for concept_id={concept_id}, language_code='{lang_code}', translation='{translation_text}', skipping creation")
+            new_cards.append(existing_card)
+            continue
+        
+        # Create new card
         new_card = Card(
             concept_id=concept_id,
             language_code=lang_code,
@@ -196,10 +208,41 @@ async def generate_flashcard(
         new_cards.append(new_card)
     
     if new_cards:
-        session.commit()
-        for card in new_cards:
-            session.refresh(card)
-        logger.info(f"Step 4: Successfully created {len(new_cards)} new card(s) for languages: {sorted([c.language_code for c in new_cards])}")
+        try:
+            session.commit()
+            for card in new_cards:
+                session.refresh(card)
+            logger.info(f"Step 4: Successfully created {len(new_cards)} new card(s) for languages: {sorted([c.language_code for c in new_cards])}")
+        except IntegrityError as e:
+            # Handle race condition where card was created between check and commit
+            session.rollback()
+            logger.warning(f"IntegrityError during card creation (likely duplicate): {e}")
+            
+            # Retry by fetching existing cards
+            new_cards_retry = []
+            for lang_code in languages_to_create:
+                if lang_code == source_lang_code:
+                    translation_text = concept_text_capitalized
+                else:
+                    translation_text = translations.get(lang_code)
+                    if not translation_text:
+                        continue
+                
+                existing_card = session.exec(
+                    select(Card).where(
+                        Card.concept_id == concept_id,
+                        Card.language_code == lang_code,
+                        Card.translation == translation_text
+                    )
+                ).first()
+                
+                if existing_card:
+                    new_cards_retry.append(existing_card)
+                else:
+                    logger.error(f"Failed to create or find card for concept_id={concept_id}, language_code='{lang_code}', translation='{translation_text}'")
+            
+            new_cards = new_cards_retry
+            logger.info(f"Step 4: After retry, found {len(new_cards)} card(s) for languages: {sorted([c.language_code for c in new_cards])}")
     else:
         logger.info("Step 4: No new cards to create")
     
@@ -207,65 +250,26 @@ async def generate_flashcard(
     if failed_translations:
         logger.warning(f"Summary: Failed to translate for {len(failed_translations)} language(s): {sorted(failed_translations)}")
     
-    # Step 5: Generate descriptions ONLY for new cards that were just created
-    logger.info("Step 5: Generating descriptions for new cards only")
+    # Step 5: Schedule description generation as a background task
+    # This allows the response to be sent immediately while descriptions are generated in parallel
     all_cards_list = existing_cards + new_cards
     
-    # Only generate descriptions for new cards (not existing ones)
     if new_cards:
-        languages_needing_descriptions = {card.language_code for card in new_cards}
-        logger.info(f"Step 5: Generating descriptions for {len(new_cards)} new card(s) in {len(languages_needing_descriptions)} language(s)")
+        new_card_ids = [card.id for card in new_cards]
+        logger.info(f"Step 5: Scheduling background task to generate descriptions for {len(new_cards)} new card(s)")
         
-        try:
-            # Use the user's input phrase (concept_text) for description generation
-            # This is the original phrase in whatever language the user entered
-            description_result = description_service.generate_descriptions_for_multiple_languages(
-                text=concept_text,  # Use user's input phrase
-                target_languages=list(languages_needing_descriptions),
-                source_language=source_lang_code,
-                prefer_english=False  # During generation, use the input phrase directly
-            )
-            
-            generated_descriptions = description_result['descriptions']
-            failed_descriptions = description_result['failed_languages']
-            
-            logger.info(f"Step 5 summary: successful: {len(generated_descriptions)}, failed: {len(failed_descriptions)}")
-            
-            # Update new cards with generated descriptions
-            cards_updated = 0
-            for card in new_cards:
-                lang_code = card.language_code
-                if lang_code in generated_descriptions:
-                    description_text = generated_descriptions[lang_code].strip()
-                    if description_text:  # Only update if description is not empty
-                        card.description = description_text
-                        session.add(card)
-                        cards_updated += 1
-                        logger.info(f"Updated description for new card {card.id} (language: {lang_code}): '{card.description[:50]}...'")
-                    else:
-                        logger.warning(f"Generated description is empty for new card {card.id} (language: {lang_code})")
-                else:
-                    logger.warning(f"No description generated for new card {card.id} (language: {lang_code})")
-            
-            # Commit description updates
-            if cards_updated > 0:
-                session.commit()
-                # Refresh all new cards to get updated descriptions
-                for card in new_cards:
-                    session.refresh(card)
-                logger.info(f"Step 5: Successfully updated {cards_updated} new card(s) with descriptions")
-            else:
-                logger.warning("Step 5: No descriptions were generated for any new cards")
-            
-            if failed_descriptions:
-                logger.warning(f"Step 5: Failed to generate descriptions for {len(failed_descriptions)} language(s): {sorted(failed_descriptions)}")
-        except Exception as e:
-            # Don't fail the entire flashcard creation if description generation fails
-            logger.error(f"Step 5: Description generation failed completely: {str(e)}. Continuing without descriptions.")
-            import traceback
-            logger.error(traceback.format_exc())
+        # Add background task to generate descriptions
+        background_tasks.add_task(
+            generate_descriptions_background,
+            concept_text=concept_text,
+            source_lang_code=source_lang_code,
+            new_card_ids=new_card_ids,
+            concept_id=concept_id
+        )
+        logger.info(f"Step 5: Background task scheduled. Response will be sent immediately.")
     else:
         logger.info("Step 5: No new cards to generate descriptions for")
+    
     source_card = next((card for card in all_cards_list if card.language_code == source_lang_code), None)
     target_card = next((card for card in all_cards_list if card.language_code == target_lang_code), None)
     
@@ -354,6 +358,9 @@ async def get_vocabulary(
     user_id: int,
     page: int = 1,
     page_size: int = 20,
+    sort_by: str = "alphabetical",  # Options: "alphabetical", "recent"
+    search: str = None,  # Optional search query
+    search_in_source: bool = True,  # True = search in source language, False = search in target
     session: Session = Depends(get_session)
 ):
     """
@@ -364,7 +371,17 @@ async def get_vocabulary(
         user_id: The user ID
         page: Page number (1-indexed, default: 1)
         page_size: Number of items per page (default: 20)
+        sort_by: Sort order - "alphabetical" (default) or "recent" (by creation_time, newest first)
+        search: Optional search query to filter cards by translation
+        search_in_source: If True, search in source language; if False, search in target language
     """
+    # Validate sort_by parameter
+    if sort_by not in ["alphabetical", "recent"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="sort_by must be 'alphabetical' or 'recent'"
+        )
+    
     # Validate pagination parameters
     if page < 1:
         raise HTTPException(
@@ -391,37 +408,108 @@ async def get_vocabulary(
         language_codes.append(user.lang_learning)
     
     # Get all cards for these languages
-    all_cards = session.exec(
-        select(Card).where(Card.language_code.in_(language_codes))
-    ).all()
+    # Apply search filter if provided
+    matching_concept_ids = None
+    if search and search.strip():
+        search_term = search.strip().lower()
+        if search_in_source:
+            # Search in source language (user's native language)
+            matching_cards = session.exec(
+                select(Card).where(
+                    Card.language_code == user.lang_native,
+                    func.lower(Card.translation).contains(search_term)
+                )
+            ).all()
+        else:
+            # Search in target language (user's learning language)
+            if user.lang_learning:
+                matching_cards = session.exec(
+                    select(Card).where(
+                        Card.language_code == user.lang_learning,
+                        func.lower(Card.translation).contains(search_term)
+                    )
+                ).all()
+            else:
+                matching_cards = []
+        
+        # Get all concept_ids that match
+        matching_concept_ids = {card.concept_id for card in matching_cards}
+        
+        # Get all cards for the matching concepts (both languages)
+        if matching_concept_ids:
+            all_cards = session.exec(
+                select(Card).where(
+                    Card.concept_id.in_(list(matching_concept_ids)),
+                    Card.language_code.in_(language_codes)
+                )
+            ).all()
+        else:
+            all_cards = []
+    else:
+        # No search - get all cards for these languages
+        all_cards = session.exec(
+            select(Card).where(Card.language_code.in_(language_codes))
+        ).all()
     
     # Group cards by concept_id
     concept_cards_map = {}
     for card in all_cards:
-        if card.concept_id not in concept_cards_map:
-            concept_cards_map[card.concept_id] = {}
-        concept_cards_map[card.concept_id][card.language_code] = card
+        # If searching, only include matching concept_ids
+        if matching_concept_ids is None or card.concept_id in matching_concept_ids:
+            if card.concept_id not in concept_cards_map:
+                concept_cards_map[card.concept_id] = {}
+            concept_cards_map[card.concept_id][card.language_code] = card
     
-    # Get all concept_ids and sort by target language translation (alphabetically)
+    # Get all concept_ids and sort based on sort_by parameter
     concept_sort_keys = []
     for concept_id, lang_cards in concept_cards_map.items():
-        # Get target card for sorting (prefer target language, fallback to source)
         target_card = lang_cards.get(user.lang_learning) if user.lang_learning else None
         source_card = lang_cards.get(user.lang_native)
         
-        # Use target language translation for sorting, fallback to source if no target
-        sort_text = ""
-        if target_card:
-            sort_text = target_card.translation.lower().strip()
-        elif source_card:
-            sort_text = source_card.translation.lower().strip()
-        
-        # Only include concepts that have at least one card
-        if sort_text:
-            concept_sort_keys.append((sort_text, concept_id))
+        if sort_by == "recent":
+            # For recent sort, use the most recent creation_time among all cards for this concept
+            # Prefer target card's creation_time, fallback to source card's, or any card's
+            creation_time = None
+            if target_card and target_card.creation_time:
+                creation_time = target_card.creation_time
+            elif source_card and source_card.creation_time:
+                creation_time = source_card.creation_time
+            else:
+                # Get the most recent creation_time from any card in this concept
+                all_cards_for_concept = list(lang_cards.values())
+                if all_cards_for_concept:
+                    cards_with_time = [c for c in all_cards_for_concept if c.creation_time]
+                    if cards_with_time:
+                        creation_time = max(c.creation_time for c in cards_with_time)
+            
+            # Include concept even if no creation_time (fallback to concept_id for sorting)
+            if creation_time:
+                concept_sort_keys.append((creation_time, concept_id))
+            else:
+                # Fallback: use concept_id (higher IDs = more recent) with a very old timestamp
+                fallback_time = datetime.min.replace(tzinfo=timezone.utc)
+                concept_sort_keys.append((fallback_time, concept_id))
+        else:
+            # Default: alphabetical sorting by target language translation
+            # Use target language translation for sorting, fallback to source if no target
+            sort_text = ""
+            if target_card:
+                sort_text = target_card.translation.lower().strip()
+            elif source_card:
+                sort_text = source_card.translation.lower().strip()
+            
+            # Only include concepts that have at least one card
+            if sort_text:
+                concept_sort_keys.append((sort_text, concept_id))
     
-    # Sort alphabetically by target language translation (case-insensitive)
-    concept_sort_keys.sort(key=lambda x: x[0])
+    # Sort based on sort_by parameter
+    if sort_by == "recent":
+        # Sort by creation_time descending (newest first)
+        concept_sort_keys.sort(key=lambda x: x[0], reverse=True)
+    else:
+        # Sort alphabetically by target language translation (case-insensitive)
+        concept_sort_keys.sort(key=lambda x: x[0])
+    
     all_concept_ids = [concept_id for _, concept_id in concept_sort_keys]
     total = len(all_concept_ids)
     
@@ -508,15 +596,41 @@ async def update_card(
             detail="Card not found"
         )
     
-    # Update the card
+    # Check if translation update would create a duplicate
     if request.translation is not None:
-        card.translation = ensure_capitalized(request.translation.strip())
+        new_translation = ensure_capitalized(request.translation.strip())
+        
+        # Check if another card with same concept_id, language_code, and translation already exists
+        existing_card = session.exec(
+            select(Card).where(
+                Card.concept_id == card.concept_id,
+                Card.language_code == card.language_code,
+                Card.translation == new_translation,
+                Card.id != card_id  # Exclude the current card
+            )
+        ).first()
+        
+        if existing_card:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A card with the same concept_id, language_code, and translation already exists (card_id: {existing_card.id})"
+            )
+        
+        card.translation = new_translation
+    
     if request.description is not None:
         card.description = request.description.strip()
     
-    session.add(card)
-    session.commit()
-    session.refresh(card)
+    try:
+        session.add(card)
+        session.commit()
+        session.refresh(card)
+    except IntegrityError as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Failed to update card: duplicate constraint violation"
+        ) from e
     
     return CardResponse(
         id=card.id,
@@ -575,4 +689,3 @@ async def delete_concept(
     session.commit()
     
     return None
-
