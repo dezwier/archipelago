@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'vocabulary_controller.dart';
 import '../domain/paired_vocabulary_item.dart';
@@ -7,6 +8,8 @@ import 'widgets/vocabulary_empty_state.dart';
 import 'widgets/vocabulary_error_state.dart';
 import 'widgets/edit_vocabulary_dialog.dart';
 import 'widgets/delete_vocabulary_dialog.dart';
+import 'widgets/vocabulary_detail_dialog.dart';
+import '../data/vocabulary_service.dart';
 import '../../../utils/language_emoji.dart';
 
 class VocabularyScreen extends StatefulWidget {
@@ -23,11 +26,14 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   final GlobalKey _sortButtonKey = GlobalKey();
   final GlobalKey _filterButtonKey = GlobalKey();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
   // Filter state - all enabled by default
   bool _showSourceLanguage = true;
   bool _showTargetLanguage = true;
   bool _showDescription = true;
+  bool _showImages = true;
+  
 
   @override
   void initState() {
@@ -118,6 +124,7 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
         }
 
         return Scaffold(
+          key: _scaffoldKey,
           body: GestureDetector(
             onTap: () {
               // Dismiss keyboard when tapping outside text fields
@@ -180,8 +187,12 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
                           showSource: _showSourceLanguage,
                           showTarget: _showTargetLanguage,
                           showDescription: _showDescription,
+                          showImages: _showImages,
                           onEdit: () => _handleEdit(item),
                           onDelete: () => _handleDelete(item),
+                          allItems: _controller.filteredItems,
+                          onRandomCard: () => _handleRandomCard(context),
+                          onTap: () => _handleItemTap(item),
                         );
                       },
                       childCount: _controller.filteredItems.length,
@@ -574,6 +585,28 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
               },
             ),
           ),
+          PopupMenuItem<void>(
+            child: StatefulBuilder(
+              builder: (context, setMenuState) {
+                return Row(
+                  children: [
+                    Checkbox(
+                      value: _showImages,
+                      onChanged: (value) {
+                        setMenuState(() {
+                          setState(() {
+                            _showImages = value ?? true;
+                          });
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Images'),
+                  ],
+                );
+              },
+            ),
+          ),
         ],
       );
     }
@@ -757,6 +790,99 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
             backgroundColor: success
                 ? null
                 : Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _handleItemTap(PairedVocabularyItem item) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => VocabularyDetailDrawer(
+        item: item,
+        sourceLanguageCode: _controller.sourceLanguageCode,
+        targetLanguageCode: _controller.targetLanguageCode,
+        onEdit: () => _handleEdit(item),
+        onRandomCard: () => _handleRandomCard(context),
+        onRefreshImages: () => _handleRefreshImages(context, item),
+      ),
+    );
+  }
+
+  void _handleRandomCard(BuildContext context) {
+    final items = _controller.filteredItems;
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No cards available')),
+      );
+      return;
+    }
+
+    final random = Random();
+    final randomItem = items[random.nextInt(items.length)];
+    _handleItemTap(randomItem);
+  }
+
+  Future<void> _handleRefreshImages(BuildContext context, PairedVocabularyItem item) async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final result = await VocabularyService.refreshImagesForConcept(
+        conceptId: item.conceptId,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        
+        if (result['success'] == true) {
+          // Refresh the vocabulary list to show new images
+          await _controller.refresh();
+          
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result['message'] as String? ?? 'Images refreshed successfully',
+              ),
+            ),
+          );
+          
+          // Close the detail dialog and reopen with updated item
+          Navigator.of(context).pop(); // Close detail dialog
+          // Find the updated item in the list
+          final updatedItems = _controller.filteredItems;
+          final updatedItem = updatedItems.firstWhere(
+            (i) => i.conceptId == item.conceptId,
+            orElse: () => item,
+          );
+          _handleItemTap(updatedItem);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result['message'] as String? ?? 'Failed to refresh images',
+              ),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error refreshing images: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }

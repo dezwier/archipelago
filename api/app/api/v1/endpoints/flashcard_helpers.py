@@ -156,7 +156,8 @@ def generate_descriptions_for_cards(
 def retrieve_images_for_concept(
     concept: Concept,
     concept_text: str,
-    session: Session
+    session: Session,
+    force_refresh: bool = False
 ) -> Dict:
     """
     Retrieve images for a concept and store them in the concept's image_path fields.
@@ -165,21 +166,23 @@ def retrieve_images_for_concept(
         concept: Concept object to update with images
         concept_text: The concept text to search for (typically English translation)
         session: Database session
+        force_refresh: If True, retrieve images even if concept already has images
     
     Returns:
         Dict with 'images_retrieved' (int) and 'success' (bool)
     """
-    # Check if concept already has images
-    has_images = any([
-        concept.image_path_1,
-        concept.image_path_2,
-        concept.image_path_3,
-        concept.image_path_4
-    ])
-    
-    if has_images:
-        logger.info(f"Concept {concept.id} already has images, skipping retrieval")
-        return {'images_retrieved': 0, 'success': True, 'skipped': True}
+    # Check if concept already has images (unless forcing refresh)
+    if not force_refresh:
+        has_images = any([
+            concept.image_path_1,
+            concept.image_path_2,
+            concept.image_path_3,
+            concept.image_path_4
+        ])
+        
+        if has_images:
+            logger.info(f"Concept {concept.id} already has images, skipping retrieval")
+            return {'images_retrieved': 0, 'success': True, 'skipped': True}
     
     if not concept_text or not concept_text.strip():
         logger.warning(f"No concept text provided for image retrieval for concept {concept.id}")
@@ -187,6 +190,16 @@ def retrieve_images_for_concept(
     
     try:
         logger.info(f"Retrieving images for concept {concept.id} with query: '{concept_text}'")
+        
+        # Clear existing images if forcing refresh
+        if force_refresh:
+            concept.image_path_1 = None
+            concept.image_path_2 = None
+            concept.image_path_3 = None
+            concept.image_path_4 = None
+            session.add(concept)
+            session.commit()
+            session.refresh(concept)
         
         # Get images from image service
         image_urls = image_service.get_images_for_concept(
@@ -205,6 +218,8 @@ def retrieve_images_for_concept(
         concept.image_path_4 = image_urls[3] if len(image_urls) > 3 else None
         
         session.add(concept)
+        session.commit()
+        session.refresh(concept)
         
         logger.info(f"Retrieved and stored {len(image_urls)} image(s) for concept {concept.id}")
         

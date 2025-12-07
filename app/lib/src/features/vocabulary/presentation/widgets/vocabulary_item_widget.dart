@@ -10,8 +10,12 @@ class VocabularyItemWidget extends StatelessWidget {
   final bool showSource;
   final bool showTarget;
   final bool showDescription;
+  final bool showImages;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final List<PairedVocabularyItem> allItems;
+  final VoidCallback onRandomCard;
+  final VoidCallback onTap;
 
   const VocabularyItemWidget({
     super.key,
@@ -21,8 +25,12 @@ class VocabularyItemWidget extends StatelessWidget {
     this.showSource = true,
     this.showTarget = true,
     this.showDescription = true,
+    this.showImages = true,
     required this.onEdit,
     required this.onDelete,
+    required this.allItems,
+    required this.onRandomCard,
+    required this.onTap,
   });
 
   @override
@@ -53,24 +61,27 @@ class VocabularyItemWidget extends StatelessWidget {
             ),
           ],
         ),
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16.0),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16.0),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                width: 1,
               ),
-            ],
-          ),
-          child: Row(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Content column (cards)
@@ -102,7 +113,7 @@ class VocabularyItemWidget extends StatelessWidget {
                 ),
               ),
               // Image on the right side
-              if (item.firstImageUrl != null)
+              if (showImages && item.firstImageUrl != null)
                 Container(
                   margin: const EdgeInsets.all(12.0),
                   width: 80,
@@ -147,6 +158,7 @@ class VocabularyItemWidget extends StatelessWidget {
                 ),
             ],
           ),
+        ),
         ),
       ),
     );

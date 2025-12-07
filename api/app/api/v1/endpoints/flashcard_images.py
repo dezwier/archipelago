@@ -4,12 +4,13 @@ Endpoints for generating images for existing flashcards.
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlmodel import Session, select
 from app.core.database import get_session
-from app.models.models import Concept
+from app.models.models import Concept, Card
 from app.schemas.flashcard import (
     GenerateDescriptionsResponse,
     TaskStatusResponse,
 )
 from app.api.v1.endpoints.flashcard_background_tasks import generate_images_for_existing_concepts_task
+from app.api.v1.endpoints.flashcard_helpers import retrieve_images_for_concept
 import logging
 import uuid
 from typing import Dict, Optional
@@ -129,4 +130,59 @@ async def cancel_image_generation(
         progress=task['progress'],
         message='Cancellation requested'
     )
+
+
+@router.post("/concepts/{concept_id}/refresh-images")
+async def refresh_images_for_concept(
+    concept_id: int,
+    session: Session = Depends(get_session)
+):
+    """
+    Refresh/regenerate images for a specific concept.
+    This will retrieve new images even if the concept already has images.
+    """
+    # Get the concept
+    concept = session.get(Concept, concept_id)
+    if not concept:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Concept {concept_id} not found"
+        )
+    
+    # Get concept text from English card if available, otherwise use first card
+    concept_text = None
+    cards = session.exec(select(Card).where(Card.concept_id == concept_id)).all()
+    for card in cards:
+        if card.language_code == 'en':
+            concept_text = card.translation
+            break
+    
+    if not concept_text and cards:
+        concept_text = cards[0].translation
+    
+    if not concept_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Concept {concept_id} has no cards with translation text"
+        )
+    
+    # Retrieve new images (force refresh even if images exist)
+    result = retrieve_images_for_concept(
+        concept=concept,
+        concept_text=concept_text,
+        session=session,
+        force_refresh=True
+    )
+    
+    if result['success']:
+        return {
+            'success': True,
+            'images_retrieved': result['images_retrieved'],
+            'message': f"Retrieved {result['images_retrieved']} new image(s) for concept {concept_id}"
+        }
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get('error', 'Failed to retrieve images')
+        )
 

@@ -408,5 +408,44 @@ class VocabularyService {
       };
     }
   }
+
+  /// Refresh/regenerate images for a specific concept.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'images_retrieved': int (if successful) - number of images retrieved
+  /// - 'message': String (if successful or error)
+  static Future<Map<String, dynamic>> refreshImagesForConcept({
+    required int conceptId,
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/concepts/$conceptId/refresh-images');
+    
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'images_retrieved': data['images_retrieved'] as int,
+          'message': data['message'] as String?,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to refresh images',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error refreshing images: ${e.toString()}',
+      };
+    }
+  }
 }
 
