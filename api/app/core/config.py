@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
 import os
 from pathlib import Path
 
@@ -53,6 +52,10 @@ class Settings(BaseSettings):
     # Google Generative AI (Gemini) API
     google_gemini_api_key: str = ""
     
+    # Google Custom Search API (for image retrieval)
+    google_custom_search_api_key: str = ""
+    google_custom_search_engine_id: str = ""
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -66,6 +69,10 @@ class Settings(BaseSettings):
             kwargs["google_translate_api_key"] = os.getenv("GOOGLE_TRANSLATE_API_KEY", "")
         if not kwargs.get("google_gemini_api_key"):
             kwargs["google_gemini_api_key"] = os.getenv("GOOGLE_GEMINI_API_KEY", "")
+        if not kwargs.get("google_custom_search_api_key"):
+            kwargs["google_custom_search_api_key"] = os.getenv("GOOGLE_CUSTOM_SEARCH_API_KEY", "")
+        if not kwargs.get("google_custom_search_engine_id"):
+            kwargs["google_custom_search_engine_id"] = os.getenv("GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "")
         super().__init__(**kwargs)
 
 
@@ -89,3 +96,11 @@ if not settings.google_translate_api_key:
 # Fallback: if google_gemini_api_key is still empty, try reading directly from environment
 if not settings.google_gemini_api_key:
     settings.google_gemini_api_key = os.getenv("GOOGLE_GEMINI_API_KEY", "")
+
+# Fallback: if google_custom_search_api_key is still empty, try reading directly from environment
+if not settings.google_custom_search_api_key:
+    settings.google_custom_search_api_key = os.getenv("GOOGLE_CUSTOM_SEARCH_API_KEY", "")
+
+# Fallback: if google_custom_search_engine_id is still empty, try reading directly from environment
+if not settings.google_custom_search_engine_id:
+    settings.google_custom_search_engine_id = os.getenv("GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "")

@@ -2,9 +2,10 @@
 Helper functions for flashcard operations.
 """
 from sqlmodel import Session, select
-from app.models.models import Card
+from app.models.models import Card, Concept
 from app.services.translation_service import translation_service
 from app.services.description_service import description_service
+from app.services.image_service import image_service
 from typing import Dict, Optional, List
 import logging
 
@@ -150,4 +151,73 @@ def generate_descriptions_for_cards(
         'failed_languages': failed_translations,
         'english_description': english_description
     }
+
+
+def retrieve_images_for_concept(
+    concept: Concept,
+    concept_text: str,
+    session: Session
+) -> Dict:
+    """
+    Retrieve images for a concept and store them in the concept's image_path fields.
+    
+    Args:
+        concept: Concept object to update with images
+        concept_text: The concept text to search for (typically English translation)
+        session: Database session
+    
+    Returns:
+        Dict with 'images_retrieved' (int) and 'success' (bool)
+    """
+    # Check if concept already has images
+    has_images = any([
+        concept.image_path_1,
+        concept.image_path_2,
+        concept.image_path_3,
+        concept.image_path_4
+    ])
+    
+    if has_images:
+        logger.info(f"Concept {concept.id} already has images, skipping retrieval")
+        return {'images_retrieved': 0, 'success': True, 'skipped': True}
+    
+    if not concept_text or not concept_text.strip():
+        logger.warning(f"No concept text provided for image retrieval for concept {concept.id}")
+        return {'images_retrieved': 0, 'success': False, 'error': 'No concept text'}
+    
+    try:
+        logger.info(f"Retrieving images for concept {concept.id} with query: '{concept_text}'")
+        
+        # Get images from image service
+        image_urls = image_service.get_images_for_concept(
+            concept_text=concept_text.strip(),
+            num_images=4
+        )
+        
+        if not image_urls:
+            logger.warning(f"No images found for concept {concept.id} with query: '{concept_text}'")
+            return {'images_retrieved': 0, 'success': False, 'error': 'No images found'}
+        
+        # Store up to 4 images
+        concept.image_path_1 = image_urls[0] if len(image_urls) > 0 else None
+        concept.image_path_2 = image_urls[1] if len(image_urls) > 1 else None
+        concept.image_path_3 = image_urls[2] if len(image_urls) > 2 else None
+        concept.image_path_4 = image_urls[3] if len(image_urls) > 3 else None
+        
+        session.add(concept)
+        
+        logger.info(f"Retrieved and stored {len(image_urls)} image(s) for concept {concept.id}")
+        
+        return {
+            'images_retrieved': len(image_urls),
+            'success': True
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to retrieve images for concept {concept.id}: {str(e)}")
+        return {
+            'images_retrieved': 0,
+            'success': False,
+            'error': str(e)
+        }
 

@@ -70,28 +70,80 @@ class VocabularyItemWidget extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Source card (if available and enabled)
-              if (item.sourceCard != null && sourceLanguageCode != null && showSource)
-                VocabularyCardWidget(
-                  card: item.sourceCard!,
-                  languageCode: sourceLanguageCode!,
-                  isSource: true,
-                  showDescription: showDescription,
-                  isFirst: true,
-                  isLast: !(item.targetCard != null && targetLanguageCode != null && showTarget),
+              // Content column (cards)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Source card (if available and enabled)
+                    if (item.sourceCard != null && sourceLanguageCode != null && showSource)
+                      VocabularyCardWidget(
+                        card: item.sourceCard!,
+                        languageCode: sourceLanguageCode!,
+                        isSource: true,
+                        showDescription: showDescription,
+                        isFirst: true,
+                        isLast: !(item.targetCard != null && targetLanguageCode != null && showTarget),
+                      ),
+                    // Target card (if available and enabled)
+                    if (item.targetCard != null && targetLanguageCode != null && showTarget)
+                      VocabularyCardWidget(
+                        card: item.targetCard!,
+                        languageCode: targetLanguageCode!,
+                        isSource: false,
+                        showDescription: showDescription,
+                        isFirst: !(item.sourceCard != null && sourceLanguageCode != null && showSource),
+                        isLast: true,
+                      ),
+                  ],
                 ),
-              // Target card (if available and enabled)
-              if (item.targetCard != null && targetLanguageCode != null && showTarget)
-                VocabularyCardWidget(
-                  card: item.targetCard!,
-                  languageCode: targetLanguageCode!,
-                  isSource: false,
-                  showDescription: showDescription,
-                  isFirst: !(item.sourceCard != null && sourceLanguageCode != null && showSource),
-                  isLast: true,
+              ),
+              // Image on the right side
+              if (item.firstImageUrl != null)
+                Container(
+                  margin: const EdgeInsets.all(12.0),
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.network(
+                    item.firstImageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Icon(
+                          Icons.broken_image,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                          size: 32,
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
             ],
           ),

@@ -64,6 +64,10 @@ class PairedVocabularyItem(BaseModel):
     concept_id: int
     source_card: Optional[CardResponse] = None
     target_card: Optional[CardResponse] = None
+    image_path_1: Optional[str] = None
+    image_path_2: Optional[str] = None
+    image_path_3: Optional[str] = None
+    image_path_4: Optional[str] = None
 
     class Config:
         from_attributes = True

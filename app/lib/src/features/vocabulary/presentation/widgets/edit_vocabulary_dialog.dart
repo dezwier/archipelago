@@ -57,6 +57,7 @@ class _EditVocabularyDialogState extends State<EditVocabularyDialog> {
               const SizedBox(height: 8),
               TextField(
                 controller: _sourceController,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   hintText: 'Enter source translation',
                   border: OutlineInputBorder(),
@@ -72,6 +73,7 @@ class _EditVocabularyDialogState extends State<EditVocabularyDialog> {
               const SizedBox(height: 8),
               TextField(
                 controller: _targetController,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   hintText: 'Enter target translation',
                   border: OutlineInputBorder(),

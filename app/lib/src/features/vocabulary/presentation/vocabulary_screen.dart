@@ -314,6 +314,7 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
                     controller: _searchController,
                     focusNode: _searchFocusNode,
                     autofocus: false,
+                    textCapitalization: TextCapitalization.sentences,
                     onTap: () {
                       // Always enable focus when user taps on the field
                       _searchFocusNode.canRequestFocus = true;

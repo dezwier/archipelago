@@ -148,6 +148,7 @@ class _GenerateFlashcardsScreenState extends State<GenerateFlashcardsScreen> {
                 focusNode: _conceptFocusNode,
                 autofocus: false,
                 enabled: true,
+                textCapitalization: TextCapitalization.sentences,
                 onTap: () {
                   // Always enable focus when user taps on the field
                   _conceptFocusNode.canRequestFocus = true;
@@ -179,6 +180,7 @@ class _GenerateFlashcardsScreenState extends State<GenerateFlashcardsScreen> {
                 focusNode: _topicFocusNode,
                 autofocus: false,
                 enabled: true,
+                textCapitalization: TextCapitalization.sentences,
                 onTap: () {
                   // Always enable focus when user taps on the field
                   _topicFocusNode.canRequestFocus = true;

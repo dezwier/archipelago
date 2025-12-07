@@ -528,12 +528,23 @@ async def get_vocabulary(
             has_previous=page > 1
         )
     
+    # Fetch concepts for paginated concept IDs to get images
+    concept_map = {}
+    if paginated_concept_ids:
+        concepts = session.exec(
+            select(Concept).where(Concept.id.in_(paginated_concept_ids))
+        ).all()
+        concept_map = {concept.id: concept for concept in concepts}
+    
     # Build paired vocabulary items (maintain alphabetical order)
     paired_items = []
     for concept_id in paginated_concept_ids:
         lang_cards = concept_cards_map.get(concept_id, {})
         source_card = lang_cards.get(user.lang_native)
         target_card = lang_cards.get(user.lang_learning) if user.lang_learning else None
+        
+        # Get concept for images
+        concept = concept_map.get(concept_id)
         
         # Only include items that have at least one card
         if source_card or target_card:
@@ -562,6 +573,10 @@ async def get_vocabulary(
                         gender=target_card.gender,
                         notes=target_card.notes
                     ) if target_card else None,
+                    image_path_1=concept.image_path_1 if concept else None,
+                    image_path_2=concept.image_path_2 if concept else None,
+                    image_path_3=concept.image_path_3 if concept else None,
+                    image_path_4=concept.image_path_4 if concept else None,
                 )
             )
     
