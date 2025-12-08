@@ -222,7 +222,7 @@ Return ONLY valid JSON in this exact format (no markdown, no explanations):
       "language_code": "en",
       "term": "string (use infinitive for verbs)",
       "ipa": "string or null (use standard IPA symbols)",
-      "description": "string or null (in the target language, do NOT translate from English)",
+      "description": "string (REQUIRED - in the target language, do NOT translate from English)",
       "gender": "masculine | feminine | neuter | null (for languages with gender)",
       "article": "string or null (for languages with articles)",
       "plural_form": "string or null (for nouns)",
@@ -250,7 +250,8 @@ Rules:
 9. All cards must represent the same semantic concept - consistency across languages is essential
 10. The concept description should clearly define the single semantic meaning that all cards share
 11. frequency_bucket must be exactly one of: "very high", "high", "medium", "low", or "very low"
-12. gender must be exactly one of: "masculine", "feminine", "neuter", or null"""
+12. gender must be exactly one of: "masculine", "feminine", "neuter", or null
+13. REQUIRED FIELDS: Both "term" and "description" are REQUIRED for each card - they cannot be missing, empty, or null"""
     
     return prompt
 

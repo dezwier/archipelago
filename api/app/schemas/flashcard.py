@@ -256,13 +256,29 @@ class LLMCardData(BaseModel):
     language_code: str
     term: str
     ipa: Optional[str] = None
-    description: Optional[str] = None
+    description: str
     gender: Optional[str] = None
     article: Optional[str] = None
     plural_form: Optional[str] = None
     verb_type: Optional[str] = None
     auxiliary_verb: Optional[str] = None
     formality_register: Optional[str] = Field(default=None, alias="register")
+    
+    @field_validator('term')
+    @classmethod
+    def validate_term(cls, v):
+        """Validate term field is not empty."""
+        if not v or not v.strip():
+            raise ValueError("term cannot be missing or empty")
+        return v.strip()
+    
+    @field_validator('description')
+    @classmethod
+    def validate_description(cls, v):
+        """Validate description field is not empty."""
+        if not v or not v.strip():
+            raise ValueError("description cannot be missing or empty")
+        return v.strip()
     
     @field_validator('gender', mode='before')
     @classmethod

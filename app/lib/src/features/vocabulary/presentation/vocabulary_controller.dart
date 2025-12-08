@@ -320,21 +320,6 @@ class VocabularyController extends ChangeNotifier {
     _loadUserAndVocabulary();
   }
 
-  /// Check if any cards need descriptions
-  bool hasCardsNeedingDescriptions() {
-    for (final item in _pairedItems) {
-      if (item.sourceCard != null && 
-          (item.sourceCard!.description == null || item.sourceCard!.description!.isEmpty || item.sourceCard!.description!.trim().isEmpty)) {
-        return true;
-      }
-      if (item.targetCard != null && 
-          (item.targetCard!.description == null || item.targetCard!.description!.isEmpty || item.targetCard!.description!.trim().isEmpty)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   /// Start generating descriptions for cards that don't have them
   Future<bool> startGenerateDescriptions() async {
     if (_isGeneratingDescriptions || _currentUser == null) {
@@ -422,34 +407,6 @@ class VocabularyController extends ChangeNotifier {
         print('Error polling task status: $e');
       }
     });
-  }
-
-  /// Cancel the description generation task
-  Future<bool> cancelGenerateDescriptions() async {
-    if (_descriptionTaskId == null || _descriptionStatus != 'running') {
-      return false;
-    }
-
-    try {
-      final result = await VocabularyService.cancelDescriptionGeneration(
-        taskId: _descriptionTaskId!,
-      );
-
-      if (result['success'] == true) {
-        _descriptionStatus = result['status'] as String;
-        _descriptionProgress = result['progress'] as Map<String, dynamic>;
-        notifyListeners();
-        return true;
-      } else {
-        _errorMessage = result['message'] as String? ?? 'Failed to cancel task';
-        notifyListeners();
-        return false;
-      }
-    } catch (e) {
-      _errorMessage = 'Error canceling task: ${e.toString()}';
-      notifyListeners();
-      return false;
-    }
   }
 
   // Search methods

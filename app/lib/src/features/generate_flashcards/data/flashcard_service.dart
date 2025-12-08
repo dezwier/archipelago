@@ -563,6 +563,19 @@ class FlashcardService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        // Check if there are any errors in the response
+        final errors = data['errors'] as List<dynamic>?;
+        if (errors != null && errors.isNotEmpty) {
+          // If there are errors, treat as failure
+          final errorMessages = errors.map((e) => e.toString()).join('\n');
+          return {
+            'success': false,
+            'message': errorMessages,
+            'data': data,
+          };
+        }
+        
         return {
           'success': true,
           'message': 'Cards generated successfully',
@@ -638,6 +651,19 @@ class FlashcardService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        // Check if there are any errors in the response
+        final errors = data['errors'] as List<dynamic>?;
+        if (errors != null && errors.isNotEmpty) {
+          // If there are errors, treat as failure
+          final errorMessages = errors.map((e) => e.toString()).join('\n');
+          return {
+            'success': false,
+            'message': errorMessages,
+            'data': data,
+          };
+        }
+        
         return {
           'success': true,
           'message': 'Cards generated successfully',

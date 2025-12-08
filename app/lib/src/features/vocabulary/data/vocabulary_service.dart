@@ -59,11 +59,20 @@ class VocabularyService {
           'has_previous': data['has_previous'] as bool,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to fetch vocabulary',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to fetch vocabulary',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to fetch vocabulary: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -108,11 +117,20 @@ class VocabularyService {
           'card': card,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to update card',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to update card',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to update card: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -143,11 +161,20 @@ class VocabularyService {
           'success': true,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to delete concept',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to delete concept',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to delete concept: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -184,11 +211,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to start description generation',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to start description generation',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to start description generation: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -227,11 +263,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to get task status',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to get task status',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to get task status: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -270,11 +315,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to cancel task',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to cancel task',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to cancel task: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -311,11 +365,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to start image generation',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to start image generation',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to start image generation: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -354,11 +417,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to get task status',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to get task status',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to get task status: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -397,11 +469,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to cancel task',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to cancel task',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to cancel task: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -436,11 +517,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to refresh images',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to refresh images',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to refresh images: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -477,11 +567,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to update image',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to update image',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to update image: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -519,11 +618,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to update image',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to update image',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to update image: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {
@@ -557,11 +665,20 @@ class VocabularyService {
           'message': data['message'] as String?,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to delete image',
-        };
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to delete image',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to delete image: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
       }
     } catch (e) {
       return {

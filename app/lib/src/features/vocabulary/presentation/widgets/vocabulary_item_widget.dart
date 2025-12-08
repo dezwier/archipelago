@@ -83,64 +83,11 @@ class VocabularyItemWidget extends StatelessWidget {
                 ),
               ],
             ),
-            child: Padding(
+              child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Dictionary content column
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _buildLanguageSections(context),
-                    ),
-                  ),
-                  // Image on the right side
-                  if (showImages && item.firstImageUrl != null) ...[
-                    const SizedBox(width: 12),
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                          width: 1,
-                        ),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Image.network(
-                        item.firstImageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            child: Icon(
-                              Icons.broken_image,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                              size: 32,
-                            ),
-                          );
-                        },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                                strokeWidth: 2,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ],
+                children: _buildLanguageSections(context),
               ),
             ),
           ),
