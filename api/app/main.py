@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+import logging
 from app.core.config import settings
 from app.core.database import init_db
 
@@ -7,9 +10,24 @@ from app.core.database import init_db
 from app.models import models  # noqa: F401
 
 # Import routers
-from app.api.v1.endpoints import auth, languages, flashcards, flashcard_descriptions, flashcard_images
+from app.api.v1.endpoints import auth, languages, flashcards, flashcard_images, concepts, topics
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Archipelago API", version="1.0.0")
+
+# Add exception handler for validation errors to log details
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Log validation errors with full details for debugging."""
+    body = await request.body()
+    logger.error(f"Validation error on {request.method} {request.url.path}")
+    logger.error(f"Request body: {body.decode('utf-8') if body else 'empty'}")
+    logger.error(f"Validation errors: {exc.errors()}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": body.decode('utf-8') if body else None},
+    )
 
 # CORS middleware
 app.add_middleware(
@@ -48,6 +66,7 @@ async def health():
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
 app.include_router(languages.router, prefix=settings.api_v1_prefix)
 app.include_router(flashcards.router, prefix=settings.api_v1_prefix)
-app.include_router(flashcard_descriptions.router, prefix=settings.api_v1_prefix)
 app.include_router(flashcard_images.router, prefix=settings.api_v1_prefix)
+app.include_router(concepts.router, prefix=settings.api_v1_prefix)
+app.include_router(topics.router, prefix=settings.api_v1_prefix)
 

@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 import hashlib
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import UniqueConstraint, Column, String as SAString
 
 
 class UserCardStatus(str, Enum):
@@ -94,11 +94,12 @@ class Card(SQLModel, table=True):
     plural_form: Optional[str] = None  # Plural form of the term
     verb_type: Optional[str] = None  # Verb type (e.g., 'regular', 'irregular')
     auxiliary_verb: Optional[str] = None  # Auxiliary verb (e.g., 'avoir', 'être' in French)
-    register: Optional[str] = None  # Register (e.g., 'formal', 'informal', 'slang')
+    formality_register: Optional[str] = Field(default=None, sa_column=Column("register", SAString))  # Register (e.g., 'formal', 'informal', 'slang')
     confidence_score: Optional[float] = None  # Confidence score for the card
     status: Optional[str] = None  # Status of the card
     source: Optional[str] = None  # Source of the card data
     audio_url: Optional[str] = None  # Audio URL for pronunciation
+    notes: Optional[str] = None  # Additional notes for the card
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
     

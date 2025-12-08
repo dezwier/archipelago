@@ -261,6 +261,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 bottom: MediaQuery.of(context).padding.bottom + 80,
                 child: FloatingActionButton.small(
                   key: _filterButtonKey,
+                  heroTag: 'filter_fab',
                   onPressed: () => _showFilterMenu(context),
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -274,6 +275,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 bottom: MediaQuery.of(context).padding.bottom + 140,
                 child: FloatingActionButton.small(
                   key: _sortButtonKey,
+                  heroTag: 'sort_fab',
                   onPressed: () => _showSortMenu(context),
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,

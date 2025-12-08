@@ -16,13 +16,13 @@ class DescriptionService:
         # Use gemini-2.5-flash as the primary model (fast, cost-effective, and doesn't use thinking tokens)
         # gemini-pro-latest may use thinking tokens which consume output budget
         # Based on ListModels API, available models are: gemini-2.5-flash and gemini-2.5-pro
-        self.model_name = "gemini-2.5-flash"
+        self.model_name = "gemini-pro-latest"
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         
         # Fallback model in case primary model is not available
         self.fallback_models = [
             "gemini-2.5-pro",  # More powerful but may use thinking tokens
-            "gemini-pro-latest",  # Last resort (may have thinking token issues)
+            "gemini-2.5-flash",
         ]
         
         # Debug logging

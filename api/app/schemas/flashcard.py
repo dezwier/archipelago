@@ -1,14 +1,6 @@
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, field_validator
 from typing import Optional, List
 from datetime import datetime
-
-
-class GenerateFlashcardRequest(BaseModel):
-    """Request schema for generating a flashcard."""
-    concept: str = Field(..., min_length=1, description="The word or phrase to create a flashcard for")
-    source_language: str = Field(..., max_length=2, description="Source language code (e.g., 'en', 'fr')")
-    target_language: str = Field(..., max_length=2, description="Target language code (e.g., 'en', 'fr')")
-    topic: Optional[str] = Field(None, description="Optional topic island name")
 
 
 class CardResponse(BaseModel):
@@ -121,16 +113,6 @@ class TopicResponse(BaseModel):
         from_attributes = True
 
 
-class GenerateFlashcardResponse(BaseModel):
-    """Response schema for flashcard generation."""
-    concept: ConceptResponse
-    topic: Optional[TopicResponse] = None
-    source_card: CardResponse
-    target_card: CardResponse
-    all_cards: List[CardResponse]  # All cards for this concept
-    message: str
-
-
 class PairedVocabularyItem(BaseModel):
     """Paired vocabulary item - groups source and target cards by concept."""
     concept_id: int
@@ -228,17 +210,36 @@ class TaskStatusResponse(BaseModel):
 class CreateConceptRequest(BaseModel):
     """Request schema for creating a concept with cards."""
     term: str = Field(..., min_length=1, description="The term to create a concept for")
-    topic_id: int = Field(..., description="Topic ID for the concept")
-    part_of_speech: str = Field(..., description="Part of speech (e.g., 'verb', 'noun')")
-    core_meaning_en: str = Field(..., description="Core meaning in English")
+    topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
+    part_of_speech: Optional[str] = Field(None, description="Part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence. If not provided, will be inferred from the term.")
+    core_meaning_en: Optional[str] = Field(None, description="Core meaning in English")
     excluded_senses: Optional[List[str]] = Field(default=[], description="List of excluded senses")
     languages: List[str] = Field(..., min_items=1, description="List of language codes to generate cards for")
+    
+    @field_validator('part_of_speech')
+    @classmethod
+    def validate_part_of_speech(cls, v):
+        """Validate part_of_speech field if provided."""
+        if v is not None:
+            valid_values = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence']
+            if v not in valid_values:
+                raise ValueError(f"part_of_speech must be one of: {', '.join(valid_values)}. Got: {v}")
+        return v
 
 
 class LLMConceptData(BaseModel):
     """Pydantic model for concept-level data from LLM."""
     description: str
-    frequency_bucket: str = Field(..., pattern="^(very_common|common|medium|rare)$")
+    frequency_bucket: str
+    
+    @field_validator('frequency_bucket')
+    @classmethod
+    def validate_frequency_bucket(cls, v):
+        """Validate frequency_bucket field."""
+        valid_values = ['very high', 'high', 'medium', 'low', 'very low']
+        if v not in valid_values:
+            raise ValueError(f"frequency_bucket must be one of: {', '.join(valid_values)}. Got: {v}")
+        return v
 
 
 class LLMCardData(BaseModel):
@@ -252,7 +253,26 @@ class LLMCardData(BaseModel):
     plural_form: Optional[str] = None
     verb_type: Optional[str] = None
     auxiliary_verb: Optional[str] = None
-    register: Optional[str] = Field(None, pattern="^(neutral|formal|informal|slang)$")
+    formality_register: Optional[str] = Field(default=None, alias="register")
+    
+    @field_validator('gender', mode='before')
+    @classmethod
+    def validate_gender(cls, v):
+        """Validate gender field if provided."""
+        if v is not None and v not in ['masculine', 'feminine', 'neuter']:
+            raise ValueError(f"gender must be one of: masculine, feminine, neuter, or null. Got: {v}")
+        return v
+    
+    @field_validator('formality_register', mode='before')
+    @classmethod
+    def validate_formality_register(cls, v):
+        """Validate formality_register field if provided."""
+        if v is not None and v not in ['neutral', 'formal', 'informal', 'slang']:
+            raise ValueError(f"formality_register must be one of: neutral, formal, informal, slang, or null. Got: {v}")
+        return v
+    
+    class Config:
+        populate_by_name = True  # Allow both 'register' and 'formality_register' in JSON
 
 
 class LLMResponse(BaseModel):
@@ -265,4 +285,67 @@ class CreateConceptResponse(BaseModel):
     """Response schema for concept creation."""
     concept: ConceptResponse
     cards: List[CardResponse]
+
+
+class PreviewConceptResponse(BaseModel):
+    """Response schema for concept preview (before saving)."""
+    concept: LLMConceptData
+    cards: List[LLMCardData]
+    message: str = "Preview generated successfully"
+
+
+class ConfirmConceptRequest(BaseModel):
+    """Request schema for confirming a previewed concept."""
+    term: str = Field(..., min_length=1, description="The term")
+    topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
+    part_of_speech: Optional[str] = Field(None, description="Part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence. May be inferred if not provided.")
+    concept: LLMConceptData = Field(..., description="Concept data from preview")
+    cards: List[LLMCardData] = Field(..., description="Card data from preview")
+    
+    @field_validator('part_of_speech')
+    @classmethod
+    def validate_part_of_speech(cls, v):
+        """Validate part_of_speech field if provided."""
+        if v is not None:
+            valid_values = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence']
+            if v not in valid_values:
+                raise ValueError(f"part_of_speech must be one of: {', '.join(valid_values)}. Got: {v}")
+        return v
+
+
+class CreateConceptOnlyRequest(BaseModel):
+    """Request schema for creating only a concept (without cards)."""
+    term: str = Field(..., min_length=1, description="The term")
+    description: Optional[str] = Field(None, description="Description of the concept")
+    topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
+
+
+class ConceptWithMissingLanguages(BaseModel):
+    """Schema for a concept with missing languages."""
+    concept: ConceptResponse
+    missing_languages: List[str] = Field(..., description="List of language codes that are missing cards for this concept")
+
+
+class ConceptsWithMissingLanguagesResponse(BaseModel):
+    """Response schema for concepts with missing languages."""
+    concepts: List[ConceptWithMissingLanguages]
+
+
+class GetConceptsWithMissingLanguagesRequest(BaseModel):
+    """Request schema for getting concepts with missing languages."""
+    languages: List[str] = Field(..., min_items=1, description="List of language codes to check for missing cards")
+
+
+class GenerateCardsForConceptsRequest(BaseModel):
+    """Request schema for generating cards for concepts."""
+    concept_ids: List[int] = Field(..., min_items=1, description="List of concept IDs to generate cards for")
+    languages: List[str] = Field(..., min_items=1, description="List of language codes to generate cards for")
+
+
+class GenerateCardsForConceptsResponse(BaseModel):
+    """Response schema for generating cards for concepts."""
+    concepts_processed: int = Field(..., description="Number of concepts processed")
+    cards_created: int = Field(..., description="Total number of cards created")
+    errors: List[str] = Field(default=[], description="List of error messages for concepts that failed")
+    total_concepts: int = Field(..., description="Total number of concepts to process")
 
