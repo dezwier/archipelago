@@ -26,20 +26,43 @@ class Topic(SQLModel, table=True):
     concepts: List["Concept"] = Relationship(back_populates="topic")
 
 
+class Image(SQLModel, table=True):
+    """Image table - stores images associated with concepts."""
+    __tablename__ = "images"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    concept_id: int = Field(foreign_key="concept.id", index=True)
+    url: str  # Image URL
+    image_type: Optional[str] = None  # Type of image (e.g., 'illustration', 'photo', 'clipart')
+    is_primary: bool = Field(default=False)  # Whether this is the primary image for the concept
+    confidence_score: Optional[float] = None  # Confidence score for image relevance
+    alt_text: Optional[str] = None  # Alt text for accessibility
+    source: Optional[str] = None  # Source of the image (e.g., 'google', 'upload')
+    licence: Optional[str] = None  # License information
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    concept: "Concept" = Relationship(back_populates="images")
+
+
 class Concept(SQLModel, table=True):
     """Concept table - represents a concept that can have multiple language cards."""
     __tablename__ = "concept"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    image_path_1: Optional[str] = None
-    image_path_2: Optional[str] = None
-    image_path_3: Optional[str] = None
-    image_path_4: Optional[str] = None
     topic_id: Optional[int] = Field(default=None, foreign_key="topic.id")
+    term: Optional[str] = None  # Former internal_name - English translation for the concept
+    description: Optional[str] = None
+    part_of_speech: Optional[str] = None
+    frequency_bucket: Optional[str] = None
+    status: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
     
     # Relationships
     topic: Optional[Topic] = Relationship(back_populates="concepts")
     cards: List["Card"] = Relationship(back_populates="concept")
+    images: List["Image"] = Relationship(back_populates="concept")
 
 
 class Language(SQLModel, table=True):
@@ -55,21 +78,29 @@ class Language(SQLModel, table=True):
 
 class Card(SQLModel, table=True):
     """Card table - language-specific representation of a concept."""
-    __tablename__ = "cards"
+    __tablename__ = "card"
     __table_args__ = (
-        UniqueConstraint('concept_id', 'language_code', 'translation', name='uq_card_concept_language_translation'),
+        UniqueConstraint('concept_id', 'language_code', 'term', name='uq_card_concept_language_term'),
     )
     
     id: Optional[int] = Field(default=None, primary_key=True)
     concept_id: int = Field(foreign_key="concept.id")
     language_code: str = Field(foreign_key="languages.code", max_length=2)
-    translation: str  # The word in the target language
-    description: str  # Description in the target language
+    term: str  # The word in the target language (former translation)
     ipa: Optional[str] = None  # Pronunciation in IPA symbols
-    audio_path: Optional[str] = None  # Pronunciation file path
+    description: Optional[str] = None  # Description in the target language
     gender: Optional[str] = None  # For French/Spanish/German
-    notes: Optional[str] = None  # Context specific to this language
-    creation_time: datetime = Field(default_factory=datetime.utcnow)
+    article: Optional[str] = None  # Article (e.g., 'le', 'la', 'les' in French)
+    plural_form: Optional[str] = None  # Plural form of the term
+    verb_type: Optional[str] = None  # Verb type (e.g., 'regular', 'irregular')
+    auxiliary_verb: Optional[str] = None  # Auxiliary verb (e.g., 'avoir', 'être' in French)
+    register: Optional[str] = None  # Register (e.g., 'formal', 'informal', 'slang')
+    confidence_score: Optional[float] = None  # Confidence score for the card
+    status: Optional[str] = None  # Status of the card
+    source: Optional[str] = None  # Source of the card data
+    audio_url: Optional[str] = None  # Audio URL for pronunciation
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
     
     # Relationships
     concept: Concept = Relationship(back_populates="cards")
@@ -109,7 +140,7 @@ class UserCard(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")
-    card_id: int = Field(foreign_key="cards.id")
+    card_id: int = Field(foreign_key="card.id")
     image_path: Optional[str] = None
     created_time: datetime = Field(default_factory=datetime.utcnow)
     last_success_time: Optional[datetime] = None

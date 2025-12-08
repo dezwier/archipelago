@@ -2,11 +2,12 @@
 Helper functions for flashcard operations.
 """
 from sqlmodel import Session, select
-from app.models.models import Card, Concept
+from app.models.models import Card, Concept, Image
 from app.services.translation_service import translation_service
 from app.services.description_service import description_service
 from app.services.image_service import image_service
 from typing import Dict, Optional, List
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -160,30 +161,17 @@ def retrieve_images_for_concept(
     force_refresh: bool = False
 ) -> Dict:
     """
-    Retrieve images for a concept and store them in the concept's image_path fields.
+    Retrieve images for a concept and store them in the images table.
     
     Args:
         concept: Concept object to update with images
         concept_text: The concept text to search for (typically English translation)
         session: Database session
-        force_refresh: If True, retrieve images even if concept already has images
+        force_refresh: If True, delete existing images and retrieve new ones
     
     Returns:
         Dict with 'images_retrieved' (int) and 'success' (bool)
     """
-    # Check if concept already has images (unless forcing refresh)
-    if not force_refresh:
-        has_images = any([
-            concept.image_path_1,
-            concept.image_path_2,
-            concept.image_path_3,
-            concept.image_path_4
-        ])
-        
-        if has_images:
-            logger.info(f"Concept {concept.id} already has images, skipping retrieval")
-            return {'images_retrieved': 0, 'success': True, 'skipped': True}
-    
     if not concept_text or not concept_text.strip():
         logger.warning(f"No concept text provided for image retrieval for concept {concept.id}")
         return {'images_retrieved': 0, 'success': False, 'error': 'No concept text'}
@@ -191,35 +179,54 @@ def retrieve_images_for_concept(
     try:
         logger.info(f"Retrieving images for concept {concept.id} with query: '{concept_text}'")
         
+        # Get current images count
+        existing_images = session.exec(
+            select(Image).where(Image.concept_id == concept.id)
+        ).all()
+        current_count = len(existing_images)
+        
         # Clear existing images if forcing refresh
         if force_refresh:
-            concept.image_path_1 = None
-            concept.image_path_2 = None
-            concept.image_path_3 = None
-            concept.image_path_4 = None
-            session.add(concept)
+            for img in existing_images:
+                session.delete(img)
             session.commit()
-            session.refresh(concept)
+            current_count = 0
         
-        # Get images from image service
+        # Determine how many images we need (max 4 total)
+        max_images = 4
+        images_needed = max_images - current_count
+        
+        if images_needed <= 0:
+            logger.info(f"Concept {concept.id} already has {current_count} images, no slots available")
+            return {'images_retrieved': 0, 'success': True, 'skipped': True, 'message': 'All image slots are full'}
+        
+        # Get images from image service (only as many as we need)
         image_urls = image_service.get_images_for_concept(
             concept_text=concept_text.strip(),
-            num_images=4
+            num_images=images_needed
         )
         
         if not image_urls:
             logger.warning(f"No images found for concept {concept.id} with query: '{concept_text}'")
             return {'images_retrieved': 0, 'success': False, 'error': 'No images found'}
         
-        # Store up to 4 images
-        concept.image_path_1 = image_urls[0] if len(image_urls) > 0 else None
-        concept.image_path_2 = image_urls[1] if len(image_urls) > 1 else None
-        concept.image_path_3 = image_urls[2] if len(image_urls) > 2 else None
-        concept.image_path_4 = image_urls[3] if len(image_urls) > 3 else None
+        # Check if we need to set a primary image
+        has_primary = any(img.is_primary for img in existing_images)
+        is_first_new = not has_primary and current_count == 0
         
-        session.add(concept)
+        # Create Image records for new URLs
+        for idx, url in enumerate(image_urls):
+            image = Image(
+                concept_id=concept.id,
+                url=url,
+                image_type='illustration',
+                is_primary=is_first_new and idx == 0,  # First image is primary if no primary exists
+                source='google',
+                created_at=datetime.utcnow()
+            )
+            session.add(image)
+        
         session.commit()
-        session.refresh(concept)
         
         logger.info(f"Retrieved and stored {len(image_urls)} image(s) for concept {concept.id}")
         

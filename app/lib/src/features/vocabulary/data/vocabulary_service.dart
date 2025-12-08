@@ -447,5 +447,126 @@ class VocabularyService {
       };
     }
   }
+
+  /// Update the first image (image_path_1) for a concept.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'image_path_1': String? (if successful) - updated image URL
+  /// - 'message': String (if successful or error)
+  static Future<Map<String, dynamic>> updateConceptImage1({
+    required int conceptId,
+    required String imageUrl, // Can be empty string to clear
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/concepts/$conceptId/images/1');
+    
+    try {
+      final response = await http.put(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'image_url': imageUrl}),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'image_path_1': data['image_path_1'] as String?,
+          'message': data['message'] as String?,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to update image',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error updating image: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Update a specific image for a concept by index.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'image_path': String? (if successful) - updated image URL
+  /// - 'message': String (if successful or error)
+  static Future<Map<String, dynamic>> updateConceptImage({
+    required int conceptId,
+    required int imageIndex, // 1-4
+    required String imageUrl, // Can be empty string to clear
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/concepts/$conceptId/images/$imageIndex');
+    
+    try {
+      final response = await http.put(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'image_url': imageUrl}),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'image_path': data['image_path_$imageIndex'] as String?,
+          'message': data['message'] as String?,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to update image',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error updating image: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Delete a specific image from a concept.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'message': String (if successful or error)
+  static Future<Map<String, dynamic>> deleteConceptImage({
+    required int conceptId,
+    required int imageIndex, // 1-4
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/concepts/$conceptId/images/$imageIndex');
+    
+    try {
+      final response = await http.delete(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'message': data['message'] as String?,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to delete image',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error deleting image: ${e.toString()}',
+      };
+    }
+  }
 }
 

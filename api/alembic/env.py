@@ -7,6 +7,7 @@ from app.core.database import engine
 from app.models.models import (
     Topic,
     Concept,
+    Image,
     Language,
     Card,
     UserCard,

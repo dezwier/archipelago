@@ -81,6 +81,36 @@ class ImageService:
         
         return True
     
+    def _build_clean_image_query(self, query: str) -> str:
+        """
+        Build an enhanced query to find clean, relevant illustrations.
+        
+        Strategies:
+        - Use "illustration" for cleaner, simpler images
+        - Add "simple" or "clean" to avoid complex/cluttered images
+        - Use quotes around the main concept to ensure it's the focus
+        - Add "no text" to avoid images with text overlays
+        - Use "educational" or "vocabulary" to find learning-appropriate images
+        
+        Args:
+            query: Original search query (English phrase/concept)
+            
+        Returns:
+            Enhanced query string optimized for clean illustrations
+        """
+        query = query.strip()
+        
+        # Remove quotes if present (we'll add our own)
+        query = query.strip('"\'')
+        
+        # Build query optimized for vocabulary learning illustrations
+        # Strategy: Put the concept first (in quotes for exact match), then add illustration keywords
+        # This ensures the concept is the primary focus, not the illustration type
+        # Using "simple illustration" helps find clean, educational-style images
+        enhanced = f'"{query}" simple illustration'
+        
+        return enhanced
+    
     def search_images(
         self,
         query: str,
@@ -89,9 +119,10 @@ class ImageService:
     ) -> List[str]:
         """
         Search for images using Google Custom Search JSON API.
+        Queries are enhanced with "illustration without text" prefix to get cleaner, text-free images.
         
         Args:
-            query: Search query text
+            query: Search query text (will be prefixed with "illustration without text")
             num_results: Number of image URLs to return (default: 4, max: 10)
             image_size: Image size filter - "ICON", "SMALL", "MEDIUM", "LARGE", "XLARGE", "XXLARGE", "HUGE" (default: "MEDIUM")
         
@@ -130,21 +161,22 @@ class ImageService:
             logger.warning(f"Proceeding with API call despite exceeding free tier limit ({self._daily_call_count} calls today)")
         
         try:
-            logger.debug(f"Searching for images with query: '{query}', size: {image_size}, num_results: {num_results} (API call #{self._daily_call_count})")
+            # Enhance query to get cleaner, text-free images
+            enhanced_query = self._build_clean_image_query(query)
             
-            # Use original query - let imgType=photo do the filtering
-            # Adding modifiers often backfires with Google's search algorithm
-            search_query = query.strip()
+            logger.debug(f"Searching for images with query: '{enhanced_query}' (original: '{query}'), size: {image_size}, num_results: {num_results} (API call #{self._daily_call_count})")
             
             # Build request parameters
+            # Try clipart first for cleaner illustrations, but also allow photos
+            # We'll prioritize clipart but won't restrict too much
             params = {
                 "key": self.api_key,
                 "cx": self.search_engine_id,
-                "q": search_query,
+                "q": enhanced_query,
                 "searchType": "image",
                 "num": num_results,
-                "imgSize": image_size,
-                "imgType": "photo",  # Prefer photographic images (less likely to have text overlays)
+                "imgSize": "MEDIUM",  # Use LARGE for better quality illustrations
+                "imgType": "clipart",  # Use clipart for cleaner, simpler illustrations (better for vocabulary)
                 "safe": "active"  # Safe search
             }
             
@@ -167,11 +199,11 @@ class ImageService:
                         image_urls.append(item["link"])
                         logger.debug(f"Found image URL: {item['link']}")
             
-            logger.info(f"Retrieved {len(image_urls)} image URL(s) for query: '{query}'")
+            logger.info(f"Retrieved {len(image_urls)} image URL(s) for query: '{enhanced_query}' (original: '{query}')")
             
             # If we got fewer results than requested, that's okay - just return what we have
             if len(image_urls) < num_results:
-                logger.warning(f"Requested {num_results} images but only found {len(image_urls)} for query: '{query}'")
+                logger.warning(f"Requested {num_results} images but only found {len(image_urls)} for query: '{enhanced_query}' (original: '{query}')")
             
             return image_urls
             
@@ -242,7 +274,7 @@ class ImageService:
             return self.search_images(
                 query=concept_text.strip(),
                 num_results=num_images,
-                image_size="MEDIUM"  # Medium size for better quality while keeping reasonable file sizes
+                image_size="LARGE"  # Large size for better quality illustrations
             )
         except Exception as e:
             logger.error(f"Failed to get images for concept '{concept_text}': {str(e)}")

@@ -12,14 +12,14 @@ import 'widgets/vocabulary_detail_dialog.dart';
 import '../data/vocabulary_service.dart';
 import '../../../utils/language_emoji.dart';
 
-class VocabularyScreen extends StatefulWidget {
-  const VocabularyScreen({super.key});
+class DictionaryScreen extends StatefulWidget {
+  const DictionaryScreen({super.key});
 
   @override
-  State<VocabularyScreen> createState() => _VocabularyScreenState();
+  State<DictionaryScreen> createState() => _DictionaryScreenState();
 }
 
-class _VocabularyScreenState extends State<VocabularyScreen> {
+class _DictionaryScreenState extends State<DictionaryScreen> {
   late final VocabularyController _controller;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
@@ -751,6 +751,7 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
         item,
         result['source'],
         result['target'],
+        result['image_url'],
       );
 
       if (mounted) {
@@ -758,7 +759,7 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
           SnackBar(
             content: Text(
               success
-                  ? 'Translation updated successfully'
+                  ? 'Translation and image updated successfully'
                   : _controller.errorMessage ?? 'Failed to update translation',
             ),
             backgroundColor: success
@@ -807,8 +808,27 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
         onEdit: () => _handleEdit(item),
         onRandomCard: () => _handleRandomCard(context),
         onRefreshImages: () => _handleRefreshImages(context, item),
+        onItemUpdated: (updatedItem) => _handleItemUpdated(context, updatedItem),
       ),
     );
+  }
+
+  Future<void> _handleItemUpdated(BuildContext context, PairedVocabularyItem item) async {
+    // Refresh the vocabulary list to get updated item
+    await _controller.refresh();
+    
+    // Find the updated item in the list
+    final updatedItems = _controller.filteredItems;
+    final updatedItem = updatedItems.firstWhere(
+      (i) => i.conceptId == item.conceptId,
+      orElse: () => item,
+    );
+    
+    // Close current dialog and reopen with updated item
+    if (mounted) {
+      Navigator.of(context).pop(); // Close current dialog
+      _handleItemTap(updatedItem); // Reopen with updated item
+    }
   }
 
   void _handleRandomCard(BuildContext context) {
@@ -851,20 +871,21 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                result['message'] as String? ?? 'Images refreshed successfully',
+                result['message'] as String? ?? 'Images added successfully',
               ),
             ),
           );
           
-          // Close the detail dialog and reopen with updated item
-          Navigator.of(context).pop(); // Close detail dialog
-          // Find the updated item in the list
+          // Update the item in the dialog without closing it
           final updatedItems = _controller.filteredItems;
           final updatedItem = updatedItems.firstWhere(
             (i) => i.conceptId == item.conceptId,
             orElse: () => item,
           );
-          _handleItemTap(updatedItem);
+          
+          // Close current dialog and reopen with updated item
+          Navigator.of(context).pop(); // Close detail dialog
+          _handleItemTap(updatedItem); // Reopen with updated item
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

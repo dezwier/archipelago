@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone
 from app.core.database import get_session
-from app.models.models import Topic, Concept, Card, Language, User, UserCard
+from app.models.models import Topic, Concept, Card, Language, User, UserCard, Image
 from app.schemas.flashcard import (
     GenerateFlashcardRequest,
     GenerateFlashcardResponse,
@@ -17,6 +17,7 @@ from app.schemas.flashcard import (
     PairedVocabularyItem,
     VocabularyResponse,
     UpdateCardRequest,
+    ImageResponse,
 )
 from app.services.translation_service import translation_service
 from app.api.v1.endpoints.flashcard_helpers import ensure_capitalized
@@ -75,12 +76,12 @@ async def generate_flashcard(
     # For database lookup, use case-insensitive comparison
     concept_text_lower = concept_text.lower().strip()
     
-    # Step 1: Retrieve all cards with same text (translation) in all languages (case-insensitive)
+    # Step 1: Retrieve all cards with same text (term) in all languages (case-insensitive)
     existing_cards = session.exec(
-        select(Card).where(func.lower(Card.translation) == concept_text_lower)
+        select(Card).where(func.lower(Card.term) == concept_text_lower)
     ).all()
     
-    logger.info(f"Step 1: Found {len(existing_cards)} existing cards with translation: '{concept_text_lower}'")
+    logger.info(f"Step 1: Found {len(existing_cards)} existing cards with term: '{concept_text_lower}'")
     
     # Get all languages from Language table
     all_languages = session.exec(select(Language)).all()
@@ -188,12 +189,12 @@ async def generate_flashcard(
             select(Card).where(
                 Card.concept_id == concept_id,
                 Card.language_code == lang_code,
-                Card.translation == translation_text
+                Card.term == translation_text
             )
         ).first()
         
         if existing_card:
-            logger.info(f"Card already exists for concept_id={concept_id}, language_code='{lang_code}', translation='{translation_text}', skipping creation")
+            logger.info(f"Card already exists for concept_id={concept_id}, language_code='{lang_code}', term='{translation_text}', skipping creation")
             new_cards.append(existing_card)
             continue
         
@@ -201,7 +202,7 @@ async def generate_flashcard(
         new_card = Card(
             concept_id=concept_id,
             language_code=lang_code,
-            translation=translation_text,
+            term=translation_text,
             description=""
         )
         session.add(new_card)
@@ -232,14 +233,14 @@ async def generate_flashcard(
                     select(Card).where(
                         Card.concept_id == concept_id,
                         Card.language_code == lang_code,
-                        Card.translation == translation_text
+                        Card.term == translation_text
                     )
                 ).first()
                 
                 if existing_card:
                     new_cards_retry.append(existing_card)
                 else:
-                    logger.error(f"Failed to create or find card for concept_id={concept_id}, language_code='{lang_code}', translation='{translation_text}'")
+                    logger.error(f"Failed to create or find card for concept_id={concept_id}, language_code='{lang_code}', term='{translation_text}'")
             
             new_cards = new_cards_retry
             logger.info(f"Step 4: After retry, found {len(new_cards)} card(s) for languages: {sorted([c.language_code for c in new_cards])}")
@@ -249,6 +250,38 @@ async def generate_flashcard(
     # Log summary of failed translations
     if failed_translations:
         logger.warning(f"Summary: Failed to translate for {len(failed_translations)} language(s): {sorted(failed_translations)}")
+    
+    # Step 4.5: Update concept's term with English translation
+    # Get all cards for this concept (existing + new)
+    all_cards_for_concept = existing_cards + new_cards
+    
+    # Find English card (prefer from new cards, then existing)
+    english_card = next((card for card in all_cards_for_concept if card.language_code == 'en'), None)
+    
+    if english_card and concept:
+        # Update concept's term if it doesn't have one or if we have a new English card
+        if not concept.term or (english_card in new_cards):
+            concept.term = english_card.term
+            session.add(concept)
+            try:
+                session.commit()
+                session.refresh(concept)
+                logger.info(f"Updated concept {concept_id} term to '{concept.term}'")
+            except Exception as e:
+                logger.warning(f"Failed to update concept term: {str(e)}")
+                session.rollback()
+    elif concept and not concept.term:
+        # If no English card exists, use the first available card's term
+        if all_cards_for_concept:
+            concept.term = all_cards_for_concept[0].term
+            session.add(concept)
+            try:
+                session.commit()
+                session.refresh(concept)
+                logger.info(f"Updated concept {concept_id} term to '{concept.term}' (using first available card)")
+            except Exception as e:
+                logger.warning(f"Failed to update concept term: {str(e)}")
+                session.rollback()
     
     # Step 5: Schedule description generation as a background task
     # This allows the response to be sent immediately while descriptions are generated in parallel
@@ -299,25 +332,35 @@ async def generate_flashcard(
             id=card.id,
             concept_id=card.concept_id,
             language_code=card.language_code,
-            translation=ensure_capitalized(card.translation),
+            translation=ensure_capitalized(card.term),
             description=card.description,
             ipa=card.ipa,
-            audio_path=card.audio_path,
+            audio_path=card.audio_url,
             gender=card.gender,
             notes=card.notes
         )
         for card in all_cards_list
     ]
     
+    # Get images for the concept
+    concept_images = session.exec(
+        select(Image).where(Image.concept_id == concept.id).order_by(Image.created_at)
+    ).all()
+    image_responses = [ImageResponse.model_validate(img) for img in concept_images]
+    
     # Build response
     response = GenerateFlashcardResponse(
         concept=ConceptResponse(
             id=concept.id,
-            image_path_1=concept.image_path_1,
-            image_path_2=concept.image_path_2,
-            image_path_3=concept.image_path_3,
-            image_path_4=concept.image_path_4,
-            topic_id=concept.topic_id
+            topic_id=concept.topic_id,
+            term=concept.term,
+            description=concept.description,
+            part_of_speech=concept.part_of_speech,
+            frequency_bucket=concept.frequency_bucket,
+            status=concept.status,
+            created_at=concept.created_at,
+            updated_at=concept.updated_at,
+            images=image_responses
         ),
         topic=TopicResponse(
             id=topic.id,
@@ -328,10 +371,10 @@ async def generate_flashcard(
             id=source_card.id,
             concept_id=source_card.concept_id,
             language_code=source_card.language_code,
-            translation=ensure_capitalized(source_card.translation),
+            translation=ensure_capitalized(source_card.term),
             description=source_card.description,
             ipa=source_card.ipa,
-            audio_path=source_card.audio_path,
+            audio_path=source_card.audio_url,
             gender=source_card.gender,
             notes=source_card.notes
         ),
@@ -339,10 +382,10 @@ async def generate_flashcard(
             id=target_card.id,
             concept_id=target_card.concept_id,
             language_code=target_card.language_code,
-            translation=ensure_capitalized(target_card.translation),
+            translation=ensure_capitalized(target_card.term),
             description=target_card.description,
             ipa=target_card.ipa,
-            audio_path=target_card.audio_path,
+            audio_path=target_card.audio_url,
             gender=target_card.gender,
             notes=target_card.notes
         ),
@@ -371,8 +414,8 @@ async def get_vocabulary(
         user_id: The user ID
         page: Page number (1-indexed, default: 1)
         page_size: Number of items per page (default: 20)
-        sort_by: Sort order - "alphabetical" (default) or "recent" (by creation_time, newest first)
-        search: Optional search query to filter cards by translation
+        sort_by: Sort order - "alphabetical" (default) or "recent" (by created_at, newest first)
+        search: Optional search query to filter cards by term
         search_in_source: If True, search in source language; if False, search in target language
     """
     # Validate sort_by parameter
@@ -417,7 +460,7 @@ async def get_vocabulary(
             matching_cards = session.exec(
                 select(Card).where(
                     Card.language_code == user.lang_native,
-                    func.lower(Card.translation).contains(search_term)
+                    func.lower(Card.term).contains(search_term)
                 )
             ).all()
         else:
@@ -426,7 +469,7 @@ async def get_vocabulary(
                 matching_cards = session.exec(
                     select(Card).where(
                         Card.language_code == user.lang_learning,
-                        func.lower(Card.translation).contains(search_term)
+                        func.lower(Card.term).contains(search_term)
                     )
                 ).all()
             else:
@@ -467,36 +510,36 @@ async def get_vocabulary(
         source_card = lang_cards.get(user.lang_native)
         
         if sort_by == "recent":
-            # For recent sort, use the most recent creation_time among all cards for this concept
-            # Prefer target card's creation_time, fallback to source card's, or any card's
-            creation_time = None
-            if target_card and target_card.creation_time:
-                creation_time = target_card.creation_time
-            elif source_card and source_card.creation_time:
-                creation_time = source_card.creation_time
+            # For recent sort, use the most recent created_at among all cards for this concept
+            # Prefer target card's created_at, fallback to source card's, or any card's
+            created_at = None
+            if target_card and target_card.created_at:
+                created_at = target_card.created_at
+            elif source_card and source_card.created_at:
+                created_at = source_card.created_at
             else:
-                # Get the most recent creation_time from any card in this concept
+                # Get the most recent created_at from any card in this concept
                 all_cards_for_concept = list(lang_cards.values())
                 if all_cards_for_concept:
-                    cards_with_time = [c for c in all_cards_for_concept if c.creation_time]
+                    cards_with_time = [c for c in all_cards_for_concept if c.created_at]
                     if cards_with_time:
-                        creation_time = max(c.creation_time for c in cards_with_time)
+                        created_at = max(c.created_at for c in cards_with_time)
             
-            # Include concept even if no creation_time (fallback to concept_id for sorting)
-            if creation_time:
-                concept_sort_keys.append((creation_time, concept_id))
+            # Include concept even if no created_at (fallback to concept_id for sorting)
+            if created_at:
+                concept_sort_keys.append((created_at, concept_id))
             else:
                 # Fallback: use concept_id (higher IDs = more recent) with a very old timestamp
                 fallback_time = datetime.min.replace(tzinfo=timezone.utc)
                 concept_sort_keys.append((fallback_time, concept_id))
         else:
-            # Default: alphabetical sorting by target language translation
-            # Use target language translation for sorting, fallback to source if no target
+            # Default: alphabetical sorting by target language term
+            # Use target language term for sorting, fallback to source if no target
             sort_text = ""
             if target_card:
-                sort_text = target_card.translation.lower().strip()
+                sort_text = target_card.term.lower().strip()
             elif source_card:
-                sort_text = source_card.translation.lower().strip()
+                sort_text = source_card.term.lower().strip()
             
             # Only include concepts that have at least one card
             if sort_text:
@@ -504,10 +547,10 @@ async def get_vocabulary(
     
     # Sort based on sort_by parameter
     if sort_by == "recent":
-        # Sort by creation_time descending (newest first)
+        # Sort by created_at descending (newest first)
         concept_sort_keys.sort(key=lambda x: x[0], reverse=True)
     else:
-        # Sort alphabetically by target language translation (case-insensitive)
+        # Sort alphabetically by target language term (case-insensitive)
         concept_sort_keys.sort(key=lambda x: x[0])
     
     all_concept_ids = [concept_id for _, concept_id in concept_sort_keys]
@@ -536,6 +579,17 @@ async def get_vocabulary(
         ).all()
         concept_map = {concept.id: concept for concept in concepts}
     
+    # Fetch images for all concepts in this page
+    concept_images_map = {}
+    if paginated_concept_ids:
+        images = session.exec(
+            select(Image).where(Image.concept_id.in_(paginated_concept_ids)).order_by(Image.created_at)
+        ).all()
+        for img in images:
+            if img.concept_id not in concept_images_map:
+                concept_images_map[img.concept_id] = []
+            concept_images_map[img.concept_id].append(ImageResponse.model_validate(img))
+    
     # Build paired vocabulary items (maintain alphabetical order)
     paired_items = []
     for concept_id in paginated_concept_ids:
@@ -543,8 +597,8 @@ async def get_vocabulary(
         source_card = lang_cards.get(user.lang_native)
         target_card = lang_cards.get(user.lang_learning) if user.lang_learning else None
         
-        # Get concept for images
-        concept = concept_map.get(concept_id)
+        # Get images for this concept
+        concept_images = concept_images_map.get(concept_id, [])
         
         # Only include items that have at least one card
         if source_card or target_card:
@@ -555,10 +609,10 @@ async def get_vocabulary(
                         id=source_card.id,
                         concept_id=source_card.concept_id,
                         language_code=source_card.language_code,
-                        translation=ensure_capitalized(source_card.translation),
+                        translation=ensure_capitalized(source_card.term),
                         description=source_card.description,
                         ipa=source_card.ipa,
-                        audio_path=source_card.audio_path,
+                        audio_path=source_card.audio_url,
                         gender=source_card.gender,
                         notes=source_card.notes
                     ) if source_card else None,
@@ -566,17 +620,14 @@ async def get_vocabulary(
                         id=target_card.id,
                         concept_id=target_card.concept_id,
                         language_code=target_card.language_code,
-                        translation=ensure_capitalized(target_card.translation),
+                        translation=ensure_capitalized(target_card.term),
                         description=target_card.description,
                         ipa=target_card.ipa,
-                        audio_path=target_card.audio_path,
+                        audio_path=target_card.audio_url,
                         gender=target_card.gender,
                         notes=target_card.notes
                     ) if target_card else None,
-                    image_path_1=concept.image_path_1 if concept else None,
-                    image_path_2=concept.image_path_2 if concept else None,
-                    image_path_3=concept.image_path_3 if concept else None,
-                    image_path_4=concept.image_path_4 if concept else None,
+                    images=concept_images,
                 )
             )
     
@@ -613,14 +664,14 @@ async def update_card(
     
     # Check if translation update would create a duplicate
     if request.translation is not None:
-        new_translation = ensure_capitalized(request.translation.strip())
+        new_term = ensure_capitalized(request.translation.strip())
         
-        # Check if another card with same concept_id, language_code, and translation already exists
+        # Check if another card with same concept_id, language_code, and term already exists
         existing_card = session.exec(
             select(Card).where(
                 Card.concept_id == card.concept_id,
                 Card.language_code == card.language_code,
-                Card.translation == new_translation,
+                Card.term == new_term,
                 Card.id != card_id  # Exclude the current card
             )
         ).first()
@@ -628,10 +679,11 @@ async def update_card(
         if existing_card:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"A card with the same concept_id, language_code, and translation already exists (card_id: {existing_card.id})"
+                detail=f"A card with the same concept_id, language_code, and term already exists (card_id: {existing_card.id})"
             )
         
-        card.translation = new_translation
+        card.term = new_term
+        card.updated_at = datetime.now(timezone.utc)
     
     if request.description is not None:
         card.description = request.description.strip()
@@ -651,10 +703,10 @@ async def update_card(
         id=card.id,
         concept_id=card.concept_id,
         language_code=card.language_code,
-        translation=ensure_capitalized(card.translation),
+        translation=ensure_capitalized(card.term),
         description=card.description,
         ipa=card.ipa,
-        audio_path=card.audio_path,
+        audio_path=card.audio_url,
         gender=card.gender,
         notes=card.notes
     )

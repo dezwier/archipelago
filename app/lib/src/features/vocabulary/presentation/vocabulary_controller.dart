@@ -231,6 +231,7 @@ class VocabularyController extends ChangeNotifier {
     PairedVocabularyItem item,
     String? sourceTranslation,
     String? targetTranslation,
+    String? imageUrl,
   ) async {
     try {
       // Update source card if it exists and translation changed
@@ -262,6 +263,20 @@ class VocabularyController extends ChangeNotifier {
         
         if (result['success'] != true) {
           _errorMessage = result['message'] as String? ?? 'Failed to update target card';
+          notifyListeners();
+          return false;
+        }
+      }
+
+      // Update first image if provided and changed
+      if (imageUrl != null && imageUrl != item.imagePath1) {
+        final result = await VocabularyService.updateConceptImage1(
+          conceptId: item.conceptId,
+          imageUrl: imageUrl,
+        );
+        
+        if (result['success'] != true) {
+          _errorMessage = result['message'] as String? ?? 'Failed to update image';
           notifyListeners();
           return false;
         }

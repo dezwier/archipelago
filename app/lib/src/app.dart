@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'features/generate_flashcards/presentation/generate_flashcards_screen.dart';
 import 'features/practice_flashcards/presentation/practice_flashcards_screen.dart';
-import 'features/vocabulary/presentation/vocabulary_screen.dart';
+import 'features/vocabulary/presentation/dictionary_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/profile/domain/user.dart';
 import 'features/profile/domain/language.dart';
@@ -37,7 +37,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
     _screens = [
       const GenerateFlashcardsScreen(),
       const PracticeFlashcardsScreen(),
-      const VocabularyScreen(),
+      const DictionaryScreen(),
       ProfileScreen(
         key: const ValueKey('profile_screen'),
         onLogout: () {
@@ -222,7 +222,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
           final surfaceColor = Theme.of(context).colorScheme.surface;
           
           // Determine title based on current screen
-          final List<String> screenTitles = ['Generate', 'Practice', 'Vocabulary', 'Profile'];
+          final List<String> screenTitles = ['Generate', 'Practice', 'Dictionary', 'Profile'];
           final currentTitle = screenTitles[_currentIndex];
           
           return Scaffold(
@@ -536,7 +536,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                 NavigationDestination(
                   icon: Icon(Icons.menu_book_outlined),
                   selectedIcon: Icon(Icons.menu_book),
-                  label: 'Vocabulary',
+                  label: 'Dictionary',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.person_outline),

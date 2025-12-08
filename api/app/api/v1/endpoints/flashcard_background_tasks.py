@@ -3,7 +3,7 @@ Background tasks for flashcard operations.
 """
 from sqlmodel import Session, select
 from app.core.database import engine
-from app.models.models import Concept, Card
+from app.models.models import Concept, Card, Image
 from app.api.v1.endpoints.flashcard_helpers import generate_descriptions_for_cards, retrieve_images_for_concept
 from typing import Optional
 import logging
@@ -54,9 +54,9 @@ def generate_descriptions_background(
             try:
                 concept = bg_session.get(Concept, concept_id)
                 if concept:
-                    # Use English translation if available, otherwise use concept_text
+                    # Use English term if available, otherwise use concept_text
                     english_card = next((card for card in cards if card.language_code == 'en'), None)
-                    image_query = english_card.translation if english_card else concept_text
+                    image_query = english_card.term if english_card else concept_text
                     
                     image_result = retrieve_images_for_concept(
                         concept=concept,
@@ -181,23 +181,23 @@ def generate_descriptions_for_existing_cards_task(
                     if not cards_needing_descriptions:
                         continue
                     
-                    # Get the translation text from any card (prefer English, then source)
+                    # Get the term text from any card (prefer English, then source)
                     concept_text = None
                     source_lang_code = None
                     
                     # Try to get English card first
                     english_card = next((card for card in cards if card.language_code == 'en'), None)
                     if english_card:
-                        concept_text = english_card.translation
+                        concept_text = english_card.term
                         source_lang_code = 'en'
                     else:
-                        # Use first card's translation
+                        # Use first card's term
                         if cards:
-                            concept_text = cards[0].translation
+                            concept_text = cards[0].term
                             source_lang_code = cards[0].language_code
                     
                     if not concept_text:
-                        logger.warning(f"Task {task_id}: No translation text found for concept {concept_id}")
+                        logger.warning(f"Task {task_id}: No term text found for concept {concept_id}")
                         concepts_failed += 1
                         continue
                     
@@ -316,15 +316,12 @@ def generate_images_for_existing_concepts_task(
             concept_ids_needing_images = []
             
             for concept in all_concepts:
-                # Check if concept has no images
-                has_images = any([
-                    concept.image_path_1,
-                    concept.image_path_2,
-                    concept.image_path_3,
-                    concept.image_path_4
-                ])
+                # Check if concept has no images in Image table
+                image_count = bg_session.exec(
+                    select(Image).where(Image.concept_id == concept.id)
+                ).first()
                 
-                if not has_images:
+                if not image_count:
                     concept_ids_needing_images.append(concept.id)
             
             total_concepts = len(concept_ids_needing_images)
@@ -368,20 +365,20 @@ def generate_images_for_existing_concepts_task(
                         concepts_failed += 1
                         continue
                     
-                    # Get the translation text from any card (prefer English, then first card)
+                    # Get the term text from any card (prefer English, then first card)
                     concept_text = None
                     
                     # Try to get English card first
                     english_card = next((card for card in cards if card.language_code == 'en'), None)
                     if english_card:
-                        concept_text = english_card.translation
+                        concept_text = english_card.term
                     else:
-                        # Use first card's translation
+                        # Use first card's term
                         if cards:
-                            concept_text = cards[0].translation
+                            concept_text = cards[0].term
                     
                     if not concept_text:
-                        logger.warning(f"Task {task_id}: No translation text found for concept {concept_id}")
+                        logger.warning(f"Task {task_id}: No term text found for concept {concept_id}")
                         concepts_failed += 1
                         continue
                     

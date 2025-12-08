@@ -21,6 +21,7 @@ class EditVocabularyDialog extends StatefulWidget {
 class _EditVocabularyDialogState extends State<EditVocabularyDialog> {
   late final TextEditingController _sourceController;
   late final TextEditingController _targetController;
+  late final TextEditingController _imageUrlController;
 
   @override
   void initState() {
@@ -31,12 +32,16 @@ class _EditVocabularyDialogState extends State<EditVocabularyDialog> {
     _targetController = TextEditingController(
       text: widget.item.targetCard?.translation ?? '',
     );
+    _imageUrlController = TextEditingController(
+      text: widget.item.imagePath1 ?? '',
+    );
   }
 
   @override
   void dispose() {
     _sourceController.dispose();
     _targetController.dispose();
+    _imageUrlController.dispose();
     super.dispose();
   }
 
@@ -79,7 +84,22 @@ class _EditVocabularyDialogState extends State<EditVocabularyDialog> {
                   border: OutlineInputBorder(),
                 ),
               ),
+              const SizedBox(height: 16),
             ],
+            // First image URL field
+            Text(
+              '🖼️ First Image URL',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _imageUrlController,
+              decoration: const InputDecoration(
+                hintText: 'Enter image URL (leave empty to clear)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.url,
+            ),
           ],
         ),
       ),
@@ -93,6 +113,7 @@ class _EditVocabularyDialogState extends State<EditVocabularyDialog> {
             Navigator.of(context).pop({
               'source': _sourceController.text.trim(),
               'target': _targetController.text.trim(),
+              'image_url': _imageUrlController.text.trim(),
             });
           },
           child: const Text('Save'),
