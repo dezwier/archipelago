@@ -7,6 +7,11 @@ class VocabularyCard {
   final String? ipa;
   final String? audioPath;
   final String? gender;
+  final String? article;
+  final String? pluralForm;
+  final String? verbType;
+  final String? auxiliaryVerb;
+  final String? formalityRegister;
   final String? notes;
 
   VocabularyCard({
@@ -18,6 +23,11 @@ class VocabularyCard {
     this.ipa,
     this.audioPath,
     this.gender,
+    this.article,
+    this.pluralForm,
+    this.verbType,
+    this.auxiliaryVerb,
+    this.formalityRegister,
     this.notes,
   });
 
@@ -31,6 +41,11 @@ class VocabularyCard {
       ipa: json['ipa'] as String?,
       audioPath: json['audio_path'] as String?,
       gender: json['gender'] as String?,
+      article: json['article'] as String?,
+      pluralForm: json['plural_form'] as String?,
+      verbType: json['verb_type'] as String?,
+      auxiliaryVerb: json['auxiliary_verb'] as String?,
+      formalityRegister: json['formality_register'] as String?,
       notes: json['notes'] as String?,
     );
   }

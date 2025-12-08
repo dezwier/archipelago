@@ -143,7 +143,7 @@ class CardGenerationProgressWidget extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          'Missing languages:',
+                          'Languages:',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             fontWeight: FontWeight.w500,
                           ),

@@ -3,7 +3,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../domain/paired_vocabulary_item.dart';
 import '../../domain/vocabulary_card.dart';
 import '../../../../utils/html_entity_decoder.dart';
-import '../../../../utils/language_emoji.dart';
+import 'language_lemma_widget.dart';
 
 class VocabularyItemWidget extends StatelessWidget {
   final PairedVocabularyItem item;
@@ -208,80 +208,12 @@ class VocabularyItemWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Language header with term
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Language emoji
-            Text(
-              LanguageEmoji.getEmoji(languageCode),
-              style: const TextStyle(fontSize: 20),
-            ),
-            const SizedBox(width: 8),
-            // Term and gender
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          HtmlEntityDecoder.decode(card.translation),
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                      if (card.gender != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.secondaryContainer,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            card.gender!,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSecondaryContainer,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  // IPA pronunciation
-                  if (card.ipa != null && card.ipa!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '/${card.ipa}/',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
+        LanguageLemmaWidget(
+          card: card,
+          languageCode: languageCode,
+          showDescription: showDescription,
+          partOfSpeech: item.partOfSpeech,
         ),
-        // Description
-        if ((card.description?.isNotEmpty ?? false) && showDescription) ...[
-          const SizedBox(height: 8),
-          Text(
-            HtmlEntityDecoder.decode(card.description!),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
-              height: 1.4,
-            ),
-          ),
-        ],
         // Notes
         if (card.notes != null && card.notes!.isNotEmpty) ...[
           const SizedBox(height: 6),

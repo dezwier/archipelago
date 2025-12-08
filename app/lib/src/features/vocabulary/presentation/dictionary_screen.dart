@@ -698,6 +698,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         item: item,
         sourceLanguageCode: _controller.sourceLanguageCode,
         targetLanguageCode: _controller.targetLanguageCode,
+        languageVisibility: _languageVisibility,
+        languagesToShow: _languagesToShow,
         onEdit: () => _handleEdit(item),
         onRandomCard: () => _handleRandomCard(context),
         onRefreshImages: () => _handleRefreshImages(context, item),

@@ -13,6 +13,11 @@ class CardResponse(BaseModel):
     ipa: Optional[str] = None
     audio_path: Optional[str] = None
     gender: Optional[str] = None
+    article: Optional[str] = None
+    plural_form: Optional[str] = None
+    verb_type: Optional[str] = None
+    auxiliary_verb: Optional[str] = None
+    formality_register: Optional[str] = None
     notes: Optional[str] = None
 
     class Config:
@@ -120,6 +125,9 @@ class PairedVocabularyItem(BaseModel):
     source_card: Optional[CardResponse] = None
     target_card: Optional[CardResponse] = None
     images: Optional[List[ImageResponse]] = None
+    part_of_speech: Optional[str] = None
+    concept_term: Optional[str] = None
+    concept_description: Optional[str] = None
     
     # Backward compatibility: computed fields from images list
     @computed_field

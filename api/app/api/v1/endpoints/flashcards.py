@@ -192,8 +192,9 @@ async def get_vocabulary(
             has_previous=page > 1
         )
     
-    # Fetch images for all concepts in this page
+    # Fetch images and concepts for all concepts in this page
     concept_images_map = {}
+    concept_data_map = {}
     if paginated_concept_ids:
         images = session.exec(
             select(Image).where(Image.concept_id.in_(paginated_concept_ids)).order_by(Image.created_at)
@@ -202,6 +203,13 @@ async def get_vocabulary(
             if img.concept_id not in concept_images_map:
                 concept_images_map[img.concept_id] = []
             concept_images_map[img.concept_id].append(ImageResponse.model_validate(img))
+        
+        # Fetch concepts to get part_of_speech
+        concepts = session.exec(
+            select(Concept).where(Concept.id.in_(paginated_concept_ids))
+        ).all()
+        for concept in concepts:
+            concept_data_map[concept.id] = concept
     
     # Build paired vocabulary items (maintain alphabetical order)
     paired_items = []
@@ -210,8 +218,12 @@ async def get_vocabulary(
         source_card = lang_cards.get(user.lang_native)
         target_card = lang_cards.get(user.lang_learning) if user.lang_learning else None
         
-        # Get images for this concept
+        # Get images and concept data for this concept
         concept_images = concept_images_map.get(concept_id, [])
+        concept = concept_data_map.get(concept_id)
+        part_of_speech = concept.part_of_speech if concept else None
+        concept_term = concept.term if concept else None
+        concept_description = concept.description if concept else None
         
         # Only include items that have at least one card (source or target)
         if source_card or target_card:
@@ -228,6 +240,11 @@ async def get_vocabulary(
                         ipa=card.ipa,
                         audio_path=card.audio_url,
                         gender=card.gender,
+                        article=card.article,
+                        plural_form=card.plural_form,
+                        verb_type=card.verb_type,
+                        auxiliary_verb=card.auxiliary_verb,
+                        formality_register=card.formality_register,
                         notes=card.notes
                     )
                 )
@@ -245,6 +262,11 @@ async def get_vocabulary(
                         ipa=source_card.ipa,
                         audio_path=source_card.audio_url,
                         gender=source_card.gender,
+                        article=source_card.article,
+                        plural_form=source_card.plural_form,
+                        verb_type=source_card.verb_type,
+                        auxiliary_verb=source_card.auxiliary_verb,
+                        formality_register=source_card.formality_register,
                         notes=source_card.notes
                     ) if source_card else None,
                     target_card=CardResponse(
@@ -256,9 +278,17 @@ async def get_vocabulary(
                         ipa=target_card.ipa,
                         audio_path=target_card.audio_url,
                         gender=target_card.gender,
+                        article=target_card.article,
+                        plural_form=target_card.plural_form,
+                        verb_type=target_card.verb_type,
+                        auxiliary_verb=target_card.auxiliary_verb,
+                        formality_register=target_card.formality_register,
                         notes=target_card.notes
                     ) if target_card else None,
                     images=concept_images,
+                    part_of_speech=part_of_speech,
+                    concept_term=concept_term,
+                    concept_description=concept_description,
                 )
             )
     
@@ -339,6 +369,11 @@ async def update_card(
         ipa=card.ipa,
         audio_path=card.audio_url,
         gender=card.gender,
+        article=card.article,
+        plural_form=card.plural_form,
+        verb_type=card.verb_type,
+        auxiliary_verb=card.auxiliary_verb,
+        formality_register=card.formality_register,
         notes=card.notes
     )
 

@@ -9,6 +9,9 @@ class PairedVocabularyItem {
   final String? imagePath2;
   final String? imagePath3;
   final String? imagePath4;
+  final String? partOfSpeech;
+  final String? conceptTerm;
+  final String? conceptDescription;
 
   PairedVocabularyItem({
     required this.conceptId,
@@ -19,6 +22,9 @@ class PairedVocabularyItem {
     this.imagePath2,
     this.imagePath3,
     this.imagePath4,
+    this.partOfSpeech,
+    this.conceptTerm,
+    this.conceptDescription,
   }) : cards = cards ?? [];
 
   /// Get the first available image URL, or null if no images are available
@@ -60,6 +66,9 @@ class PairedVocabularyItem {
       imagePath2: json['image_path_2'] as String?,
       imagePath3: json['image_path_3'] as String?,
       imagePath4: json['image_path_4'] as String?,
+      partOfSpeech: json['part_of_speech'] as String?,
+      conceptTerm: json['concept_term'] as String?,
+      conceptDescription: json['concept_description'] as String?,
     );
   }
 }

@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../../../utils/html_entity_decoder.dart';
-import '../../../../utils/language_emoji.dart';
 import '../../domain/paired_vocabulary_item.dart';
 import '../../domain/vocabulary_card.dart';
 import '../../../../constants/api_config.dart';
 import '../../data/vocabulary_service.dart';
+import 'language_lemma_widget.dart';
 
 class VocabularyDetailDrawer extends StatefulWidget {
   final PairedVocabularyItem item;
   final String? sourceLanguageCode;
   final String? targetLanguageCode;
+  final Map<String, bool> languageVisibility;
+  final List<String> languagesToShow;
   final VoidCallback? onEdit;
   final VoidCallback? onRandomCard;
   final VoidCallback? onRefreshImages;
@@ -21,6 +23,8 @@ class VocabularyDetailDrawer extends StatefulWidget {
     required this.item,
     this.sourceLanguageCode,
     this.targetLanguageCode,
+    required this.languageVisibility,
+    required this.languagesToShow,
     this.onEdit,
     this.onRandomCard,
     this.onRefreshImages,
@@ -274,24 +278,18 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                  // Source language phrase and description
-                  if (widget.item.sourceCard != null && widget.sourceLanguageCode != null)
-                    _buildLanguageSection(
-                      context,
-                      card: widget.item.sourceCard!,
-                      languageCode: widget.sourceLanguageCode!,
-                      isSource: true,
-                    ),
-                  // Target language phrase and description
-                  if (widget.item.targetCard != null && widget.targetLanguageCode != null) ...[
-                    if (widget.item.sourceCard != null) const SizedBox(height: 12),
-                    _buildLanguageSection(
-                      context,
-                      card: widget.item.targetCard!,
-                      languageCode: widget.targetLanguageCode!,
-                      isSource: false,
-                    ),
-                  ],
+                    ..._buildLanguageSections(context),
+                    if (widget.item.conceptTerm != null || 
+                        widget.item.conceptDescription != null) ...[
+                      const SizedBox(height: 24),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildConceptInfo(context),
+                    ],
                   ],
                 ),
               ),
@@ -788,117 +786,200 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
     }
   }
 
+  List<Widget> _buildLanguageSections(BuildContext context) {
+    // Filter visible cards and sort by the languagesToShow order
+    final visibleCards = widget.item.cards
+        .where((card) => widget.languageVisibility[card.languageCode] ?? true)
+        .toList();
+    
+    // Sort cards according to the languagesToShow list order
+    visibleCards.sort((a, b) {
+      final indexA = widget.languagesToShow.indexOf(a.languageCode);
+      final indexB = widget.languagesToShow.indexOf(b.languageCode);
+      
+      // If both are in the list, sort by their position
+      if (indexA != -1 && indexB != -1) {
+        return indexA.compareTo(indexB);
+      }
+      // If only one is in the list, prioritize it (shouldn't happen if visibility is synced)
+      if (indexA != -1) return -1;
+      if (indexB != -1) return 1;
+      // If neither is in the list, maintain original order (fallback)
+      return 0;
+    });
+    
+    final widgets = <Widget>[];
+    for (int i = 0; i < visibleCards.length; i++) {
+      final card = visibleCards[i];
+      
+      if (i > 0) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12.0),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            ),
+          ),
+        );
+      }
+      
+      widgets.add(
+        _buildLanguageSection(
+          context,
+          card: card,
+          languageCode: card.languageCode,
+        ),
+      );
+    }
+    
+    return widgets;
+  }
+
   Widget _buildLanguageSection(
     BuildContext context, {
     required VocabularyCard card,
     required String languageCode,
-    required bool isSource,
   }) {
-    final controller = isSource ? _sourceTranslationController : _targetTranslationController;
+    // Check if this card is the source or target card (only these can be edited)
+    final isSourceCard = widget.item.sourceCard?.id == card.id;
+    final isTargetCard = widget.item.targetCard?.id == card.id;
+    final isEditableCard = isSourceCard || isTargetCard;
     
+    // Get the appropriate controller for editing
+    final controller = isSourceCard ? _sourceTranslationController : 
+                      (isTargetCard ? _targetTranslationController : null);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LanguageLemmaWidget(
+          card: card,
+          languageCode: languageCode,
+          showDescription: true,
+          translationController: _isEditing && isEditableCard ? controller : null,
+          isEditing: _isEditing && isEditableCard,
+          partOfSpeech: widget.item.partOfSpeech,
+        ),
+        // Notes
+        if (card.notes != null && card.notes!.isNotEmpty && !_isEditing) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 14,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    HtmlEntityDecoder.decode(card.notes!),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontStyle: FontStyle.italic,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildConceptInfo(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10.0),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isSource
-            ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.15)
-            : Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.15),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Phrase - show input when editing, text when not
+          Text(
+            'Concept Information',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (widget.item.conceptTerm != null) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Term: ',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    widget.item.conceptTerm!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
+          if (widget.item.conceptDescription != null) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Description: ',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    widget.item.conceptDescription!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                LanguageEmoji.getEmoji(languageCode),
-                style: const TextStyle(fontSize: 20),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _isEditing
-                    ? TextField(
-                        controller: controller,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontStyle: isSource ? FontStyle.italic : FontStyle.normal,
-                        ),
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          isDense: true,
-                        ),
-                      )
-                    : Text(
-                        HtmlEntityDecoder.decode(card.translation),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontStyle: isSource ? FontStyle.italic : FontStyle.normal,
-                        ),
-                      ),
-              ),
-              if (card.gender != null && !_isEditing)
-                Container(
-                  margin: const EdgeInsets.only(left: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isSource
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    card.gender!,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isSource
-                          ? Theme.of(context).colorScheme.onPrimaryContainer
-                          : Theme.of(context).colorScheme.onSecondaryContainer,
-                    ),
-                  ),
+                'Concept ID: ',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                  fontWeight: FontWeight.w500,
                 ),
+              ),
+              Text(
+                widget.item.conceptId.toString(),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  fontFamily: 'monospace',
+                ),
+              ),
             ],
           ),
-          // Description (only show when not editing)
-          if (!_isEditing && (card.description?.isNotEmpty ?? false)) ...[
-            const SizedBox(height: 6),
-            Text(
-              HtmlEntityDecoder.decode(card.description!),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.85),
-                height: 1.4,
-              ),
-            ),
-          ],
-          // IPA if available (only show when not editing)
-          if (!_isEditing && card.ipa != null && card.ipa!.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              '/${card.ipa}/',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontFamily: 'monospace',
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ],
-          // Notes if available (only show when not editing)
-          if (!_isEditing && card.notes != null && card.notes!.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              HtmlEntityDecoder.decode(card.notes!),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontStyle: FontStyle.italic,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ],
         ],
       ),
     );

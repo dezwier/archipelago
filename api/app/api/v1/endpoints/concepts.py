@@ -23,6 +23,7 @@ from app.schemas.flashcard import (
 import requests
 import json
 import logging
+import random
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -410,6 +411,11 @@ async def create_concept(
             ipa=card.ipa,
             audio_path=card.audio_url,
             gender=card.gender,
+            article=card.article,
+            plural_form=card.plural_form,
+            verb_type=card.verb_type,
+            auxiliary_verb=card.auxiliary_verb,
+            formality_register=card.formality_register,
             notes=None  # Card model doesn't have notes field
         ) for card in created_cards]
     )
@@ -591,9 +597,13 @@ async def get_concepts_with_missing_languages(
     # Get all concepts
     all_concepts = session.exec(select(Concept)).all()
     
+    # Shuffle concepts to return in random order
+    concepts_list = list(all_concepts)
+    random.shuffle(concepts_list)
+    
     # For each concept, find which languages are missing
     concepts_with_missing = []
-    for concept in all_concepts:
+    for concept in concepts_list:
         # Get existing cards for this concept
         existing_cards = session.exec(
             select(Card).where(Card.concept_id == concept.id)
@@ -609,6 +619,10 @@ async def get_concepts_with_missing_languages(
                     missing_languages=missing_for_concept
                 )
             )
+            
+            # Limit to 100 concepts max
+            if len(concepts_with_missing) >= 100:
+                break
     
     return ConceptsWithMissingLanguagesResponse(concepts=concepts_with_missing)
 
@@ -655,6 +669,9 @@ async def generate_cards_for_concepts(
                 detail=f"Concept with id {concept_id} not found"
             )
         concepts.append(concept)
+    
+    # Shuffle concepts to process in random order
+    random.shuffle(concepts)
     
     concepts_processed = 0
     cards_created = 0
