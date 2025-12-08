@@ -34,7 +34,7 @@ class VocabularyController extends ChangeNotifier {
   
   // Search state
   String _searchQuery = '';
-  bool _searchInSource = true; // true = source, false = target
+  List<String> _searchLanguageCodes = []; // Languages to search in
   Timer? _searchDebounceTimer;
   
   // Getters
@@ -57,7 +57,7 @@ class VocabularyController extends ChangeNotifier {
   
   // Search getters
   String get searchQuery => _searchQuery;
-  bool get searchInSource => _searchInSource;
+  List<String> get searchLanguageCodes => _searchLanguageCodes;
   
   // Filtered items - when searching, items are already filtered by API
   List<PairedVocabularyItem> get filteredItems {
@@ -146,7 +146,7 @@ class VocabularyController extends ChangeNotifier {
           pageSize: _pageSize,
           sortBy: _getSortByParameter(),
           search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
-          searchInSource: _searchInSource,
+          searchLanguageCodes: _searchLanguageCodes,
         );
 
         if (result['success'] == true) {
@@ -201,7 +201,7 @@ class VocabularyController extends ChangeNotifier {
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
-        searchInSource: _searchInSource,
+        searchLanguageCodes: _searchLanguageCodes,
       );
 
       if (result['success'] == true) {
@@ -324,11 +324,11 @@ class VocabularyController extends ChangeNotifier {
   bool hasCardsNeedingDescriptions() {
     for (final item in _pairedItems) {
       if (item.sourceCard != null && 
-          (item.sourceCard!.description.isEmpty || item.sourceCard!.description.trim().isEmpty)) {
+          (item.sourceCard!.description == null || item.sourceCard!.description!.isEmpty || item.sourceCard!.description!.trim().isEmpty)) {
         return true;
       }
       if (item.targetCard != null && 
-          (item.targetCard!.description.isEmpty || item.targetCard!.description.trim().isEmpty)) {
+          (item.targetCard!.description == null || item.targetCard!.description!.isEmpty || item.targetCard!.description!.trim().isEmpty)) {
         return true;
       }
     }
@@ -453,9 +453,10 @@ class VocabularyController extends ChangeNotifier {
   }
 
   // Search methods
-  void setSearchQuery(String query) {
-    if (_searchQuery != query) {
+  void setSearchQuery(String query, List<String> languageCodes) {
+    if (_searchQuery != query || _searchLanguageCodes != languageCodes) {
       _searchQuery = query;
+      _searchLanguageCodes = languageCodes;
       
       // Cancel previous debounce timer
       _searchDebounceTimer?.cancel();
@@ -488,7 +489,7 @@ class VocabularyController extends ChangeNotifier {
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim(),
-        searchInSource: _searchInSource,
+        searchLanguageCodes: _searchLanguageCodes,
       );
       
       if (result['success'] == true) {
@@ -512,17 +513,6 @@ class VocabularyController extends ChangeNotifier {
       _errorMessage = 'Error searching vocabulary: ${e.toString()}';
     }
     notifyListeners();
-  }
-  
-  void setSearchMode(bool searchInSource) {
-    if (_searchInSource != searchInSource) {
-      _searchInSource = searchInSource;
-      // If there's a search query, re-search with new mode
-      if (_searchQuery.trim().isNotEmpty) {
-        _performSearch();
-      }
-      notifyListeners();
-    }
   }
 
   @override

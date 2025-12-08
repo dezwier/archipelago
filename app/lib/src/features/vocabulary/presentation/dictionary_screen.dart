@@ -11,6 +11,8 @@ import 'widgets/delete_vocabulary_dialog.dart';
 import 'widgets/vocabulary_detail_dialog.dart';
 import '../data/vocabulary_service.dart';
 import '../../../utils/language_emoji.dart';
+import '../../profile/data/language_service.dart';
+import '../../profile/domain/language.dart';
 
 class DictionaryScreen extends StatefulWidget {
   const DictionaryScreen({super.key});
@@ -29,10 +31,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
   // Filter state - all enabled by default
-  bool _showSourceLanguage = true;
-  bool _showTargetLanguage = true;
+  Map<String, bool> _languageVisibility = {}; // languageCode -> isVisible
+  List<String> _languagesToShow = []; // Ordered list of languages to show
   bool _showDescription = true;
   bool _showImages = true;
+  List<Language> _allLanguages = [];
   
 
   @override
@@ -41,6 +44,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     _controller = VocabularyController();
     _controller.initialize();
     _scrollController.addListener(_onScroll);
+    _loadLanguages();
+    
+    // Listen to controller changes to update language visibility when user loads
+    _controller.addListener(_onControllerChanged);
     
     // Prevent search field from requesting focus automatically
     // It can only get focus when user explicitly taps it
@@ -60,8 +67,52 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     });
   }
 
+  void _onControllerChanged() {
+    // Update language visibility defaults when user data is loaded
+    if (_controller.currentUser != null && _allLanguages.isNotEmpty) {
+      final sourceCode = _controller.sourceLanguageCode;
+      final targetCode = _controller.targetLanguageCode;
+      
+      // Only update if languages list is empty (initial state)
+      if (_languagesToShow.isEmpty) {
+        setState(() {
+          _languageVisibility = {
+            for (var lang in _allLanguages) 
+              lang.code: (lang.code == sourceCode || lang.code == targetCode)
+          };
+          // Initialize with source and target languages
+          _languagesToShow = [];
+          if (sourceCode != null) {
+            _languagesToShow.add(sourceCode);
+          }
+          if (targetCode != null && targetCode != sourceCode) {
+            _languagesToShow.add(targetCode);
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> _loadLanguages() async {
+    final languages = await LanguageService.getLanguages();
+    
+    setState(() {
+      _allLanguages = languages;
+      // Initialize visibility - will be updated when controller loads user
+      _languageVisibility = {
+        for (var lang in languages) lang.code: false
+      };
+    });
+    
+    // Try to set defaults if controller already has user data
+    if (_controller.currentUser != null) {
+      _onControllerChanged();
+    }
+  }
+
   @override
   void dispose() {
+    _controller.removeListener(_onControllerChanged);
     _scrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -137,30 +188,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                   child: CustomScrollView(
               controller: _scrollController,
               slivers: [
-                // Description generation progress banner
-                if (_controller.isGeneratingDescriptions)
-                  SliverToBoxAdapter(
-                    child: _buildDescriptionGenerationBanner(context),
-                  ),
-                // Generate descriptions button
-                if (!_controller.isGeneratingDescriptions && 
-                    _controller.hasCardsNeedingDescriptions())
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _handleGenerateDescriptions(),
-                          icon: const Icon(Icons.auto_awesome),
-                          label: const Text('Generate Descriptions'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12.0),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                 // Phrase count at top of cards
                 if (_controller.filteredItems.isNotEmpty)
                   SliverToBoxAdapter(
@@ -184,8 +211,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                           item: item,
                           sourceLanguageCode: _controller.sourceLanguageCode,
                           targetLanguageCode: _controller.targetLanguageCode,
-                          showSource: _showSourceLanguage,
-                          showTarget: _showTargetLanguage,
+                          languageVisibility: _languageVisibility,
+                          languagesToShow: _languagesToShow,
                           showDescription: _showDescription,
                           showImages: _showImages,
                           onEdit: () => _handleEdit(item),
@@ -298,6 +325,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     return '$displayCount ${displayCount == 1 ? 'phrase' : 'phrases'}';
   }
 
+  List<String> _getVisibleLanguageCodes() {
+    return _languageVisibility.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+  }
+
   Widget _buildBottomSearchBar(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(
@@ -334,7 +368,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                       // Request focus explicitly to ensure it works
                       _searchFocusNode.requestFocus();
                     },
-                    onChanged: (value) => _controller.setSearchQuery(value),
+                    onChanged: (value) => _controller.setSearchQuery(value, _getVisibleLanguageCodes()),
                     decoration: InputDecoration(
                       hintText: 'Search...',
                       prefixIcon: Icon(
@@ -349,7 +383,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                               ),
                               onPressed: () {
                                 _searchController.clear();
-                                _controller.setSearchQuery('');
+                                _controller.setSearchQuery('', []);
                               },
                             )
                           : null,
@@ -360,60 +394,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                       ),
                     ),
                   ),
-                ),
-                // Divider
-                Container(
-                  width: 1,
-                  height: 32,
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                ),
-                // Source/Target toggle
-                ToggleButtons(
-                  isSelected: [
-                    _controller.searchInSource,
-                    !_controller.searchInSource,
-                  ],
-                  onPressed: (index) {
-                    _controller.setSearchMode(index == 0);
-                  },
-                  borderRadius: BorderRadius.circular(18),
-                  constraints: const BoxConstraints(
-                    minWidth: 50,
-                    minHeight: 48,
-                  ),
-                  selectedColor: Theme.of(context).colorScheme.onPrimary,
-                  fillColor: Theme.of(context).colorScheme.primary,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _controller.sourceLanguageCode != null
-                                ? LanguageEmoji.getEmoji(_controller.sourceLanguageCode!)
-                                : '🌐',
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _controller.targetLanguageCode != null
-                                ? LanguageEmoji.getEmoji(_controller.targetLanguageCode!)
-                                : '🌐',
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -521,50 +501,84 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           borderRadius: BorderRadius.circular(12),
         ),
         items: [
+          // Language visibility buttons
           PopupMenuItem<void>(
             child: StatefulBuilder(
               builder: (context, setMenuState) {
-                return Row(
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Checkbox(
-                      value: _showSourceLanguage,
-                      onChanged: (value) {
-                        setMenuState(() {
-                          setState(() {
-                            _showSourceLanguage = value ?? true;
-                          });
-                        });
-                      },
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Text(
+                        'Languages',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    const Text('Source Language'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _allLanguages.map((language) {
+                        final isVisible = _languageVisibility[language.code] ?? true;
+                        return GestureDetector(
+                          onTap: () {
+                            setMenuState(() {
+                              setState(() {
+                                final wasVisible = _languageVisibility[language.code] ?? true;
+                                final willBeVisible = !isVisible;
+                                _languageVisibility[language.code] = willBeVisible;
+                                
+                                if (!wasVisible && willBeVisible) {
+                                  // Language was just enabled - append to the end of the list
+                                  if (!_languagesToShow.contains(language.code)) {
+                                    _languagesToShow.add(language.code);
+                                  }
+                                } else if (wasVisible && !willBeVisible) {
+                                  // Language was just disabled - remove from the list
+                                  _languagesToShow.remove(language.code);
+                                }
+                                
+                                // Re-search if there's an active search query
+                                if (_controller.searchQuery.isNotEmpty) {
+                                  _controller.setSearchQuery(
+                                    _controller.searchQuery,
+                                    _getVisibleLanguageCodes(),
+                                  );
+                                }
+                              });
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isVisible
+                                  ? Theme.of(context).colorScheme.primaryContainer
+                                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isVisible
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                width: isVisible ? 2 : 1,
+                              ),
+                            ),
+                            child: Text(
+                              LanguageEmoji.getEmoji(language.code),
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ],
                 );
               },
             ),
           ),
-          PopupMenuItem<void>(
-            child: StatefulBuilder(
-              builder: (context, setMenuState) {
-                return Row(
-                  children: [
-                    Checkbox(
-                      value: _showTargetLanguage,
-                      onChanged: (value) {
-                        setMenuState(() {
-                          setState(() {
-                            _showTargetLanguage = value ?? true;
-                          });
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Target Language'),
-                  ],
-                );
-              },
-            ),
-          ),
+          const PopupMenuDivider(),
           PopupMenuItem<void>(
             child: StatefulBuilder(
               builder: (context, setMenuState) {
@@ -614,129 +628,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     }
   }
 
-  Widget _buildDescriptionGenerationBanner(BuildContext context) {
-    final progress = _controller.descriptionProgress;
-    final status = _controller.descriptionStatus;
-    final processed = progress?['processed'] as int? ?? 0;
-    final total = progress?['total_concepts'] as int? ?? 0;
-    final cardsUpdated = progress?['cards_updated'] as int? ?? 0;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Generating descriptions...',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (status == 'running')
-                TextButton(
-                  onPressed: () => _handleCancelGenerateDescriptions(),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text('Cancel'),
-                ),
-            ],
-          ),
-          if (total > 0) ...[
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: processed / total,
-              minHeight: 4,
-              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Processed: $processed / $total concepts • $cardsUpdated cards updated',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleGenerateDescriptions() async {
-    final success = await _controller.startGenerateDescriptions();
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? 'Description generation started'
-                : _controller.errorMessage ?? 'Failed to start description generation',
-          ),
-          backgroundColor: success
-              ? null
-              : Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
-  }
-
-  Future<void> _handleCancelGenerateDescriptions() async {
-    final success = await _controller.cancelGenerateDescriptions();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? 'Description generation cancelled'
-                : _controller.errorMessage ?? 'Failed to cancel',
-          ),
-          backgroundColor: success
-              ? null
-              : Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
-  }
 
   Future<void> _handleEdit(PairedVocabularyItem item) async {
     final result = await showDialog<Map<String, String>>(

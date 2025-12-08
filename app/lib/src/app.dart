@@ -36,8 +36,8 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
     // Cache screens so they persist across rebuilds
     _screens = [
       const GenerateFlashcardsScreen(),
-      const PracticeFlashcardsScreen(),
       const DictionaryScreen(),
+      const PracticeFlashcardsScreen(),
       ProfileScreen(
         key: const ValueKey('profile_screen'),
         onLogout: () {
@@ -222,7 +222,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
           final surfaceColor = Theme.of(context).colorScheme.surface;
           
           // Determine title based on current screen
-          final List<String> screenTitles = ['Generate', 'Practice', 'Dictionary', 'Profile'];
+          final List<String> screenTitles = ['Generate', 'Dictionary', 'Practice', 'Profile'];
           final currentTitle = screenTitles[_currentIndex];
           
           return Scaffold(
@@ -529,14 +529,14 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                   label: 'Generate',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.school_outlined),
-                  selectedIcon: Icon(Icons.school),
-                  label: 'Practice',
-                ),
-                NavigationDestination(
                   icon: Icon(Icons.menu_book_outlined),
                   selectedIcon: Icon(Icons.menu_book),
                   label: 'Dictionary',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.school_outlined),
+                  selectedIcon: Icon(Icons.school),
+                  label: 'Practice',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.person_outline),

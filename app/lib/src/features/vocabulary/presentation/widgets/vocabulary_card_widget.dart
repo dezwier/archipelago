@@ -74,10 +74,10 @@ class VocabularyCardWidget extends StatelessWidget {
                 ),
             ],
           ),
-          if (card.description.isNotEmpty && showDescription) ...[
+          if ((card.description?.isNotEmpty ?? false) && showDescription) ...[
             const SizedBox(height: 2),
             Text(
-              HtmlEntityDecoder.decode(card.description),
+              HtmlEntityDecoder.decode(card.description!),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(

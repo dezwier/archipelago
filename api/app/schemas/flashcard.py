@@ -9,7 +9,7 @@ class CardResponse(BaseModel):
     concept_id: int
     language_code: str
     translation: str
-    description: str
+    description: Optional[str] = None
     ipa: Optional[str] = None
     audio_path: Optional[str] = None
     gender: Optional[str] = None
@@ -114,8 +114,9 @@ class TopicResponse(BaseModel):
 
 
 class PairedVocabularyItem(BaseModel):
-    """Paired vocabulary item - groups source and target cards by concept."""
+    """Paired vocabulary item - groups cards by concept."""
     concept_id: int
+    cards: List[CardResponse] = Field(default=[], description="All cards for this concept")
     source_card: Optional[CardResponse] = None
     target_card: Optional[CardResponse] = None
     images: Optional[List[ImageResponse]] = None
@@ -348,4 +349,6 @@ class GenerateCardsForConceptsResponse(BaseModel):
     cards_created: int = Field(..., description="Total number of cards created")
     errors: List[str] = Field(default=[], description="List of error messages for concepts that failed")
     total_concepts: int = Field(..., description="Total number of concepts to process")
+    session_cost_usd: float = Field(default=0.0, description="Total cost in USD for this generation session")
+    total_tokens: int = Field(default=0, description="Total tokens used in this session")
 

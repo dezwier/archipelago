@@ -2,6 +2,7 @@ import 'vocabulary_card.dart';
 
 class PairedVocabularyItem {
   final int conceptId;
+  final List<VocabularyCard> cards;
   final VocabularyCard? sourceCard;
   final VocabularyCard? targetCard;
   final String? imagePath1;
@@ -11,22 +12,44 @@ class PairedVocabularyItem {
 
   PairedVocabularyItem({
     required this.conceptId,
+    List<VocabularyCard>? cards,
     this.sourceCard,
     this.targetCard,
     this.imagePath1,
     this.imagePath2,
     this.imagePath3,
     this.imagePath4,
-  });
+  }) : cards = cards ?? [];
 
   /// Get the first available image URL, or null if no images are available
   String? get firstImageUrl {
     return imagePath1 ?? imagePath2 ?? imagePath3 ?? imagePath4;
   }
 
+  /// Get a card by language code
+  VocabularyCard? getCardByLanguage(String languageCode) {
+    try {
+      return cards.firstWhere(
+        (card) => card.languageCode == languageCode,
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
   factory PairedVocabularyItem.fromJson(Map<String, dynamic> json) {
+    // Parse cards list if available
+    List<VocabularyCard> cardsList = [];
+    if (json['cards'] != null) {
+      final cardsData = json['cards'] as List<dynamic>;
+      cardsList = cardsData
+          .map((cardJson) => VocabularyCard.fromJson(cardJson as Map<String, dynamic>))
+          .toList();
+    }
+    
     return PairedVocabularyItem(
       conceptId: json['concept_id'] as int,
+      cards: cardsList,
       sourceCard: json['source_card'] != null
           ? VocabularyCard.fromJson(json['source_card'] as Map<String, dynamic>)
           : null,

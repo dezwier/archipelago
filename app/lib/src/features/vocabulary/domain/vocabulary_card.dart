@@ -3,7 +3,7 @@ class VocabularyCard {
   final int conceptId;
   final String languageCode;
   final String translation;
-  final String description;
+  final String? description;
   final String? ipa;
   final String? audioPath;
   final String? gender;
@@ -14,7 +14,7 @@ class VocabularyCard {
     required this.conceptId,
     required this.languageCode,
     required this.translation,
-    required this.description,
+    this.description,
     this.ipa,
     this.audioPath,
     this.gender,
@@ -27,7 +27,7 @@ class VocabularyCard {
       conceptId: json['concept_id'] as int,
       languageCode: json['language_code'] as String,
       translation: json['translation'] as String,
-      description: json['description'] as String,
+      description: json['description'] as String?,
       ipa: json['ipa'] as String?,
       audioPath: json['audio_path'] as String?,
       gender: json['gender'] as String?,

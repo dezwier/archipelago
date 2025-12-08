@@ -30,7 +30,7 @@ async def get_vocabulary(
     page_size: int = 20,
     sort_by: str = "alphabetical",  # Options: "alphabetical", "recent"
     search: str = None,  # Optional search query
-    search_in_source: bool = True,  # True = search in source language, False = search in target
+    search_languages: str = None,  # Comma-separated list of language codes to search in
     session: Session = Depends(get_session)
 ):
     """
@@ -43,7 +43,7 @@ async def get_vocabulary(
         page_size: Number of items per page (default: 20)
         sort_by: Sort order - "alphabetical" (default) or "recent" (by created_at, newest first)
         search: Optional search query to filter cards by term
-        search_in_source: If True, search in source language; if False, search in target language
+        search_languages: Comma-separated list of language codes to search in (if not provided, searches in all languages)
     """
     # Validate sort_by parameter
     if sort_by not in ["alphabetical", "recent"]:
@@ -72,63 +72,57 @@ async def get_vocabulary(
             detail="User not found"
         )
     
-    # Get all cards for user's native and learning languages
+    # Get all cards for user's native and learning languages (for filtering/searching)
     language_codes = [user.lang_native]
     if user.lang_learning:
         language_codes.append(user.lang_learning)
     
-    # Get all cards for these languages
     # Apply search filter if provided
     matching_concept_ids = None
     if search and search.strip():
         search_term = search.strip().lower()
-        if search_in_source:
-            # Search in source language (user's native language)
+        
+        # Parse search languages if provided
+        search_language_codes = None
+        if search_languages:
+            search_language_codes = [lang.strip().lower() for lang in search_languages.split(',') if lang.strip()]
+        
+        # Build search query
+        if search_language_codes:
+            # Search in specified languages
             matching_cards = session.exec(
                 select(Card).where(
-                    Card.language_code == user.lang_native,
+                    Card.language_code.in_(search_language_codes),
                     func.lower(Card.term).contains(search_term)
                 )
             ).all()
         else:
-            # Search in target language (user's learning language)
-            if user.lang_learning:
-                matching_cards = session.exec(
-                    select(Card).where(
-                        Card.language_code == user.lang_learning,
-                        func.lower(Card.term).contains(search_term)
-                    )
-                ).all()
-            else:
-                matching_cards = []
+            # Search in all languages
+            matching_cards = session.exec(
+                select(Card).where(
+                    func.lower(Card.term).contains(search_term)
+                )
+            ).all()
         
         # Get all concept_ids that match
         matching_concept_ids = {card.concept_id for card in matching_cards}
-        
-        # Get all cards for the matching concepts (both languages)
-        if matching_concept_ids:
-            all_cards = session.exec(
-                select(Card).where(
-                    Card.concept_id.in_(list(matching_concept_ids)),
-                    Card.language_code.in_(language_codes)
-                )
-            ).all()
-        else:
-            all_cards = []
-    else:
-        # No search - get all cards for these languages
-        all_cards = session.exec(
-            select(Card).where(Card.language_code.in_(language_codes))
-        ).all()
     
-    # Group cards by concept_id
+    # Get ALL cards for matching concepts (all languages, not just source/target)
+    if matching_concept_ids is not None:
+        # If searching, get all cards for matching concepts
+        all_cards = session.exec(
+            select(Card).where(Card.concept_id.in_(list(matching_concept_ids)))
+        ).all()
+    else:
+        # No search - get all cards (we'll filter by source/target later for sorting)
+        all_cards = session.exec(select(Card)).all()
+    
+    # Group cards by concept_id (all languages)
     concept_cards_map = {}
     for card in all_cards:
-        # If searching, only include matching concept_ids
-        if matching_concept_ids is None or card.concept_id in matching_concept_ids:
-            if card.concept_id not in concept_cards_map:
-                concept_cards_map[card.concept_id] = {}
-            concept_cards_map[card.concept_id][card.language_code] = card
+        if card.concept_id not in concept_cards_map:
+            concept_cards_map[card.concept_id] = {}
+        concept_cards_map[card.concept_id][card.language_code] = card
     
     # Get all concept_ids and sort based on sort_by parameter
     concept_sort_keys = []
@@ -219,11 +213,29 @@ async def get_vocabulary(
         # Get images for this concept
         concept_images = concept_images_map.get(concept_id, [])
         
-        # Only include items that have at least one card
+        # Only include items that have at least one card (source or target)
         if source_card or target_card:
+            # Build list of all cards for this concept
+            all_cards_list = []
+            for card in lang_cards.values():
+                all_cards_list.append(
+                    CardResponse(
+                        id=card.id,
+                        concept_id=card.concept_id,
+                        language_code=card.language_code,
+                        translation=ensure_capitalized(card.term),
+                        description=card.description,
+                        ipa=card.ipa,
+                        audio_path=card.audio_url,
+                        gender=card.gender,
+                        notes=card.notes
+                    )
+                )
+            
             paired_items.append(
                 PairedVocabularyItem(
                     concept_id=concept_id,
+                    cards=all_cards_list,
                     source_card=CardResponse(
                         id=source_card.id,
                         concept_id=source_card.concept_id,

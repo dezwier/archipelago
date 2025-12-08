@@ -20,7 +20,7 @@ class VocabularyService {
     int pageSize = 20,
     String sortBy = 'alphabetical', // Options: 'alphabetical', 'recent'
     String? search,
-    bool searchInSource = true,
+    List<String> searchLanguageCodes = const [],
   }) async {
     final queryParams = <String, String>{
       'user_id': userId.toString(),
@@ -31,7 +31,9 @@ class VocabularyService {
     
     if (search != null && search.isNotEmpty) {
       queryParams['search'] = search;
-      queryParams['search_in_source'] = searchInSource.toString();
+      if (searchLanguageCodes.isNotEmpty) {
+        queryParams['search_languages'] = searchLanguageCodes.join(',');
+      }
     }
     
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/vocabulary').replace(

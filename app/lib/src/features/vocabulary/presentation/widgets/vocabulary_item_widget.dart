@@ -9,8 +9,8 @@ class VocabularyItemWidget extends StatelessWidget {
   final PairedVocabularyItem item;
   final String? sourceLanguageCode;
   final String? targetLanguageCode;
-  final bool showSource;
-  final bool showTarget;
+  final Map<String, bool> languageVisibility;
+  final List<String> languagesToShow;
   final bool showDescription;
   final bool showImages;
   final VoidCallback onEdit;
@@ -24,8 +24,8 @@ class VocabularyItemWidget extends StatelessWidget {
     required this.item,
     this.sourceLanguageCode,
     this.targetLanguageCode,
-    this.showSource = true,
-    this.showTarget = true,
+    required this.languageVisibility,
+    required this.languagesToShow,
     this.showDescription = true,
     this.showImages = true,
     required this.onEdit,
@@ -92,39 +92,7 @@ class VocabularyItemWidget extends StatelessWidget {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Source language section
-                        if (item.sourceCard != null && sourceLanguageCode != null && showSource)
-                          _buildLanguageSection(
-                            context,
-                            card: item.sourceCard!,
-                            languageCode: sourceLanguageCode!,
-                            isSource: true,
-                          ),
-                        // Divider between languages
-                        if (item.sourceCard != null && 
-                            sourceLanguageCode != null && 
-                            showSource &&
-                            item.targetCard != null && 
-                            targetLanguageCode != null && 
-                            showTarget)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12.0),
-                            child: Divider(
-                              height: 1,
-                              thickness: 1,
-                              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                            ),
-                          ),
-                        // Target language section
-                        if (item.targetCard != null && targetLanguageCode != null && showTarget)
-                          _buildLanguageSection(
-                            context,
-                            card: item.targetCard!,
-                            languageCode: targetLanguageCode!,
-                            isSource: false,
-                          ),
-                      ],
+                      children: _buildLanguageSections(context),
                     ),
                   ),
                   // Image on the right side
@@ -181,11 +149,61 @@ class VocabularyItemWidget extends StatelessWidget {
     );
   }
 
+  List<Widget> _buildLanguageSections(BuildContext context) {
+    // Filter visible cards and sort by the languagesToShow order
+    final visibleCards = item.cards
+        .where((card) => languageVisibility[card.languageCode] ?? true)
+        .toList();
+    
+    // Sort cards according to the languagesToShow list order
+    visibleCards.sort((a, b) {
+      final indexA = languagesToShow.indexOf(a.languageCode);
+      final indexB = languagesToShow.indexOf(b.languageCode);
+      
+      // If both are in the list, sort by their position
+      if (indexA != -1 && indexB != -1) {
+        return indexA.compareTo(indexB);
+      }
+      // If only one is in the list, prioritize it (shouldn't happen if visibility is synced)
+      if (indexA != -1) return -1;
+      if (indexB != -1) return 1;
+      // If neither is in the list, maintain original order (fallback)
+      return 0;
+    });
+    
+    final widgets = <Widget>[];
+    for (int i = 0; i < visibleCards.length; i++) {
+      final card = visibleCards[i];
+      
+      if (i > 0) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12.0),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            ),
+          ),
+        );
+      }
+      
+      widgets.add(
+        _buildLanguageSection(
+          context,
+          card: card,
+          languageCode: card.languageCode,
+        ),
+      );
+    }
+    
+    return widgets;
+  }
+
   Widget _buildLanguageSection(
     BuildContext context, {
     required VocabularyCard card,
     required String languageCode,
-    required bool isSource,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,10 +230,8 @@ class VocabularyItemWidget extends StatelessWidget {
                         child: Text(
                           HtmlEntityDecoder.decode(card.translation),
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: isSource ? FontWeight.w500 : FontWeight.w700,
-                            color: isSource 
-                                ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8)
-                                : Theme.of(context).colorScheme.onSurface,
+                            fontWeight: FontWeight.w700,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       ),
@@ -224,9 +240,7 @@ class VocabularyItemWidget extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: isSource
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : Theme.of(context).colorScheme.secondaryContainer,
+                            color: Theme.of(context).colorScheme.secondaryContainer,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -234,9 +248,7 @@ class VocabularyItemWidget extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: isSource
-                                  ? Theme.of(context).colorScheme.onPrimaryContainer
-                                  : Theme.of(context).colorScheme.onSecondaryContainer,
+                              color: Theme.of(context).colorScheme.onSecondaryContainer,
                             ),
                           ),
                         ),
@@ -250,9 +262,7 @@ class VocabularyItemWidget extends StatelessWidget {
                       '/${card.ipa}/',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         fontFamily: 'monospace',
-                        color: Theme.of(context).colorScheme.onSurface.withValues(
-                          alpha: isSource ? 0.5 : 0.7,
-                        ),
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
                     ),
                   ],
@@ -262,14 +272,12 @@ class VocabularyItemWidget extends StatelessWidget {
           ],
         ),
         // Description
-        if (card.description.isNotEmpty && showDescription) ...[
+        if ((card.description?.isNotEmpty ?? false) && showDescription) ...[
           const SizedBox(height: 8),
           Text(
-            HtmlEntityDecoder.decode(card.description),
+            HtmlEntityDecoder.decode(card.description!),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(
-                alpha: isSource ? 0.6 : 0.8,
-              ),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
               height: 1.4,
             ),
           ),
@@ -297,9 +305,7 @@ class VocabularyItemWidget extends StatelessWidget {
                     HtmlEntityDecoder.decode(card.notes!),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontStyle: FontStyle.italic,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(
-                        alpha: isSource ? 0.5 : 0.7,
-                      ),
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                     ),
                   ),
                 ),

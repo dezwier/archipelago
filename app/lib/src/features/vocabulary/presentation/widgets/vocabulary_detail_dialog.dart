@@ -867,10 +867,10 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
             ],
           ),
           // Description (only show when not editing)
-          if (!_isEditing && card.description.isNotEmpty) ...[
+          if (!_isEditing && (card.description?.isNotEmpty ?? false)) ...[
             const SizedBox(height: 6),
             Text(
-              HtmlEntityDecoder.decode(card.description),
+              HtmlEntityDecoder.decode(card.description!),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.85),
                 height: 1.4,

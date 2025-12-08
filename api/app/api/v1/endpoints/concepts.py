@@ -30,7 +30,41 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/concepts", tags=["concepts"])
 
 
-def call_gemini_api(prompt: str) -> dict:
+def calculate_gemini_cost(prompt_tokens: int, output_tokens: int, model_name: str = "gemini-2.5-flash") -> float:
+    """
+    Calculate cost for Gemini API call based on token usage.
+    
+    Pricing (as of 2024):
+    - gemini-2.5-flash: $0.075 per 1M input tokens, $0.30 per 1M output tokens
+    - gemini-2.5-pro: $0.125 per 1M input tokens, $0.50 per 1M output tokens
+    
+    Args:
+        prompt_tokens: Number of input tokens
+        output_tokens: Number of output tokens
+        model_name: Name of the model used
+        
+    Returns:
+        Cost in USD
+    """
+    # Pricing per million tokens
+    if "flash" in model_name.lower():
+        input_price_per_million = 0.075
+        output_price_per_million = 0.30
+    elif "pro" in model_name.lower():
+        input_price_per_million = 0.125
+        output_price_per_million = 0.50
+    else:
+        # Default to flash pricing
+        input_price_per_million = 0.075
+        output_price_per_million = 0.30
+    
+    input_cost = (prompt_tokens / 1_000_000) * input_price_per_million
+    output_cost = (output_tokens / 1_000_000) * output_price_per_million
+    
+    return input_cost + output_cost
+
+
+def call_gemini_api(prompt: str) -> tuple[dict, dict]:
     """
     Call Gemini API to generate concept and card data.
     
@@ -38,7 +72,8 @@ def call_gemini_api(prompt: str) -> dict:
         prompt: The prompt to send to the LLM
         
     Returns:
-        Parsed JSON response from the LLM
+        Tuple of (parsed JSON response from the LLM, token usage dict with keys:
+                  'prompt_tokens', 'output_tokens', 'total_tokens', 'cost_usd', 'model_name')
         
     Raises:
         Exception: If API call fails or response is invalid
@@ -74,6 +109,23 @@ def call_gemini_api(prompt: str) -> dict:
         response.raise_for_status()
         data = response.json()
         
+        # Extract token usage from usageMetadata
+        usage_metadata = data.get('usageMetadata', {})
+        prompt_tokens = usage_metadata.get('promptTokenCount', 0)
+        output_tokens = usage_metadata.get('candidatesTokenCount', 0)
+        total_tokens = usage_metadata.get('totalTokenCount', prompt_tokens + output_tokens)
+        
+        # Calculate cost
+        cost_usd = calculate_gemini_cost(prompt_tokens, output_tokens, model_name)
+        
+        token_usage = {
+            'prompt_tokens': prompt_tokens,
+            'output_tokens': output_tokens,
+            'total_tokens': total_tokens,
+            'cost_usd': cost_usd,
+            'model_name': model_name
+        }
+        
         # Extract generated text
         if 'candidates' in data and len(data['candidates']) > 0:
             candidate = data['candidates'][0]
@@ -95,7 +147,7 @@ def call_gemini_api(prompt: str) -> dict:
                 # Parse JSON
                 try:
                     llm_data = json.loads(text)
-                    return llm_data
+                    return llm_data, token_usage
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse LLM JSON response: {e}")
                     logger.error(f"Response text: {text[:500]}")
@@ -256,7 +308,8 @@ async def create_concept(
     
     # Call Gemini API
     try:
-        llm_data = call_gemini_api(prompt)
+        llm_data, token_usage = call_gemini_api(prompt)
+        logger.info(f"Gemini API call completed. Tokens: {token_usage['total_tokens']}, Cost: ${token_usage['cost_usd']:.6f}")
     except Exception as e:
         logger.error(f"Gemini API call failed: {str(e)}")
         raise HTTPException(
@@ -606,6 +659,8 @@ async def generate_cards_for_concepts(
     concepts_processed = 0
     cards_created = 0
     errors = []
+    total_cost_usd = 0.0
+    total_tokens = 0
     
     # Process each concept
     for concept in concepts:
@@ -635,7 +690,10 @@ async def generate_cards_for_concepts(
             
             # Call Gemini API
             try:
-                llm_data = call_gemini_api(prompt)
+                llm_data, token_usage = call_gemini_api(prompt)
+                total_cost_usd += token_usage['cost_usd']
+                total_tokens += token_usage['total_tokens']
+                logger.info(f"Gemini API call completed for concept {concept.id}. Tokens: {token_usage['total_tokens']}, Cost: ${token_usage['cost_usd']:.6f}")
             except Exception as e:
                 logger.error(f"Gemini API call failed for concept {concept.id}: {str(e)}")
                 errors.append(f"Concept {concept.id} ({concept.term}): Failed to generate cards - {str(e)}")
@@ -715,6 +773,8 @@ async def generate_cards_for_concepts(
         concepts_processed=concepts_processed,
         cards_created=cards_created,
         errors=errors,
-        total_concepts=len(concepts)
+        total_concepts=len(concepts),
+        session_cost_usd=round(total_cost_usd, 6),
+        total_tokens=total_tokens
     )
 
