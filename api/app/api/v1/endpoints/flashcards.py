@@ -224,6 +224,7 @@ async def get_vocabulary(
         part_of_speech = concept.part_of_speech if concept else None
         concept_term = concept.term if concept else None
         concept_description = concept.description if concept else None
+        concept_level = concept.level.value if concept and concept.level else None
         
         # Only include items that have at least one card (source or target)
         if source_card or target_card:
@@ -289,6 +290,7 @@ async def get_vocabulary(
                     part_of_speech=part_of_speech,
                     concept_term=concept_term,
                     concept_description=concept_description,
+                    concept_level=concept_level,
                 )
             )
     

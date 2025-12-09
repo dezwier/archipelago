@@ -555,20 +555,33 @@ class FlashcardService {
         'languages': languages.map((lang) => lang.toLowerCase()).toList(),
       };
       
+      print('=== FLASHCARD SERVICE REQUEST (generateCardsForConcept) ===');
+      print('URL: $url');
+      print('Request body: ${jsonEncode(body)}');
+      
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
       );
 
+      print('=== FLASHCARD SERVICE RESPONSE (generateCardsForConcept) ===');
+      print('Status code: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         
+        print('Parsed data: $data');
+        
         // Check if there are any errors in the response
         final errors = data['errors'] as List<dynamic>?;
+        print('Errors in response: $errors');
+        
         if (errors != null && errors.isNotEmpty) {
           // If there are errors, treat as failure
           final errorMessages = errors.map((e) => e.toString()).join('\n');
+          print('Returning failure with errors: $errorMessages');
           return {
             'success': false,
             'message': errorMessages,
@@ -576,6 +589,7 @@ class FlashcardService {
           };
         }
         
+        print('Returning success');
         return {
           'success': true,
           'message': 'Cards generated successfully',
@@ -583,6 +597,7 @@ class FlashcardService {
         };
       } else {
         final error = jsonDecode(response.body) as Map<String, dynamic>;
+        print('Returning failure with status code error: ${error['detail']}');
         return {
           'success': false,
           'message': error['detail'] as String? ?? 'Failed to generate cards',

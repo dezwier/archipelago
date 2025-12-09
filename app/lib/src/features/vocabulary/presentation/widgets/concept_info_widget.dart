@@ -25,7 +25,7 @@ class ConceptInfoWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Concept Term: ',
+                  'Concept: ',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                     fontWeight: FontWeight.w500,
@@ -33,7 +33,9 @@ class ConceptInfoWidget extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(
-                    item.conceptTerm!,
+                    item.conceptLevel != null
+                        ? '${item.conceptTerm!}, ${item.conceptLevel!.toUpperCase()}'
+                        : item.conceptTerm!,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
@@ -70,7 +72,7 @@ class ConceptInfoWidget extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Concept ID: ',
+                'Concept ID: #',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                   fontWeight: FontWeight.w500,

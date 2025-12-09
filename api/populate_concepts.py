@@ -1,339 +1,193 @@
 """
-Script to populate concept table with top 3000 most frequent English words.
-Reads from frequent_words.txt and enriches with WordNet data.
-Uses frequency data to assign proper frequency buckets.
+Script to populate the concept table from words.txt file.
+Wipes the concept table and creates a record for each word/part-of-speech/level combination.
 """
 import sys
-from pathlib import Path
-from sqlmodel import Session, select
-from app.core.database import engine
-from app.models.models import Concept
-import nltk
-from nltk.corpus import wordnet as wn
-from collections import Counter
-import requests
+import re
 import logging
-
-# Download required NLTK data (run once)
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    print("Downloading WordNet data...")
-    nltk.download('wordnet', quiet=True)
-
-try:
-    nltk.data.find('corpora/brown')
-except LookupError:
-    print("Downloading Brown corpus for frequency data...")
-    nltk.download('brown', quiet=True)
+from pathlib import Path
+from sqlmodel import Session, text
+from app.core.database import engine
+from app.models.models import Concept, CEFRLevel
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# POS mapping from WordNet to readable format
-POS_MAP = {
-    'n': 'noun',
-    'v': 'verb',
-    'a': 'adjective',
-    's': 'adjective',  # satellite adjective
-    'r': 'adverb'
+# Mapping of abbreviations to full part of speech names
+POS_MAPPING = {
+    'n.': 'noun',
+    'v.': 'verb',
+    'adj.': 'adjective',
+    'adv.': 'adverb',
+    'prep.': 'preposition',
+    'modal v.': 'modal verb',
+    'conj.': 'conjunction',
+    'pron.': 'pronoun',
+    'det.': 'determiner',
+    'exclam.': 'exclamation',
+    'num.': 'numeral',
+    'number': 'numeral'
 }
 
 
-def get_frequency_bucket(rank: int) -> str:
-    """Assign frequency bucket based on rank."""
-    if rank <= 1000:
-        return "1-1000"
-    elif rank <= 2000:
-        return "1001-2000"
-    elif rank <= 3000:
-        return "2001-3000"
-    else:
-        return "3001+"
-
-
-def download_frequency_list() -> dict[str, int]:
+def parse_word_line(line: str) -> list[tuple[str, str, str]]:
     """
-    Download a frequency-ranked word list and return a mapping of word -> rank.
-    Uses a public frequency word list from GitHub.
+    Parse a line from words.txt and return list of (word, part_of_speech, level) tuples.
+    
+    Examples:
+    - "conservative adj., n. B2" -> [("conservative", "adjective", "B2"), ("conservative", "noun", "B2")]
+    - "direct adj. A2, v., adv. B1" -> [("direct", "adjective", "A2"), ("direct", "verb", "B1"), ("direct", "adverb", "B1")]
+    - "need v. A1, n. A2, modal v. B1" -> [("need", "verb", "A1"), ("need", "noun", "A2"), ("need", "modal verb", "B1")]
+    - "according to prep. A2" -> [("according to", "preposition", "A2")]
     """
-    url = "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2016/en/en_50k.txt"
-    
-    try:
-        logger.info("Downloading frequency word list...")
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        
-        word_to_rank = {}
-        for rank, line in enumerate(response.text.strip().split('\n'), start=1):
-            if line.strip():
-                # Format is usually "word frequency" or just "word"
-                parts = line.strip().split()
-                if parts:
-                    word = parts[0].lower()
-                    word_to_rank[word] = rank
-        
-        logger.info("Downloaded frequency list with %d words", len(word_to_rank))
-        return word_to_rank
-        
-    except Exception as e:
-        logger.warning("Failed to download frequency list: %s", e)
-        logger.info("Falling back to Brown corpus frequency calculation...")
-        return calculate_frequency_from_corpus()
-
-
-def calculate_frequency_from_corpus() -> dict[str, int]:
-    """
-    Calculate word frequencies from NLTK Brown corpus and return word -> rank mapping.
-    This is a fallback if we can't download a frequency list.
-    """
-    try:
-        from nltk.corpus import brown
-        
-        logger.info("Calculating word frequencies from Brown corpus...")
-        # Get all words from Brown corpus
-        words = [word.lower() for word in brown.words() if word.isalpha()]
-        
-        # Count frequencies
-        word_freq = Counter(words)
-        
-        # Sort by frequency (descending) and assign ranks
-        sorted_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
-        
-        word_to_rank = {}
-        for rank, (word, _) in enumerate(sorted_words, start=1):
-            word_to_rank[word] = rank
-        
-        logger.info("Calculated frequencies for %d words from Brown corpus", len(word_to_rank))
-        return word_to_rank
-        
-    except Exception as e:
-        logger.error("Failed to calculate frequencies from corpus: %s", e)
-        return {}
-
-
-def get_wordnet_data(word: str) -> tuple[str | None, str | None]:
-    """
-    Get description and part of speech from WordNet.
-    Returns (description, part_of_speech) or (None, None) if not found.
-    """
-    # Get all synsets for the word
-    synsets = wn.synsets(word.lower())
-    
-    if not synsets:
-        return None, None
-    
-    # Prefer noun, then verb, then adjective, then adverb
-    preferred_pos = ['n', 'v', 'a', 'r', 's']
-    
-    # Find the best synset (prefer most common POS)
-    best_synset = None
-    for pos in preferred_pos:
-        for synset in synsets:
-            if synset.pos() == pos:
-                best_synset = synset
-                break
-        if best_synset:
-            break
-    
-    # If no preferred POS found, use the first synset
-    if not best_synset:
-        best_synset = synsets[0]
-    
-    # Get definition (gloss)
-    definition = best_synset.definition()
-    
-    # Get POS
-    pos_code = best_synset.pos()
-    pos_readable = POS_MAP.get(pos_code, pos_code)
-    
-    return definition, pos_readable
-
-
-def get_wordnet_meanings_by_pos(word: str) -> list[tuple[str, str]]:
-    """
-    Get meanings grouped by part of speech from WordNet for a word.
-    Returns a list of (description, part_of_speech) tuples, one per unique POS.
-    Each tuple represents a concept for that part of speech (using the first description found for that POS).
-    Only returns entries where both description and part_of_speech are available.
-    """
-    # Get all synsets for the word
-    synsets = wn.synsets(word.lower())
-    
-    if not synsets:
+    line = line.strip()
+    if not line:
         return []
     
-    # Group by part of speech, taking the first description for each POS
-    pos_to_description = {}
+    # Find the first POS abbreviation to separate word from POS/level info
+    # This handles multi-word entries like "according to"
+    word_end_pos = len(line)
+    for pos_abbr in sorted(POS_MAPPING.keys(), key=len, reverse=True):
+        pos_idx = line.find(pos_abbr)
+        if pos_idx != -1 and pos_idx < word_end_pos:
+            word_end_pos = pos_idx
     
-    for synset in synsets:
-        definition = synset.definition()
-        pos_code = synset.pos()
-        pos_readable = POS_MAP.get(pos_code, pos_code)
+    if word_end_pos == len(line):
+        logger.warning("Could not find POS abbreviation in line: %s", line)
+        return []
+    
+    word = line[:word_end_pos].strip()
+    pos_level_str = line[word_end_pos:].strip()
+    
+    results = []
+    
+    # Split by comma to get different groups
+    # Each group has format: "pos1, pos2. LEVEL" or "pos. LEVEL"
+    # We need to split on commas, but a comma can be within a group (like "v., adv.")
+    # The pattern is: groups are separated by comma-space-level or comma-space-POS
+    # Actually, simpler: split on comma, then for each part, find the level
+    
+    # First, let's find all level positions to understand the structure
+    level_positions = [(m.start(), m.end(), m.group(1)) for m in re.finditer(r'\b([A-C][12])\b', pos_level_str)]
+    
+    if not level_positions:
+        logger.warning("Could not find any level in: %s (line: %s)", pos_level_str, line)
+        return []
+    
+    # For each level, find the POS that belong to it
+    # A level belongs to all POS that come before it and after the previous level
+    for i, (level_start, _, level) in enumerate(level_positions):
+        # Find the start of this group (either start of string or after previous level)
+        if i == 0:
+            group_start = 0
+        else:
+            # Start after the previous level and any comma/space
+            prev_level_end = level_positions[i-1][1]
+            group_start = prev_level_end
+            # Skip comma and spaces
+            while group_start < len(pos_level_str) and pos_level_str[group_start] in ', ':
+                group_start += 1
         
-        # Only add if we have both description and POS, and haven't seen this POS yet
-        if definition and pos_readable and pos_readable not in pos_to_description:
-            pos_to_description[pos_readable] = definition
+        # The POS part is everything before this level
+        pos_part = pos_level_str[group_start:level_start].strip()
+        
+        # Remove trailing comma if present
+        pos_part = pos_part.rstrip(',').strip()
+        
+        # Extract all part of speech abbreviations from this group
+        pos_patterns = []
+        remaining_text = pos_part
+        for pos_abbr in sorted(POS_MAPPING.keys(), key=len, reverse=True):  # Sort by length to match longer ones first
+            if pos_abbr in remaining_text:
+                pos_patterns.append(pos_abbr)
+                # Remove matched POS from remaining_text to avoid double matching
+                remaining_text = remaining_text.replace(pos_abbr, '', 1)
+        
+        # Create a record for each part of speech in this group
+        for pos_abbr in pos_patterns:
+            pos_full = POS_MAPPING.get(pos_abbr, pos_abbr)
+            results.append((word, pos_full, level))
     
-    # Convert to list of tuples
-    return [(desc, pos) for pos, desc in pos_to_description.items()]
+    return results
 
 
-def read_frequent_words(file_path: Path) -> list[str]:
-    """Read words from the frequent words file."""
-    words = []
-    with open(file_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            word = line.strip()
-            if word:
-                words.append(word)
-    return words
-
-
-def populate_concepts(batch_size: int = 100):
-    """
-    Populate concept table with words from the frequent_words.txt file.
-    
-    Args:
-        batch_size: Number of concepts to insert per transaction
-    """
-    # Get file path relative to this script
-    script_dir = Path(__file__).parent
-    words_file = script_dir / "app" / "core" / "frequent_words.txt"
-    
-    if not words_file.exists():
-        logger.error("Word list file not found: %s", words_file)
-        sys.exit(1)
-    
-    words = read_frequent_words(words_file)
-    total_words = len(words)
-    logger.info("Found %d words to process", total_words)
-    
-    # Get frequency rankings
-    logger.info("Loading frequency data...")
-    frequency_map = download_frequency_list()
-    
-    if not frequency_map:
-        logger.error("Could not obtain frequency data. Cannot assign frequency buckets.")
-        sys.exit(1)
-    
+def clear_concept_table():
+    """Clear all data from concept table."""
     with Session(engine) as session:
-        # Check existing concepts to avoid duplicates
-        # We check for (term, description) combinations to avoid duplicates
-        existing_concepts = session.exec(
-            select(Concept.term, Concept.description).where(Concept.term.isnot(None))
-        ).all()
-        existing_concept_pairs = {
-            (term.lower() if term else None, description) 
-            for term, description in existing_concepts
-        }
-        logger.info("Found %d existing concepts in database", len(existing_concept_pairs))
-        
-        concepts_to_insert = []
-        skipped = 0
-        not_found = 0
-        no_frequency = 0
-        processed = 0
-        total_concepts_created = 0
-        
-        for word in words:
-            word_lower = word.lower()
-            
-            # Get frequency rank from frequency map
-            frequency_rank = frequency_map.get(word_lower)
-            
-            if frequency_rank is None:
-                no_frequency += 1
-                logger.warning("No frequency data found for: %s, assigning to 3001+ bucket", word)
-                frequency_rank = 999999  # High number for unknown words
-            
-            # Get WordNet meanings grouped by part of speech
-            meanings = get_wordnet_meanings_by_pos(word)
-            
-            if not meanings:
-                not_found += 1
-                logger.warning("No WordNet data with both POS and description found for: %s", word)
-                # Skip words without both POS and description
-                skipped += 1
-            else:
-                # Create a concept for each part of speech
-                frequency_bucket = get_frequency_bucket(frequency_rank)
-                
-                for description, part_of_speech in meanings:
-                    concept_key = (word_lower, description)
-                    
-                    # Skip if this exact (term, description) combination already exists
-                    if concept_key in existing_concept_pairs:
-                        skipped += 1
-                        continue
-                    
-                    concept = Concept(
-                        term=word,
-                        description=description,
-                        part_of_speech=part_of_speech,
-                        frequency_bucket=frequency_bucket,
-                        status="active"
-                    )
-                    
-                    concepts_to_insert.append(concept)
-                    existing_concept_pairs.add(concept_key)
-                    total_concepts_created += 1
-            
-            processed += 1
-            
-            # Progress update every 100 words
-            if processed % 100 == 0:
-                logger.info("Processed %d/%d words (skipped: %d, not found: %d, no frequency: %d, concepts created: %d)", 
-                          processed, total_words, skipped, not_found, no_frequency, total_concepts_created)
-            
-            # Insert in batches
-            if len(concepts_to_insert) >= batch_size:
-                try:
-                    session.add_all(concepts_to_insert)
-                    session.commit()
-                    logger.info("Inserted batch of %d concepts", len(concepts_to_insert))
-                    concepts_to_insert = []
-                except Exception as e:
-                    session.rollback()
-                    logger.error("Error inserting batch: %s", e)
-                    raise
-        
-        # Insert remaining concepts
-        if concepts_to_insert:
+        try:
+            logger.info("Deleting all concepts...")
+            session.exec(text("DELETE FROM concept"))
+            session.commit()
+            logger.info("Successfully cleared concept table")
+        except Exception as e:
+            session.rollback()
+            logger.error("Error clearing concept table: %s", e, exc_info=True)
+            raise
+
+
+def populate_concepts(words_file_path: str = None):
+    """Read words.txt and populate concept table."""
+    # If no path provided, look for words.txt in the same directory as this script
+    if words_file_path is None:
+        script_dir = Path(__file__).parent
+        words_file_path = script_dir / "words.txt"
+    
+    try:
+        with open(words_file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        logger.error("File not found: %s", words_file_path)
+        sys.exit(1)
+    
+    # Parse all lines and collect concepts
+    concepts_to_create = []
+    for line_num, line in enumerate(lines, 1):
+        parsed = parse_word_line(line)
+        for word, pos, level in parsed:
             try:
-                session.add_all(concepts_to_insert)
-                session.commit()
-                logger.info("Inserted final batch of %d concepts", len(concepts_to_insert))
-            except Exception as e:
-                session.rollback()
-                logger.error("Error inserting final batch: %s", e)
-                raise
-        
-        logger.info("Completed! Processed %d words", total_words)
-        logger.info("  - Skipped (already exists): %d", skipped)
-        logger.info("  - Not found in WordNet: %d", not_found)
-        logger.info("  - No frequency data: %d", no_frequency)
-        logger.info("  - Concepts created: %d", total_concepts_created)
-        logger.info("  - Total concepts to insert: %d", len(concepts_to_insert))
+                # Validate level
+                cefr_level = CEFRLevel(level)
+                concepts_to_create.append({
+                    'term': word,
+                    'part_of_speech': pos,
+                    'level': cefr_level,
+                })
+            except ValueError:
+                logger.warning("Invalid level '%s' on line %d: %s", level, line_num, line.strip())
+    
+    logger.info("Parsed %d concept records from %d lines", len(concepts_to_create), len(lines))
+    
+    # Clear existing concepts
+    clear_concept_table()
+    
+    # Insert all concepts
+    with Session(engine) as session:
+        try:
+            logger.info("Inserting %d concepts...", len(concepts_to_create))
+            for i, concept_data in enumerate(concepts_to_create, 1):
+                concept = Concept(**concept_data)
+                session.add(concept)
+                
+                # Commit in batches to avoid memory issues
+                if i % 1000 == 0:
+                    session.commit()
+                    logger.info("Inserted %d/%d concepts...", i, len(concepts_to_create))
+            
+            session.commit()
+            logger.info("Successfully inserted %d concepts", len(concepts_to_create))
+            
+        except Exception as e:
+            session.rollback()
+            logger.error("Error inserting concepts: %s", e, exc_info=True)
+            raise
 
 
 if __name__ == "__main__":
-    # Get file path
-    script_dir_path = Path(__file__).parent
-    words_file_path = script_dir_path / "app" / "core" / "frequent_words.txt"
-    
-    if not words_file_path.exists():
-        logger.error("Word list file not found: %s", words_file_path)
-        logger.error("Please ensure frequent_words.txt exists in api/app/core/")
-        sys.exit(1)
-    
     logger.info("Starting concept population...")
-    logger.info("Reading words from: %s", words_file_path)
-    
     try:
         populate_concepts()
         logger.info("Successfully completed!")
     except Exception as e:
-        logger.error("Error during population: %s", e, exc_info=True)
+        logger.error("Error during concept population: %s", e, exc_info=True)
         sys.exit(1)
 

@@ -3,6 +3,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../domain/paired_vocabulary_item.dart';
 import '../../domain/vocabulary_card.dart';
 import '../../../../utils/html_entity_decoder.dart';
+import '../../../../utils/language_emoji.dart';
 import 'language_lemma_widget.dart';
 
 class VocabularyItemWidget extends StatelessWidget {
@@ -12,7 +13,7 @@ class VocabularyItemWidget extends StatelessWidget {
   final Map<String, bool> languageVisibility;
   final List<String> languagesToShow;
   final bool showDescription;
-  final bool showImages;
+  final bool showExtraInfo;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final List<PairedVocabularyItem> allItems;
@@ -27,7 +28,7 @@ class VocabularyItemWidget extends StatelessWidget {
     required this.languageVisibility,
     required this.languagesToShow,
     this.showDescription = true,
-    this.showImages = true,
+    this.showExtraInfo = true,
     required this.onEdit,
     required this.onDelete,
     required this.allItems,
@@ -97,30 +98,17 @@ class VocabularyItemWidget extends StatelessWidget {
   }
 
   List<Widget> _buildLanguageSections(BuildContext context) {
-    // Filter visible cards and sort by the languagesToShow order
-    final visibleCards = item.cards
-        .where((card) => languageVisibility[card.languageCode] ?? true)
-        .toList();
-    
-    // Sort cards according to the languagesToShow list order
-    visibleCards.sort((a, b) {
-      final indexA = languagesToShow.indexOf(a.languageCode);
-      final indexB = languagesToShow.indexOf(b.languageCode);
-      
-      // If both are in the list, sort by their position
-      if (indexA != -1 && indexB != -1) {
-        return indexA.compareTo(indexB);
-      }
-      // If only one is in the list, prioritize it (shouldn't happen if visibility is synced)
-      if (indexA != -1) return -1;
-      if (indexB != -1) return 1;
-      // If neither is in the list, maintain original order (fallback)
-      return 0;
-    });
-    
+    // Build sections for all visible languages in order
+    // Show placeholders for missing cards
     final widgets = <Widget>[];
-    for (int i = 0; i < visibleCards.length; i++) {
-      final card = visibleCards[i];
+    
+    for (int i = 0; i < languagesToShow.length; i++) {
+      final languageCode = languagesToShow[i];
+      
+      // Skip if language is not visible
+      if (languageVisibility[languageCode] != true) {
+        continue;
+      }
       
       if (i > 0) {
         widgets.add(
@@ -135,13 +123,27 @@ class VocabularyItemWidget extends StatelessWidget {
         );
       }
       
-      widgets.add(
-        _buildLanguageSection(
-          context,
-          card: card,
-          languageCode: card.languageCode,
-        ),
-      );
+      // Check if card exists for this language
+      final card = item.getCardByLanguage(languageCode);
+      
+      if (card != null) {
+        // Show card normally
+        widgets.add(
+          _buildLanguageSection(
+            context,
+            card: card,
+            languageCode: languageCode,
+          ),
+        );
+      } else {
+        // Show placeholder for missing card
+        widgets.add(
+          _buildPlaceholderSection(
+            context,
+            languageCode: languageCode,
+          ),
+        );
+      }
     }
     
     return widgets;
@@ -159,6 +161,7 @@ class VocabularyItemWidget extends StatelessWidget {
           card: card,
           languageCode: languageCode,
           showDescription: showDescription,
+          showExtraInfo: showExtraInfo,
           partOfSpeech: item.partOfSpeech,
         ),
         // Notes
@@ -192,6 +195,42 @@ class VocabularyItemWidget extends StatelessWidget {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildPlaceholderSection(
+    BuildContext context, {
+    required String languageCode,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Language flag emoji
+        Text(
+          LanguageEmoji.getEmoji(languageCode),
+          style: const TextStyle(fontSize: 20),
+        ),
+        const SizedBox(width: 8),
+        // Placeholder text
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 5.0),
+                child: Text(
+                  'Lemma to be retrieved',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w400,
+                    fontStyle: FontStyle.italic,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

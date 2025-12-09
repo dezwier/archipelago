@@ -24,6 +24,7 @@ class VocabularyController extends ChangeNotifier {
   
   // Sort state
   SortOption _sortOption = SortOption.timeCreatedRecentFirst;
+  String? _alphabeticalSortLanguageCode; // Language code to sort by when alphabetical is selected
   
   // Description generation state
   String? _descriptionTaskId;
@@ -66,8 +67,7 @@ class VocabularyController extends ChangeNotifier {
 
   String _getSortByParameter() {
     switch (_sortOption) {
-      case SortOption.sourceLanguage:
-      case SortOption.targetLanguage:
+      case SortOption.alphabetical:
         return 'alphabetical';
       case SortOption.timeCreatedRecentFirst:
         return 'recent';
@@ -78,21 +78,20 @@ class VocabularyController extends ChangeNotifier {
     // Only apply client-side sorting for alphabetical sorts
     // Recent sort is handled server-side
     switch (_sortOption) {
-      case SortOption.sourceLanguage:
-        _pairedItems.sort((a, b) {
-          final aText = a.sourceCard?.translation.toLowerCase().trim() ?? '';
-          final bText = b.sourceCard?.translation.toLowerCase().trim() ?? '';
-          return aText.compareTo(bText);
-        });
-        break;
-      case SortOption.targetLanguage:
-        _pairedItems.sort((a, b) {
-          final aText = a.targetCard?.translation.toLowerCase().trim() ?? 
-                       a.sourceCard?.translation.toLowerCase().trim() ?? '';
-          final bText = b.targetCard?.translation.toLowerCase().trim() ?? 
-                       b.sourceCard?.translation.toLowerCase().trim() ?? '';
-          return aText.compareTo(bText);
-        });
+      case SortOption.alphabetical:
+        if (_alphabeticalSortLanguageCode != null) {
+          _pairedItems.sort((a, b) {
+            // Get card for the first visible language
+            final aCard = a.getCardByLanguage(_alphabeticalSortLanguageCode!);
+            final bCard = b.getCardByLanguage(_alphabeticalSortLanguageCode!);
+            
+            // Get translation text, fallback to empty string if card not found
+            final aText = aCard?.translation.toLowerCase().trim() ?? '';
+            final bText = bCard?.translation.toLowerCase().trim() ?? '';
+            
+            return aText.compareTo(bText);
+          });
+        }
         break;
       case SortOption.timeCreatedRecentFirst:
         // Server-side sorting - no client-side sorting needed
@@ -101,9 +100,15 @@ class VocabularyController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setSortOption(SortOption option) {
-    if (_sortOption != option) {
+  void setSortOption(SortOption option, {String? firstVisibleLanguage}) {
+    if (_sortOption != option || 
+        (option == SortOption.alphabetical && _alphabeticalSortLanguageCode != firstVisibleLanguage)) {
       _sortOption = option;
+      if (option == SortOption.alphabetical) {
+        _alphabeticalSortLanguageCode = firstVisibleLanguage;
+      } else {
+        _alphabeticalSortLanguageCode = null;
+      }
       _loadUserAndVocabulary(reset: true);
     }
   }

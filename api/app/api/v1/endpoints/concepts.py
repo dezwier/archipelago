@@ -3,7 +3,7 @@ Concept generation endpoint.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
-from sqlalchemy import text
+from sqlalchemy import text, func
 from app.core.database import get_session
 from app.core.config import settings
 from app.models.models import Concept, Card, Language, Topic
@@ -24,6 +24,7 @@ import requests
 import json
 import logging
 import random
+from datetime import datetime, timezone
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -256,6 +257,64 @@ Rules:
     return prompt
 
 
+def generate_card_translation_prompt(
+    term: str,
+    description: Optional[str],
+    part_of_speech: Optional[str],
+    target_language: str
+) -> str:
+    """
+    Generate a prompt for translating a term and generating a description in the target language.
+    
+    Args:
+        term: The English term to translate
+        description: The English description of the concept
+        part_of_speech: Part of speech
+        target_language: Target language code
+        
+    Returns:
+        The prompt string
+    """
+    description_text = ""
+    if description:
+        description_text = f"\nDescription: {description}"
+    
+    part_of_speech_text = ""
+    if part_of_speech:
+        part_of_speech_text = f"\nPart of speech: {part_of_speech}"
+    
+    # Add instruction about sticking to the provided meaning
+    meaning_instruction = ""
+    if description:
+        meaning_instruction = f"\n\nCRITICAL: The term \"{term}\" may have multiple meanings, but you MUST use ONLY the specific meaning provided in the Description above. Ignore all other meanings this term might have. Your translation and description must reflect ONLY this exact semantic meaning."
+    
+    prompt = f"""You are a language learning assistant. Translate the term "{term}" into {target_language.upper()} and generate a description in {target_language.upper()}.{part_of_speech_text}{description_text}{meaning_instruction}
+
+Return ONLY valid JSON in this exact format (no markdown, no explanations):
+{{
+  "term": "string (the translation in {target_language.upper()}, use infinitive for verbs)",
+  "ipa": "string or null (pronunciation in standard IPA symbols)",
+  "description": "string (REQUIRED - generate a description in {target_language.upper()}, do NOT translate from English, write naturally in {target_language.upper()})",
+  "gender": "masculine | feminine | neuter | null (for languages with gender)",
+  "article": "string or null (for languages with articles)",
+  "plural_form": "string or null (for nouns)",
+  "verb_type": "string or null (for verbs)",
+  "auxiliary_verb": "string or null (for verbs in languages like French)",
+  "register": "neutral | formal | informal | slang | null"
+}}
+
+IMPORTANT:
+- Translate the term "{term}" into {target_language.upper()}
+- Generate a description in {target_language.upper()} (IMPORTANT: write the description naturally in {target_language.upper()}, do not translate word-for-word from English)
+- The description should be a lemma definition of the term in {target_language.upper()}
+- {f"CRITICAL: Use ONLY the meaning provided in the Description above. Ignore all other meanings the term \"{term}\" might have." if description else ""}
+- Provide IPA pronunciation
+- Include gender, article, plural_form, and register if applicable for the language. Use null for non-applicable fields
+- Fields "term", "description", "ipa" are REQUIRED and cannot be null or empty"""
+    
+    return prompt
+
+
 @router.post("/create", response_model=CreateConceptResponse, status_code=status.HTTP_201_CREATED)
 async def create_concept(
     request: CreateConceptRequest,
@@ -443,6 +502,43 @@ async def list_concepts(
     
     concepts = session.exec(
         select(Concept).offset(skip).limit(limit).order_by(Concept.created_at.desc())
+    ).all()
+    
+    return [ConceptResponse.model_validate(concept) for concept in concepts]
+
+
+@router.get("/by-term", response_model=List[ConceptResponse])
+async def get_concepts_by_term(
+    term: str,
+    session: Session = Depends(get_session)
+):
+    """
+    Get all concepts that match the given term.
+    
+    Searches for concepts where the term field matches (case-insensitive).
+    Uses partial matching - will find concepts where the term contains the search term.
+    
+    Args:
+        term: The term to search for
+    
+    Returns:
+        List of concepts matching the term
+    """
+    if not term or not term.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Term parameter cannot be empty"
+        )
+    
+    # Use case-insensitive partial matching
+    # Filter out concepts where term is None and use case-insensitive matching
+    search_term = term.strip()
+    # Use ilike for PostgreSQL case-insensitive pattern matching with wildcards
+    concepts = session.exec(
+        select(Concept).where(
+            Concept.term.isnot(None),
+            Concept.term.ilike(f"%{search_term}%")
+        ).order_by(Concept.created_at.desc())
     ).all()
     
     return [ConceptResponse.model_validate(concept) for concept in concepts]
@@ -671,11 +767,17 @@ async def generate_cards_for_concepts(
             )
         concepts.append(concept)
     
+    # Log request input
+    logger.info(f"=== GENERATE CARDS REQUEST ===")
+    logger.info(f"Request JSON Input: concept_ids={request.concept_ids}, languages={request.languages}")
+    logger.info(f"Concepts to process: {[{'id': c.id, 'term': c.term, 'description': c.description} for c in concepts]}")
+    
     # Shuffle concepts to process in random order
     random.shuffle(concepts)
     
     concepts_processed = 0
     cards_created = 0
+    cards_updated = 0
     errors = []
     total_cost_usd = 0.0
     total_tokens = 0
@@ -683,111 +785,148 @@ async def generate_cards_for_concepts(
     # Process each concept
     for concept in concepts:
         try:
-            # Get existing cards for this concept to determine which languages we need
+            # Filter: Only process concepts with filled term, description, and part_of_speech
+            if not concept.term or not concept.term.strip():
+                logger.info(f"Skipping concept {concept.id}: term is missing or empty")
+                continue
+            
+            if not concept.description or not concept.description.strip():
+                logger.info(f"Skipping concept {concept.id} ({concept.term}): description is missing or empty")
+                continue
+            
+            if not concept.part_of_speech or not concept.part_of_speech.strip():
+                logger.info(f"Skipping concept {concept.id} ({concept.term}): part_of_speech is missing or empty")
+                continue
+            
+            # Get existing cards for this concept
             existing_cards = session.exec(
                 select(Card).where(Card.concept_id == concept.id)
             ).all()
             
-            existing_language_codes = {card.language_code.lower() for card in existing_cards}
-            languages_to_generate = [lang for lang in language_codes if lang not in existing_language_codes]
+            # Create a map of existing cards by language code for easy lookup
+            existing_cards_by_lang = {card.language_code.lower(): card for card in existing_cards}
             
-            if not languages_to_generate:
-                # All languages already have cards, skip
-                continue
+            # Process all requested languages (will overwrite existing cards)
+            created_cards = []
+            updated_cards = []
             
-            # Generate prompt for this concept
-            prompt = generate_concept_prompt(
-                term=concept.term or "",
-                part_of_speech=concept.part_of_speech,
-                core_meaning_en=concept.description,
-                excluded_senses=[],
-                languages=languages_to_generate
-            )
-            
-            logger.info(f"Calling Gemini API for concept {concept.id}: term='{concept.term}', languages={languages_to_generate}")
-            
-            # Call Gemini API
-            try:
-                llm_data, token_usage = call_gemini_api(prompt)
-                total_cost_usd += token_usage['cost_usd']
-                total_tokens += token_usage['total_tokens']
-                logger.info(f"Gemini API call completed for concept {concept.id}. Tokens: {token_usage['total_tokens']}, Cost: ${token_usage['cost_usd']:.6f}")
-            except Exception as e:
-                logger.error(f"Gemini API call failed for concept {concept.id}: {str(e)}")
-                errors.append(f"Concept {concept.id} ({concept.term}): Failed to generate cards - {str(e)}")
-                continue
-            
-            # Validate LLM output using Pydantic
-            try:
-                validated_data = LLMResponse.model_validate(llm_data)
-            except Exception as e:
-                logger.error(f"LLM output validation failed for concept {concept.id}: {str(e)}")
-                errors.append(f"Concept {concept.id} ({concept.term}): Invalid LLM output format - {str(e)}")
-                continue
-            
-            # Verify we have cards for all requested languages
-            card_language_codes = {card.language_code.lower() for card in validated_data.cards}
-            missing_card_languages = set(languages_to_generate) - card_language_codes
-            
-            if missing_card_languages:
-                errors.append(f"Concept {concept.id} ({concept.term}): LLM did not generate cards for all languages. Missing: {', '.join(sorted(missing_card_languages))}")
-                continue
-            
-            # Verify no duplicate language codes in cards
-            if len(validated_data.cards) != len(card_language_codes):
-                errors.append(f"Concept {concept.id} ({concept.term}): LLM generated duplicate language codes in cards")
-                continue
-            
-            # Create cards in database
-            try:
-                created_cards = []
-                for card_data in validated_data.cards:
-                    # Skip if card already exists for this language
-                    if card_data.language_code.lower() in existing_language_codes:
+            for target_lang in language_codes:
+                try:
+                    # Generate prompt for this specific language
+                    prompt = generate_card_translation_prompt(
+                        term=concept.term or "",
+                        description=concept.description,
+                        part_of_speech=concept.part_of_speech,
+                        target_language=target_lang
+                    )
+                    
+                    logger.info(f"Calling Gemini API for concept {concept.id}: term='{concept.term}', language={target_lang}")
+                    
+                    # Call Gemini API
+                    try:
+                        llm_data, token_usage = call_gemini_api(prompt)
+                        total_cost_usd += token_usage['cost_usd']
+                        total_tokens += token_usage['total_tokens']
+                        logger.info(f"Gemini API call completed for concept {concept.id}, language {target_lang}. Tokens: {token_usage['total_tokens']}, Cost: ${token_usage['cost_usd']:.6f}")
+                        
+                        # Log raw LLM output
+                        logger.info(f"=== LLM RAW OUTPUT for concept {concept.id} ({concept.term}), language {target_lang} ===")
+                        logger.info(f"LLM Output JSON: {json.dumps(llm_data, indent=2, ensure_ascii=False)}")
+                    except Exception as e:
+                        logger.error(f"Gemini API call failed for concept {concept.id}, language {target_lang}: {str(e)}")
+                        errors.append(f"Concept {concept.id} ({concept.term}), language {target_lang}: Failed to generate card - {str(e)}")
                         continue
                     
+                    # Validate LLM output - expect a single card object, not the full LLMResponse format
+                    try:
+                        # The new prompt returns a single card object, not the full concept+cards structure
+                        # Validate required fields
+                        if not isinstance(llm_data, dict):
+                            raise ValueError("LLM output must be a JSON object")
+                        
+                        required_fields = ['term', 'description']
+                        for field in required_fields:
+                            if field not in llm_data or not llm_data[field]:
+                                raise ValueError(f"Missing or empty required field: {field}")
+                        
+                        # Log validated data
+                        logger.info(f"=== VALIDATED DATA for concept {concept.id} ({concept.term}), language {target_lang} ===")
+                        logger.info(f"Term: '{llm_data.get('term')}', Description: '{llm_data.get('description')}'")
+                        
+                    except Exception as e:
+                        logger.error(f"=== VALIDATION ERROR for concept {concept.id} ({concept.term}), language {target_lang} ===")
+                        logger.error(f"LLM Output that failed validation: {json.dumps(llm_data, indent=2, ensure_ascii=False)}")
+                        logger.error(f"Validation error: {str(e)}")
+                        errors.append(f"Concept {concept.id} ({concept.term}), language {target_lang}: Invalid LLM output format - {str(e)}")
+                        continue
+                    
+                    # Check if card already exists
+                    existing_card = existing_cards_by_lang.get(target_lang.lower())
+                    is_update = existing_card is not None
+                    
+                    if existing_card:
+                        # Delete existing card to avoid unique constraint issues when term changes
+                        session.delete(existing_card)
+                        # Flush to ensure deletion is processed before insert
+                        session.flush()
+                    
+                    # Create new card (or recreate if we just deleted one)
                     card = Card(
                         concept_id=concept.id,
-                        language_code=card_data.language_code.lower(),
-                        term=card_data.term,
-                        ipa=card_data.ipa,
-                        description=card_data.description,
-                        gender=card_data.gender,
-                        article=card_data.article,
-                        plural_form=card_data.plural_form,
-                        verb_type=card_data.verb_type,
-                        auxiliary_verb=card_data.auxiliary_verb,
-                        formality_register=card_data.formality_register,
+                        language_code=target_lang.lower(),
+                        term=llm_data.get('term'),
+                        ipa=llm_data.get('ipa'),
+                        description=llm_data.get('description'),
+                        gender=llm_data.get('gender'),
+                        article=llm_data.get('article'),
+                        plural_form=llm_data.get('plural_form'),
+                        verb_type=llm_data.get('verb_type'),
+                        auxiliary_verb=llm_data.get('auxiliary_verb'),
+                        formality_register=llm_data.get('register'),
                         status="active",
                         source="llm"
                     )
                     session.add(card)
-                    created_cards.append(card)
-                
-                # Commit transaction for this concept
-                session.commit()
-                
-                # Refresh cards to get IDs
-                for card in created_cards:
-                    session.refresh(card)
-                
-                cards_created += len(created_cards)
-                concepts_processed += 1
-                
-                logger.info(f"Successfully created {len(created_cards)} cards for concept {concept.id}")
-                
-            except Exception as e:
-                session.rollback()
-                logger.error(f"Database transaction failed for concept {concept.id}: {str(e)}")
-                errors.append(f"Concept {concept.id} ({concept.term}): Failed to create cards - {str(e)}")
-                continue
+                    if is_update:
+                        updated_cards.append(card)
+                    else:
+                        created_cards.append(card)
+                    
+                except Exception as e:
+                    logger.error(f"Unexpected error processing concept {concept.id}, language {target_lang}: {str(e)}")
+                    errors.append(f"Concept {concept.id} ({concept.term}), language {target_lang}: Unexpected error - {str(e)}")
+                    continue
+            
+            # Commit transaction for this concept
+            if created_cards or updated_cards:
+                try:
+                    session.commit()
+                    
+                    # Refresh cards to get IDs
+                    for card in created_cards:
+                        session.refresh(card)
+                    for card in updated_cards:
+                        session.refresh(card)
+                    
+                    cards_created += len(created_cards)
+                    cards_updated += len(updated_cards)
+                    concepts_processed += 1
+                    
+                    logger.info(f"Successfully processed concept {concept.id}: created {len(created_cards)} cards, updated {len(updated_cards)} cards")
+                    
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Database transaction failed for concept {concept.id}: {str(e)}")
+                    errors.append(f"Concept {concept.id} ({concept.term}): Failed to create cards - {str(e)}")
+                    continue
                 
         except Exception as e:
             logger.error(f"Unexpected error processing concept {concept.id}: {str(e)}")
             errors.append(f"Concept {concept.id} ({concept.term}): Unexpected error - {str(e)}")
             continue
     
-    return GenerateCardsForConceptsResponse(
+    # Log final response
+    response = GenerateCardsForConceptsResponse(
         concepts_processed=concepts_processed,
         cards_created=cards_created,
         errors=errors,
@@ -795,4 +934,12 @@ async def generate_cards_for_concepts(
         session_cost_usd=round(total_cost_usd, 6),
         total_tokens=total_tokens
     )
+    
+    logger.info(f"=== GENERATE CARDS RESPONSE ===")
+    logger.info(f"Response JSON: {json.dumps(response.model_dump(), indent=2, ensure_ascii=False)}")
+    logger.info(f"Concepts processed: {concepts_processed}, Cards created: {cards_created}, Cards updated: {cards_updated}, Errors: {len(errors)}")
+    if errors:
+        logger.error(f"Errors: {errors}")
+    
+    return response
 

@@ -14,6 +14,16 @@ class UserCardStatus(str, Enum):
     MASTERED = "mastered"
 
 
+class CEFRLevel(str, Enum):
+    """CEFR language proficiency levels."""
+    A1 = "A1"
+    A2 = "A2"
+    B1 = "B1"
+    B2 = "B2"
+    C1 = "C1"
+    C2 = "C2"
+
+
 class Topic(SQLModel, table=True):
     """Topic table for grouping concepts."""
     __tablename__ = "topic"
@@ -55,6 +65,7 @@ class Concept(SQLModel, table=True):
     description: Optional[str] = None
     part_of_speech: Optional[str] = None
     frequency_bucket: Optional[str] = None
+    level: Optional[CEFRLevel] = None  # CEFR language proficiency level (A1-C2)
     status: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None

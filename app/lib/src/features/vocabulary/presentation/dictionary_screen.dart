@@ -34,7 +34,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   Map<String, bool> _languageVisibility = {}; // languageCode -> isVisible
   List<String> _languagesToShow = []; // Ordered list of languages to show
   bool _showDescription = true;
-  bool _showImages = true;
+  bool _showExtraInfo = true;
   List<Language> _allLanguages = [];
   
 
@@ -214,7 +214,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                           languageVisibility: _languageVisibility,
                           languagesToShow: _languagesToShow,
                           showDescription: _showDescription,
-                          showImages: _showImages,
+                          showExtraInfo: _showExtraInfo,
                           onEdit: () => _handleEdit(item),
                           onDelete: () => _handleDelete(item),
                           allItems: _controller.filteredItems,
@@ -422,10 +422,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         ),
         items: [
           PopupMenuItem<SortOption>(
-            value: SortOption.sourceLanguage,
+            value: SortOption.alphabetical,
             child: Row(
               children: [
-                if (_controller.sortOption == SortOption.sourceLanguage)
+                if (_controller.sortOption == SortOption.alphabetical)
                   Icon(
                     Icons.check,
                     size: 20,
@@ -434,24 +434,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 else
                   const SizedBox(width: 20),
                 const SizedBox(width: 8),
-                const Text('Source Language'),
-              ],
-            ),
-          ),
-          PopupMenuItem<SortOption>(
-            value: SortOption.targetLanguage,
-            child: Row(
-              children: [
-                if (_controller.sortOption == SortOption.targetLanguage)
-                  Icon(
-                    Icons.check,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.primary,
-                  )
-                else
-                  const SizedBox(width: 20),
-                const SizedBox(width: 8),
-                const Text('Target Language'),
+                const Text('Alphabetically'),
               ],
             ),
           ),
@@ -475,7 +458,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         ],
       ).then((value) {
         if (value != null) {
-          _controller.setSortOption(value);
+          // Get the first visible language for alphabetical sorting
+          final firstVisibleLanguage = _languagesToShow.isNotEmpty 
+              ? _languagesToShow.first 
+              : null;
+          _controller.setSortOption(value, firstVisibleLanguage: firstVisibleLanguage);
         }
       });
     }
@@ -585,17 +572,17 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 return Row(
                   children: [
                     Checkbox(
-                      value: _showDescription,
+                      value: _showExtraInfo,
                       onChanged: (value) {
                         setMenuState(() {
                           setState(() {
-                            _showDescription = value ?? true;
+                            _showExtraInfo = value ?? true;
                           });
                         });
                       },
                     ),
                     const SizedBox(width: 8),
-                    const Text('Description'),
+                    const Text('Extra Info'),
                   ],
                 );
               },
@@ -607,17 +594,17 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 return Row(
                   children: [
                     Checkbox(
-                      value: _showImages,
+                      value: _showDescription,
                       onChanged: (value) {
                         setMenuState(() {
                           setState(() {
-                            _showImages = value ?? true;
+                            _showDescription = value ?? true;
                           });
                         });
                       },
                     ),
                     const SizedBox(width: 8),
-                    const Text('Images'),
+                    const Text('Description'),
                   ],
                 );
               },

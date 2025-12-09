@@ -44,6 +44,14 @@ class VocabularyActionButtons extends StatelessWidget {
               padding: const EdgeInsets.all(12),
             ),
           ),
+          IconButton(
+            onPressed: onRefreshImages,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Images',
+            style: IconButton.styleFrom(
+              padding: const EdgeInsets.all(12),
+            ),
+          ),
         ],
       );
     }
@@ -60,9 +68,9 @@ class VocabularyActionButtons extends StatelessWidget {
         const SizedBox(height: 8),
         _buildSquareIconButton(
           context,
-          icon: Icons.refresh,
-          tooltip: 'Refresh Images',
-          onPressed: onRefreshImages,
+          icon: Icons.auto_fix_high,
+          tooltip: 'Regenerate LLM Output',
+          onPressed: onRegenerate,
         ),
         const SizedBox(height: 8),
         _buildSquareIconButton(
@@ -70,13 +78,6 @@ class VocabularyActionButtons extends StatelessWidget {
           icon: Icons.shuffle,
           tooltip: 'Random Card',
           onPressed: onRandomCard,
-        ),
-        const SizedBox(height: 8),
-        _buildSquareIconButton(
-          context,
-          icon: Icons.auto_fix_high,
-          tooltip: 'Regenerate LLM Output',
-          onPressed: onRegenerate,
         ),
       ],
     );

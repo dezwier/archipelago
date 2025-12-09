@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
 enum SortOption {
-  sourceLanguage,
-  targetLanguage,
+  alphabetical,
   timeCreatedRecentFirst,
 }
 
@@ -41,16 +40,9 @@ class VocabularyHeaderWidget extends StatelessWidget {
             ),
             items: [
               DropdownMenuItem(
-                value: SortOption.sourceLanguage,
+                value: SortOption.alphabetical,
                 child: Text(
-                  'Source Language',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              DropdownMenuItem(
-                value: SortOption.targetLanguage,
-                child: Text(
-                  'Target Language',
+                  'Alphabetically',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),

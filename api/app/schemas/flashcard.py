@@ -128,6 +128,7 @@ class PairedVocabularyItem(BaseModel):
     part_of_speech: Optional[str] = None
     concept_term: Optional[str] = None
     concept_description: Optional[str] = None
+    concept_level: Optional[str] = None
     
     # Backward compatibility: computed fields from images list
     @computed_field

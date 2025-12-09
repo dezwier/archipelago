@@ -9,6 +9,7 @@ class LanguageLemmaWidget extends StatefulWidget {
   final VocabularyCard card;
   final String languageCode;
   final bool showDescription;
+  final bool showExtraInfo;
   final TextEditingController? translationController;
   final bool isEditing;
   final VoidCallback? onTranslationChanged;
@@ -19,6 +20,7 @@ class LanguageLemmaWidget extends StatefulWidget {
     required this.card,
     required this.languageCode,
     this.showDescription = true,
+    this.showExtraInfo = true,
     this.translationController,
     this.isEditing = false,
     this.onTranslationChanged,
@@ -190,7 +192,7 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                 ],
               ),
               // Row 2: IPA and Tags
-              if (!widget.isEditing) ...[
+              if (!widget.isEditing && widget.showExtraInfo) ...[
                 const SizedBox(height: 6),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
