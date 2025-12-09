@@ -9,6 +9,8 @@ class LanguageEmoji {
     'jp': '🇯🇵', // Japanese
     'nl': '🇳🇱', // Dutch
     'lt': '🇱🇹', // Lithuanian
+    'pt': '🇵🇹', // Portuguese
+    'ar': '🇸🇦', // Arabic - Saudi Arabian flag
   };
 
   static String getEmoji(String languageCode) {

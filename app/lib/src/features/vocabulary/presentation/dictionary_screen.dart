@@ -89,6 +89,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
             _languagesToShow.add(targetCode);
           }
         });
+        // Set language filter to visible languages
+        _controller.setLanguageCodes(_getVisibleLanguageCodes());
       }
     } else if (_controller.currentUser == null && _allLanguages.isNotEmpty) {
       // When logged out, default to English only
@@ -101,6 +103,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           // Initialize with English only
           _languagesToShow = ['en'];
         });
+        // Set language filter to visible languages
+        _controller.setLanguageCodes(_getVisibleLanguageCodes());
       }
     }
   }
@@ -126,6 +130,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     
     // Update defaults based on user state
     _onControllerChanged();
+    
+    // Set language filter after visibility is initialized
+    if (_languagesToShow.isNotEmpty) {
+      _controller.setLanguageCodes(_getVisibleLanguageCodes());
+    }
   }
 
   @override
@@ -363,7 +372,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                       // Request focus explicitly to ensure it works
                       _searchFocusNode.requestFocus();
                     },
-                    onChanged: (value) => _controller.setSearchQuery(value, _getVisibleLanguageCodes()),
+                    onChanged: (value) => _controller.setSearchQuery(value),
                     decoration: InputDecoration(
                       hintText: 'Search...',
                       prefixIcon: Icon(
@@ -378,7 +387,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                               ),
                               onPressed: () {
                                 _searchController.clear();
-                                _controller.setSearchQuery('', []);
+                                _controller.setSearchQuery('');
                               },
                             )
                           : null,
@@ -532,12 +541,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                   _languagesToShow.remove(language.code);
                                 }
                                 
-                                // Re-search if there's an active search query
+                                // Update language filter to only show concepts with terms in visible languages
+                                // This will also limit search to these languages
+                                _controller.setLanguageCodes(_getVisibleLanguageCodes());
+                                
+                                // Re-search if there's an active search query (will use updated language codes)
                                 if (_controller.searchQuery.isNotEmpty) {
-                                  _controller.setSearchQuery(
-                                    _controller.searchQuery,
-                                    _getVisibleLanguageCodes(),
-                                  );
+                                  _controller.setSearchQuery(_controller.searchQuery);
                                 }
                               });
                             });
@@ -693,7 +703,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         languagesToShow: _languagesToShow,
         onEdit: () => _handleEdit(item),
         onRandomCard: () => _handleRandomCard(context),
-        onRefreshImages: () => _handleRefreshImages(context, item),
         onItemUpdated: (updatedItem) => _handleItemUpdated(context, updatedItem),
       ),
     );
@@ -731,69 +740,5 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     _handleItemTap(randomItem);
   }
 
-  Future<void> _handleRefreshImages(BuildContext context, PairedVocabularyItem item) async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-
-    try {
-      final result = await VocabularyService.refreshImagesForConcept(
-        conceptId: item.conceptId,
-      );
-
-      if (mounted) {
-        Navigator.of(context).pop(); // Close loading dialog
-        
-        if (result['success'] == true) {
-          // Refresh the vocabulary list to show new images
-          await _controller.refresh();
-          
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                result['message'] as String? ?? 'Images added successfully',
-              ),
-            ),
-          );
-          
-          // Update the item in the dialog without closing it
-          final updatedItems = _controller.filteredItems;
-          final updatedItem = updatedItems.firstWhere(
-            (i) => i.conceptId == item.conceptId,
-            orElse: () => item,
-          );
-          
-          // Close current dialog and reopen with updated item
-          Navigator.of(context).pop(); // Close detail dialog
-          _handleItemTap(updatedItem); // Reopen with updated item
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                result['message'] as String? ?? 'Failed to refresh images',
-              ),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop(); // Close loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error refreshing images: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    }
-  }
 }
 

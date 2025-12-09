@@ -19,7 +19,6 @@ class VocabularyDetailDrawer extends StatefulWidget {
   final List<String> languagesToShow;
   final VoidCallback? onEdit;
   final VoidCallback? onRandomCard;
-  final VoidCallback? onRefreshImages;
   final Function(PairedVocabularyItem)? onItemUpdated;
 
   const VocabularyDetailDrawer({
@@ -31,7 +30,6 @@ class VocabularyDetailDrawer extends StatefulWidget {
     required this.languagesToShow,
     this.onEdit,
     this.onRandomCard,
-    this.onRefreshImages,
     this.onItemUpdated,
   });
 
@@ -212,7 +210,6 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                           },
                           onSave: _handleSave,
                           onCancel: _handleCancel,
-                          onRefreshImages: widget.onRefreshImages,
                           onRandomCard: () {
                             Navigator.of(context).pop();
                             widget.onRandomCard?.call();
@@ -241,7 +238,6 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                           },
                           onSave: _handleSave,
                           onCancel: _handleCancel,
-                          onRefreshImages: widget.onRefreshImages,
                           onRandomCard: () {
                             Navigator.of(context).pop();
                             widget.onRandomCard?.call();

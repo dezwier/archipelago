@@ -40,8 +40,8 @@ class LanguageSelectionWidget extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Calculate number of rows needed (4 per row)
-    const int itemsPerRow = 8;
+    // Calculate number of rows needed (5 per row)
+    const int itemsPerRow = 5;
     final int rowCount = (languages.length / itemsPerRow).ceil();
 
     return Column(
@@ -67,7 +67,7 @@ class LanguageSelectionWidget extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        // Language buttons in grid (4 per row)
+        // Language buttons in grid (5 per row)
         for (int row = 0; row < rowCount; row++)
           Padding(
             padding: EdgeInsets.only(bottom: row < rowCount - 1 ? 8 : 0),
@@ -101,12 +101,12 @@ class LanguageSelectionWidget extends StatelessWidget {
 
     final isSelected = selectedLanguages.contains(language.code);
 
-    return AspectRatio(
-      aspectRatio: 1.0,
+    return SizedBox(
+      height: 40,
       child: OutlinedButton(
         onPressed: () => _toggleLanguage(language.code),
         style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.all(4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           side: BorderSide(
             color: isSelected
                 ? Theme.of(context).colorScheme.primary
@@ -123,7 +123,7 @@ class LanguageSelectionWidget extends StatelessWidget {
         child: Center(
           child: Text(
             LanguageEmoji.getEmoji(language.code),
-            style: const TextStyle(fontSize: 28, height: 1.0),
+            style: const TextStyle(fontSize: 24, height: 1.0),
           ),
         ),
       ),

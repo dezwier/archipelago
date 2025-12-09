@@ -21,7 +21,7 @@ class VocabularyService {
     int pageSize = 20,
     String sortBy = 'alphabetical', // Options: 'alphabetical', 'recent'
     String? search,
-    List<String> searchLanguageCodes = const [],
+    List<String> languageCodes = const [],
   }) async {
     final queryParams = <String, String>{
       'page': page.toString(),
@@ -36,12 +36,14 @@ class VocabularyService {
     
     if (search != null && search.isNotEmpty) {
       queryParams['search'] = search;
-      if (searchLanguageCodes.isNotEmpty) {
-        queryParams['search_languages'] = searchLanguageCodes.join(',');
-      }
     }
     
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/vocabulary').replace(
+    // Add languages parameter - filters concepts to show only those with terms in these languages, and limits search to these languages
+    if (languageCodes.isNotEmpty) {
+      queryParams['languages'] = languageCodes.join(',');
+    }
+    
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/vocabulary').replace(
       queryParameters: queryParams,
     );
     
@@ -98,7 +100,7 @@ class VocabularyService {
     String? translation,
     String? description,
   }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/cards/$cardId');
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/cards/$cardId');
     
     try {
       final body = <String, dynamic>{};
@@ -153,7 +155,7 @@ class VocabularyService {
   static Future<Map<String, dynamic>> deleteConcept({
     required int conceptId,
   }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/concepts/$conceptId');
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/$conceptId');
     
     try {
       final response = await http.delete(
@@ -343,354 +345,5 @@ class VocabularyService {
     }
   }
 
-  /// Start generating images for concepts that don't have images.
-  /// 
-  /// Returns a map with:
-  /// - 'success': bool
-  /// - 'task_id': String (if successful) - task ID for tracking progress
-  /// - 'total_concepts': int (if successful) - total concepts that need images
-  /// - 'message': String (if error)
-  static Future<Map<String, dynamic>> startGenerateImages({
-    int? userId,
-  }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/generate-images${userId != null ? '?user_id=$userId' : ''}');
-    
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 202) {
-        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': true,
-          'task_id': data['task_id'] as String,
-          'total_concepts': data['total_concepts'] as int,
-          'message': data['message'] as String?,
-        };
-      } else {
-        // Try to parse error response as JSON, but handle non-JSON responses
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to start image generation',
-          };
-        } catch (_) {
-          // Response is not JSON (might be HTML error page)
-          return {
-            'success': false,
-            'message': 'Failed to start image generation: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error starting image generation: ${e.toString()}',
-      };
-    }
-  }
-
-  /// Get the status of an image generation task.
-  /// 
-  /// Returns a map with:
-  /// - 'success': bool
-  /// - 'task_id': String (if successful)
-  /// - 'status': String (if successful) - 'running', 'completed', 'cancelled', 'failed', 'cancelling'
-  /// - 'progress': Map<String, dynamic> (if successful) - progress information
-  /// - 'message': String (if error or status message)
-  static Future<Map<String, dynamic>> getImageGenerationStatus({
-    required String taskId,
-  }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/generate-images/$taskId/status');
-    
-    try {
-      final response = await http.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': true,
-          'task_id': data['task_id'] as String,
-          'status': data['status'] as String,
-          'progress': data['progress'] as Map<String, dynamic>,
-          'message': data['message'] as String?,
-        };
-      } else {
-        // Try to parse error response as JSON, but handle non-JSON responses
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to get task status',
-          };
-        } catch (_) {
-          // Response is not JSON (might be HTML error page)
-          return {
-            'success': false,
-            'message': 'Failed to get task status: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error getting task status: ${e.toString()}',
-      };
-    }
-  }
-
-  /// Cancel a running image generation task.
-  /// 
-  /// Returns a map with:
-  /// - 'success': bool
-  /// - 'task_id': String (if successful)
-  /// - 'status': String (if successful) - updated status
-  /// - 'progress': Map<String, dynamic> (if successful) - progress information
-  /// - 'message': String (if error)
-  static Future<Map<String, dynamic>> cancelImageGeneration({
-    required String taskId,
-  }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/generate-images/$taskId/cancel');
-    
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': true,
-          'task_id': data['task_id'] as String,
-          'status': data['status'] as String,
-          'progress': data['progress'] as Map<String, dynamic>,
-          'message': data['message'] as String?,
-        };
-      } else {
-        // Try to parse error response as JSON, but handle non-JSON responses
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to cancel task',
-          };
-        } catch (_) {
-          // Response is not JSON (might be HTML error page)
-          return {
-            'success': false,
-            'message': 'Failed to cancel task: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error canceling task: ${e.toString()}',
-      };
-    }
-  }
-
-  /// Refresh/regenerate images for a specific concept.
-  /// 
-  /// Returns a map with:
-  /// - 'success': bool
-  /// - 'images_retrieved': int (if successful) - number of images retrieved
-  /// - 'message': String (if successful or error)
-  static Future<Map<String, dynamic>> refreshImagesForConcept({
-    required int conceptId,
-  }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/concepts/$conceptId/refresh-images');
-    
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': true,
-          'images_retrieved': data['images_retrieved'] as int,
-          'message': data['message'] as String?,
-        };
-      } else {
-        // Try to parse error response as JSON, but handle non-JSON responses
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to refresh images',
-          };
-        } catch (_) {
-          // Response is not JSON (might be HTML error page)
-          return {
-            'success': false,
-            'message': 'Failed to refresh images: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error refreshing images: ${e.toString()}',
-      };
-    }
-  }
-
-  /// Update the first image (image_path_1) for a concept.
-  /// 
-  /// Returns a map with:
-  /// - 'success': bool
-  /// - 'image_path_1': String? (if successful) - updated image URL
-  /// - 'message': String (if successful or error)
-  static Future<Map<String, dynamic>> updateConceptImage1({
-    required int conceptId,
-    required String imageUrl, // Can be empty string to clear
-  }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/concepts/$conceptId/images/1');
-    
-    try {
-      final response = await http.put(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'image_url': imageUrl}),
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': true,
-          'image_path_1': data['image_path_1'] as String?,
-          'message': data['message'] as String?,
-        };
-      } else {
-        // Try to parse error response as JSON, but handle non-JSON responses
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to update image',
-          };
-        } catch (_) {
-          // Response is not JSON (might be HTML error page)
-          return {
-            'success': false,
-            'message': 'Failed to update image: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error updating image: ${e.toString()}',
-      };
-    }
-  }
-
-  /// Update a specific image for a concept by index.
-  /// 
-  /// Returns a map with:
-  /// - 'success': bool
-  /// - 'image_path': String? (if successful) - updated image URL
-  /// - 'message': String (if successful or error)
-  static Future<Map<String, dynamic>> updateConceptImage({
-    required int conceptId,
-    required int imageIndex, // 1-4
-    required String imageUrl, // Can be empty string to clear
-  }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/concepts/$conceptId/images/$imageIndex');
-    
-    try {
-      final response = await http.put(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'image_url': imageUrl}),
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': true,
-          'image_path': data['image_path_$imageIndex'] as String?,
-          'message': data['message'] as String?,
-        };
-      } else {
-        // Try to parse error response as JSON, but handle non-JSON responses
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to update image',
-          };
-        } catch (_) {
-          // Response is not JSON (might be HTML error page)
-          return {
-            'success': false,
-            'message': 'Failed to update image: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error updating image: ${e.toString()}',
-      };
-    }
-  }
-
-  /// Delete a specific image from a concept.
-  /// 
-  /// Returns a map with:
-  /// - 'success': bool
-  /// - 'message': String (if successful or error)
-  static Future<Map<String, dynamic>> deleteConceptImage({
-    required int conceptId,
-    required int imageIndex, // 1-4
-  }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/concepts/$conceptId/images/$imageIndex');
-    
-    try {
-      final response = await http.delete(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': true,
-          'message': data['message'] as String?,
-        };
-      } else {
-        // Try to parse error response as JSON, but handle non-JSON responses
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to delete image',
-          };
-        } catch (_) {
-          // Response is not JSON (might be HTML error page)
-          return {
-            'success': false,
-            'message': 'Failed to delete image: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error deleting image: ${e.toString()}',
-      };
-    }
-  }
 }
 

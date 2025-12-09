@@ -1,19 +1,17 @@
 """
-Main flashcard CRUD endpoints.
+Vocabulary endpoints for retrieving paired vocabulary items.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone
 from typing import Optional
 from app.core.database import get_session
-from app.models.models import Concept, Card, User, UserCard, Image
+from app.models.models import Concept, Card, User, Image
 from app.schemas.flashcard import (
     CardResponse,
     PairedVocabularyItem,
     VocabularyResponse,
-    UpdateCardRequest,
     ImageResponse,
 )
 from app.api.v1.endpoints.flashcard_helpers import ensure_capitalized
@@ -21,17 +19,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/flashcards", tags=["flashcards"])
+router = APIRouter(prefix="/vocabulary", tags=["vocabulary"])
 
 
-@router.get("/vocabulary", response_model=VocabularyResponse)
+@router.get("", response_model=VocabularyResponse)
 async def get_vocabulary(
     user_id: Optional[int] = None,
     page: int = 1,
     page_size: int = 20,
     sort_by: str = "alphabetical",  # Options: "alphabetical", "recent"
     search: str = None,  # Optional search query
-    search_languages: str = None,  # Comma-separated list of language codes to search in
+    languages: str = None,  # Comma-separated list of language codes - filters concepts to show only those with terms in these languages, and limits search to these languages
     session: Session = Depends(get_session)
 ):
     """
@@ -45,7 +43,7 @@ async def get_vocabulary(
         page_size: Number of items per page (default: 20)
         sort_by: Sort order - "alphabetical" (default) or "recent" (by created_at, newest first)
         search: Optional search query to filter cards by term
-        search_languages: Comma-separated list of language codes to search in (if not provided, searches in all languages)
+        languages: Comma-separated list of language codes - filters concepts to show only those with terms in these languages, and limits search to these languages when searching
     """
     # Validate sort_by parameter
     if sort_by not in ["alphabetical", "recent"]:
@@ -65,6 +63,11 @@ async def get_vocabulary(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Page size must be between 1 and 100"
         )
+    
+    # Parse languages parameter if provided (used for both filtering and searching)
+    language_codes_filter = None
+    if languages:
+        language_codes_filter = [lang.strip().lower() for lang in languages.split(',') if lang.strip()]
     
     # Determine source and target languages
     source_language = "en"  # Default to English for logged-out users
@@ -95,28 +98,32 @@ async def get_vocabulary(
     if search and search.strip():
         search_term = search.strip().lower()
         
-        # Parse search languages if provided
-        search_language_codes = None
-        if search_languages:
-            search_language_codes = [lang.strip().lower() for lang in search_languages.split(',') if lang.strip()]
-        
-        # If no search languages specified and user is logged out, default to English only
-        if not search_language_codes and user_id is None:
-            search_language_codes = ["en"]
+        # Use language_codes_filter if provided, otherwise use source/target languages or default to English for logged-out users
+        search_language_codes = language_codes_filter
+        if not search_language_codes:
+            if user_id is None:
+                # Logged-out users: default to English only
+                search_language_codes = ["en"]
+            # If logged in and no languages specified, search in all languages
         
         # Build search query
+        # Only search in cards with non-empty terms
         if search_language_codes:
             # Search in specified languages
             matching_cards = session.exec(
                 select(Card).where(
                     Card.language_code.in_(search_language_codes),
+                    Card.term.isnot(None),
+                    Card.term != "",
                     func.lower(Card.term).contains(search_term)
                 )
             ).all()
         else:
-            # Search in all languages (only when user is logged in)
+            # Search in all languages (only when user is logged in and no languages filter specified)
             matching_cards = session.exec(
                 select(Card).where(
+                    Card.term.isnot(None),
+                    Card.term != "",
                     func.lower(Card.term).contains(search_term)
                 )
             ).all()
@@ -125,14 +132,24 @@ async def get_vocabulary(
         matching_concept_ids = {card.concept_id for card in matching_cards}
     
     # Get ALL cards for matching concepts (all languages, not just source/target)
+    # Only include cards with non-empty terms
     if matching_concept_ids is not None:
         # If searching, get all cards for matching concepts
         all_cards = session.exec(
-            select(Card).where(Card.concept_id.in_(list(matching_concept_ids)))
+            select(Card).where(
+                Card.concept_id.in_(list(matching_concept_ids)),
+                Card.term.isnot(None),
+                Card.term != ""
+            )
         ).all()
     else:
-        # No search - get all cards (we'll filter by source/target later for sorting)
-        all_cards = session.exec(select(Card)).all()
+        # No search - get all cards with non-empty terms (we'll filter by source/target later for sorting)
+        all_cards = session.exec(
+            select(Card).where(
+                Card.term.isnot(None),
+                Card.term != ""
+            )
+        ).all()
     
     # Group cards by concept_id (all languages)
     concept_cards_map = {}
@@ -142,10 +159,42 @@ async def get_vocabulary(
         concept_cards_map[card.concept_id][card.language_code] = card
     
     # Get all concept_ids and sort based on sort_by parameter
+    # Only include concepts that have at least one card with a non-empty term
+    # Apply language filter here so the total count is correct
     concept_sort_keys = []
     for concept_id, lang_cards in concept_cards_map.items():
+        # Verify that this concept has at least one card with a non-empty term
+        has_valid_card = any(
+            card.term and card.term.strip() 
+            for card in lang_cards.values()
+        )
+        if not has_valid_card:
+            continue
+        
+        # Apply language filter if provided
+        if language_codes_filter:
+            # Filter by specified languages - concept must have at least one card with a term in one of these languages
+            has_valid_card_in_filter = any(
+                lang_code in lang_cards and 
+                lang_cards[lang_code].term and 
+                lang_cards[lang_code].term.strip()
+                for lang_code in language_codes_filter
+            )
+            if not has_valid_card_in_filter:
+                continue
+        
         target_card = lang_cards.get(target_language) if target_language else None
         source_card = lang_cards.get(source_language)
+        
+        # For language filter case, also need to check source/target if no filter is provided
+        if not language_codes_filter:
+            # Default behavior: check source/target languages
+            has_valid_source_card = source_card and source_card.term and source_card.term.strip()
+            has_valid_target_card = target_card and target_card.term and target_card.term.strip()
+            
+            # Only include if at least one of source or target has a valid term
+            if not (has_valid_source_card or has_valid_target_card):
+                continue
         
         if sort_by == "recent":
             # For recent sort, use the most recent created_at among all cards for this concept
@@ -174,12 +223,12 @@ async def get_vocabulary(
             # Default: alphabetical sorting by target language term
             # Use target language term for sorting, fallback to source if no target
             sort_text = ""
-            if target_card:
+            if target_card and target_card.term and target_card.term.strip():
                 sort_text = target_card.term.lower().strip()
-            elif source_card:
+            elif source_card and source_card.term and source_card.term.strip():
                 sort_text = source_card.term.lower().strip()
             
-            # Only include concepts that have at least one card
+            # Only include concepts that have at least one card with a valid term
             if sort_text:
                 concept_sort_keys.append((sort_text, concept_id))
     
@@ -243,11 +292,13 @@ async def get_vocabulary(
         concept_description = concept.description if concept else None
         concept_level = concept.level.value if concept and concept.level else None
         
-        # Only include items that have at least one card (source or target)
-        if source_card or target_card:
-            # Build list of all cards for this concept
-            all_cards_list = []
-            for card in lang_cards.values():
+        # Note: Language filtering is already applied when building concept_sort_keys,
+        # so concepts here should already be filtered. We just need to verify they have valid cards.
+        # Build list of all cards for this concept (only include cards with non-empty terms)
+        all_cards_list = []
+        for card in lang_cards.values():
+            # Only include cards with non-empty terms
+            if card.term and card.term.strip():
                 all_cards_list.append(
                     CardResponse(
                         id=card.id,
@@ -266,8 +317,8 @@ async def get_vocabulary(
                         notes=card.notes
                     )
                 )
-            
-            paired_items.append(
+        
+        paired_items.append(
                 PairedVocabularyItem(
                     concept_id=concept_id,
                     cards=all_cards_list,
@@ -286,7 +337,7 @@ async def get_vocabulary(
                         auxiliary_verb=source_card.auxiliary_verb,
                         formality_register=source_card.formality_register,
                         notes=source_card.notes
-                    ) if source_card else None,
+                    ) if source_card and source_card.term and source_card.term.strip() else None,
                     target_card=CardResponse(
                         id=target_card.id,
                         concept_id=target_card.concept_id,
@@ -302,7 +353,7 @@ async def get_vocabulary(
                         auxiliary_verb=target_card.auxiliary_verb,
                         formality_register=target_card.formality_register,
                         notes=target_card.notes
-                    ) if target_card else None,
+                    ) if target_card and target_card.term and target_card.term.strip() else None,
                     images=concept_images,
                     part_of_speech=part_of_speech,
                     concept_term=concept_term,
@@ -324,120 +375,3 @@ async def get_vocabulary(
         has_previous=has_previous
     )
 
-
-@router.put("/cards/{card_id}", response_model=CardResponse)
-async def update_card(
-    card_id: int,
-    request: UpdateCardRequest,
-    session: Session = Depends(get_session)
-):
-    """
-    Update a card's translation and description.
-    """
-    # Get the card
-    card = session.get(Card, card_id)
-    if not card:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Card not found"
-        )
-    
-    # Check if translation update would create a duplicate
-    if request.translation is not None:
-        new_term = ensure_capitalized(request.translation.strip())
-        
-        # Check if another card with same concept_id, language_code, and term already exists
-        existing_card = session.exec(
-            select(Card).where(
-                Card.concept_id == card.concept_id,
-                Card.language_code == card.language_code,
-                Card.term == new_term,
-                Card.id != card_id  # Exclude the current card
-            )
-        ).first()
-        
-        if existing_card:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"A card with the same concept_id, language_code, and term already exists (card_id: {existing_card.id})"
-            )
-        
-        card.term = new_term
-        card.updated_at = datetime.now(timezone.utc)
-    
-    if request.description is not None:
-        card.description = request.description.strip()
-    
-    try:
-        session.add(card)
-        session.commit()
-        session.refresh(card)
-    except IntegrityError as e:
-        session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Failed to update card: duplicate constraint violation"
-        ) from e
-    
-    return CardResponse(
-        id=card.id,
-        concept_id=card.concept_id,
-        language_code=card.language_code,
-        translation=ensure_capitalized(card.term),
-        description=card.description,
-        ipa=card.ipa,
-        audio_path=card.audio_url,
-        gender=card.gender,
-        article=card.article,
-        plural_form=card.plural_form,
-        verb_type=card.verb_type,
-        auxiliary_verb=card.auxiliary_verb,
-        formality_register=card.formality_register,
-        notes=card.notes
-    )
-
-
-@router.delete("/concepts/{concept_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_concept(
-    concept_id: int,
-    session: Session = Depends(get_session)
-):
-    """
-    Delete a concept and all its associated cards and user_cards.
-    This will cascade delete:
-    - All UserCards that reference cards for this concept
-    - All Cards for this concept
-    - The Concept itself
-    """
-    # Get the concept
-    concept = session.get(Concept, concept_id)
-    if not concept:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concept not found"
-        )
-    
-    # Get all cards for this concept
-    cards = session.exec(
-        select(Card).where(Card.concept_id == concept_id)
-    ).all()
-    
-    # Delete all UserCards that reference these cards
-    card_ids = [card.id for card in cards]
-    if card_ids:
-        user_cards = session.exec(
-            select(UserCard).where(UserCard.card_id.in_(card_ids))
-        ).all()
-        for user_card in user_cards:
-            session.delete(user_card)
-    
-    # Delete all cards
-    for card in cards:
-        session.delete(card)
-    
-    # Delete the concept
-    session.delete(concept)
-    
-    session.commit()
-    
-    return None

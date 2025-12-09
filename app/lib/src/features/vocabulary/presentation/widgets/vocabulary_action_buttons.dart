@@ -5,7 +5,6 @@ class VocabularyActionButtons extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onSave;
   final VoidCallback onCancel;
-  final VoidCallback? onRefreshImages;
   final VoidCallback? onRandomCard;
   final VoidCallback? onRegenerate;
 
@@ -15,7 +14,6 @@ class VocabularyActionButtons extends StatelessWidget {
     required this.onEdit,
     required this.onSave,
     required this.onCancel,
-    this.onRefreshImages,
     this.onRandomCard,
     this.onRegenerate,
   });
@@ -40,14 +38,6 @@ class VocabularyActionButtons extends StatelessWidget {
             onPressed: onCancel,
             icon: const Icon(Icons.close),
             tooltip: 'Cancel',
-            style: IconButton.styleFrom(
-              padding: const EdgeInsets.all(12),
-            ),
-          ),
-          IconButton(
-            onPressed: onRefreshImages,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh Images',
             style: IconButton.styleFrom(
               padding: const EdgeInsets.all(12),
             ),

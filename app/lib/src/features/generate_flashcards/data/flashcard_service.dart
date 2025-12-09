@@ -318,7 +318,7 @@ class FlashcardService {
       };
     }
     
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/create');
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/generate');
     
     try {
       final body = {
@@ -405,7 +405,7 @@ class FlashcardService {
       };
     }
     
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/create-only');
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/generate-only');
     
     try {
       final body = <String, dynamic>{
@@ -547,7 +547,7 @@ class FlashcardService {
       };
     }
     
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/generate-cards');
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/cards/generate');
     
     try {
       final body = {
@@ -650,7 +650,7 @@ class FlashcardService {
       };
     }
     
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/generate-cards');
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/cards/generate');
     
     try {
       final body = {

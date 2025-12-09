@@ -35,8 +35,10 @@ class VocabularyController extends ChangeNotifier {
   
   // Search state
   String _searchQuery = '';
-  List<String> _searchLanguageCodes = []; // Languages to search in
   Timer? _searchDebounceTimer;
+  
+  // Language filter state - used for both filtering concepts and limiting search
+  List<String> _languageCodes = []; // Languages to filter by - only show concepts with terms in these languages, and limit search to these languages
   
   // Getters
   User? get currentUser => _currentUser;
@@ -58,7 +60,17 @@ class VocabularyController extends ChangeNotifier {
   
   // Search getters
   String get searchQuery => _searchQuery;
-  List<String> get searchLanguageCodes => _searchLanguageCodes;
+  
+  // Language filter getters
+  List<String> get languageCodes => _languageCodes;
+  
+  // Set language filter (used for both filtering concepts and limiting search)
+  void setLanguageCodes(List<String> languageCodes) {
+    if (_languageCodes != languageCodes) {
+      _languageCodes = languageCodes;
+      _loadUserAndVocabulary(reset: true, showLoading: false);
+    }
+  }
   
   // Filtered items - when searching, items are already filtered by API
   List<PairedVocabularyItem> get filteredItems {
@@ -155,7 +167,7 @@ class VocabularyController extends ChangeNotifier {
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
-        searchLanguageCodes: _searchLanguageCodes,
+        languageCodes: _languageCodes,
       );
 
       if (result['success'] == true) {
@@ -204,7 +216,7 @@ class VocabularyController extends ChangeNotifier {
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
-        searchLanguageCodes: _searchLanguageCodes,
+        languageCodes: _languageCodes,
       );
 
       if (result['success'] == true) {
@@ -271,19 +283,6 @@ class VocabularyController extends ChangeNotifier {
         }
       }
 
-      // Update first image if provided and changed
-      if (imageUrl != null && imageUrl != item.imagePath1) {
-        final result = await VocabularyService.updateConceptImage1(
-          conceptId: item.conceptId,
-          imageUrl: imageUrl,
-        );
-        
-        if (result['success'] != true) {
-          _errorMessage = result['message'] as String? ?? 'Failed to update image';
-          notifyListeners();
-          return false;
-        }
-      }
 
       // Reload vocabulary to show updated data
       await _loadUserAndVocabulary(reset: true);
@@ -413,10 +412,9 @@ class VocabularyController extends ChangeNotifier {
   }
 
   // Search methods
-  void setSearchQuery(String query, List<String> languageCodes) {
-    if (_searchQuery != query || _searchLanguageCodes != languageCodes) {
+  void setSearchQuery(String query) {
+    if (_searchQuery != query) {
       _searchQuery = query;
-      _searchLanguageCodes = languageCodes;
       
       // Cancel previous debounce timer
       _searchDebounceTimer?.cancel();
@@ -447,7 +445,7 @@ class VocabularyController extends ChangeNotifier {
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim(),
-        searchLanguageCodes: _searchLanguageCodes,
+        languageCodes: _languageCodes,
       );
       
       if (result['success'] == true) {
