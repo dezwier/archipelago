@@ -96,6 +96,37 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
     super.dispose();
   }
 
+  TextStyle _getTitleTextStyle(BuildContext context) {
+    // Count how many sections are hidden
+    int hiddenCount = 0;
+    if (!widget.showExtraInfo) hiddenCount++;
+    if (!widget.showDescription) hiddenCount++;
+
+    // Determine text style based on hidden count
+    TextStyle? baseStyle;
+    if (hiddenCount == 0) {
+      // Both visible - use titleLarge but make it a tiny bit smaller
+      final titleLarge = Theme.of(context).textTheme.titleLarge;
+      baseStyle = titleLarge?.copyWith(
+        fontSize: (titleLarge.fontSize ?? 22) * 0.85, // Make it ~8% smaller
+      );
+    } else if (hiddenCount == 1) {
+      // One hidden - use titleMedium (bit smaller)
+      baseStyle = Theme.of(context).textTheme.titleMedium;
+    } else {
+      // Both hidden - use titleSmall (more smaller)
+      baseStyle = Theme.of(context).textTheme.titleSmall;
+    }
+
+    return baseStyle?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: Theme.of(context).colorScheme.onSurface,
+    ) ?? TextStyle(
+      fontWeight: FontWeight.w700,
+      color: Theme.of(context).colorScheme.onSurface,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -117,15 +148,12 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Flexible(
+                    Flexible(
                     child: widget.isEditing && widget.translationController != null
                         ? TextField(
                             controller: widget.translationController,
                             onChanged: (_) => widget.onTranslationChanged?.call(),
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
+                            style: _getTitleTextStyle(context),
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -139,10 +167,7 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                           )
                         : Text(
                             HtmlEntityDecoder.decode(widget.card.translation),
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
+                            style: _getTitleTextStyle(context),
                           ),
                   ),
                   // Play audio button - always show

@@ -4,6 +4,7 @@ import '../../../constants/api_config.dart';
 
 class VocabularyService {
   /// Get vocabulary cards for a user's source and target languages, paired by concept_id.
+  /// If userId is null, returns English-only vocabulary for logged-out users.
   /// 
   /// Returns a map with:
   /// - 'success': bool
@@ -15,7 +16,7 @@ class VocabularyService {
   /// - 'has_previous': bool (if successful) - whether there are previous pages
   /// - 'message': String (if error)
   static Future<Map<String, dynamic>> getVocabulary({
-    required int userId,
+    int? userId,
     int page = 1,
     int pageSize = 20,
     String sortBy = 'alphabetical', // Options: 'alphabetical', 'recent'
@@ -23,11 +24,15 @@ class VocabularyService {
     List<String> searchLanguageCodes = const [],
   }) async {
     final queryParams = <String, String>{
-      'user_id': userId.toString(),
       'page': page.toString(),
       'page_size': pageSize.toString(),
       'sort_by': sortBy,
     };
+    
+    // Only include user_id if provided
+    if (userId != null) {
+      queryParams['user_id'] = userId.toString();
+    }
     
     if (search != null && search.isNotEmpty) {
       queryParams['search'] = search;

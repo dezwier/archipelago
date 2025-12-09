@@ -90,6 +90,18 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           }
         });
       }
+    } else if (_controller.currentUser == null && _allLanguages.isNotEmpty) {
+      // When logged out, default to English only
+      if (_languagesToShow.isEmpty) {
+        setState(() {
+          _languageVisibility = {
+            for (var lang in _allLanguages) 
+              lang.code: lang.code.toLowerCase() == 'en'
+          };
+          // Initialize with English only
+          _languagesToShow = ['en'];
+        });
+      }
     }
   }
 
@@ -98,16 +110,22 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     
     setState(() {
       _allLanguages = languages;
-      // Initialize visibility - will be updated when controller loads user
-      _languageVisibility = {
-        for (var lang in languages) lang.code: false
-      };
+      // Initialize visibility - default to English if logged out
+      if (_controller.currentUser == null) {
+        _languageVisibility = {
+          for (var lang in languages) 
+            lang.code: lang.code.toLowerCase() == 'en'
+        };
+        _languagesToShow = ['en'];
+      } else {
+        _languageVisibility = {
+          for (var lang in languages) lang.code: false
+        };
+      }
     });
     
-    // Try to set defaults if controller already has user data
-    if (_controller.currentUser != null) {
-      _onControllerChanged();
-    }
+    // Update defaults based on user state
+    _onControllerChanged();
   }
 
   @override
@@ -147,29 +165,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
             body: VocabularyErrorState(
               errorMessage: _controller.errorMessage!,
               onRetry: _controller.refresh,
-            ),
-          );
-        }
-
-        if (_controller.currentUser == null) {
-          return Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.login,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Please log in to view vocabulary',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
             ),
           );
         }
@@ -516,6 +511,15 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                               setState(() {
                                 final wasVisible = _languageVisibility[language.code] ?? true;
                                 final willBeVisible = !isVisible;
+                                
+                                // Prevent disabling if this is the last visible language
+                                if (wasVisible && !willBeVisible) {
+                                  final visibleCount = _languageVisibility.values.where((v) => v == true).length;
+                                  if (visibleCount <= 1) {
+                                    return; // Don't proceed with the change
+                                  }
+                                }
+                                
                                 _languageVisibility[language.code] = willBeVisible;
                                 
                                 if (!wasVisible && willBeVisible) {

@@ -3,9 +3,7 @@ Concept generation endpoint.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
-from sqlalchemy import text, func
 from app.core.database import get_session
-from app.core.config import settings
 from app.models.models import Concept, Card, Language, Topic
 from app.schemas.flashcard import (
     CreateConceptRequest,
@@ -20,299 +18,21 @@ from app.schemas.flashcard import (
     GenerateCardsForConceptsRequest,
     GenerateCardsForConceptsResponse,
 )
-import requests
 import json
 import logging
-import random
+from typing import List
 from datetime import datetime, timezone
-from typing import List, Optional
+
+from app.api.v1.endpoints.llm_helpers import call_gemini_api
+from app.api.v1.endpoints.prompt_helpers import (
+    generate_concept_prompt,
+    generate_card_translation_system_instruction,
+    generate_card_translation_user_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/concepts", tags=["concepts"])
-
-
-def calculate_gemini_cost(prompt_tokens: int, output_tokens: int, model_name: str = "gemini-2.5-flash") -> float:
-    """
-    Calculate cost for Gemini API call based on token usage.
-    
-    Pricing (as of 2024):
-    - gemini-2.5-flash: $0.075 per 1M input tokens, $0.30 per 1M output tokens
-    - gemini-2.5-pro: $0.125 per 1M input tokens, $0.50 per 1M output tokens
-    
-    Args:
-        prompt_tokens: Number of input tokens
-        output_tokens: Number of output tokens
-        model_name: Name of the model used
-        
-    Returns:
-        Cost in USD
-    """
-    # Pricing per million tokens
-    if "flash" in model_name.lower():
-        input_price_per_million = 0.075
-        output_price_per_million = 0.30
-    elif "pro" in model_name.lower():
-        input_price_per_million = 0.125
-        output_price_per_million = 0.50
-    else:
-        # Default to flash pricing
-        input_price_per_million = 0.075
-        output_price_per_million = 0.30
-    
-    input_cost = (prompt_tokens / 1_000_000) * input_price_per_million
-    output_cost = (output_tokens / 1_000_000) * output_price_per_million
-    
-    return input_cost + output_cost
-
-
-def call_gemini_api(prompt: str) -> tuple[dict, dict]:
-    """
-    Call Gemini API to generate concept and card data.
-    
-    Args:
-        prompt: The prompt to send to the LLM
-        
-    Returns:
-        Tuple of (parsed JSON response from the LLM, token usage dict with keys:
-                  'prompt_tokens', 'output_tokens', 'total_tokens', 'cost_usd', 'model_name')
-        
-    Raises:
-        Exception: If API call fails or response is invalid
-    """
-    api_key = settings.google_gemini_api_key
-    if not api_key:
-        raise Exception("Google Gemini API key not configured")
-    
-    model_name = "gemini-2.5-flash"
-    base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
-    
-    payload = {
-        "contents": [{
-            "parts": [{
-                "text": prompt
-            }]
-        }],
-        "generationConfig": {
-            "temperature": 0.7,
-            "topK": 40,
-            "topP": 0.95,
-            "maxOutputTokens": 4096,
-        }
-    }
-    
-    try:
-        response = requests.post(
-            f"{base_url}?key={api_key}",
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=60
-        )
-        response.raise_for_status()
-        data = response.json()
-        
-        # Extract token usage from usageMetadata
-        usage_metadata = data.get('usageMetadata', {})
-        prompt_tokens = usage_metadata.get('promptTokenCount', 0)
-        output_tokens = usage_metadata.get('candidatesTokenCount', 0)
-        total_tokens = usage_metadata.get('totalTokenCount', prompt_tokens + output_tokens)
-        
-        # Calculate cost
-        cost_usd = calculate_gemini_cost(prompt_tokens, output_tokens, model_name)
-        
-        token_usage = {
-            'prompt_tokens': prompt_tokens,
-            'output_tokens': output_tokens,
-            'total_tokens': total_tokens,
-            'cost_usd': cost_usd,
-            'model_name': model_name
-        }
-        
-        # Extract generated text
-        if 'candidates' in data and len(data['candidates']) > 0:
-            candidate = data['candidates'][0]
-            if 'content' in candidate and 'parts' in candidate['content']:
-                text = candidate['content']['parts'][0].get('text', '').strip()
-                if not text:
-                    raise Exception("LLM returned empty response")
-                
-                # Try to extract JSON from the response
-                # The LLM might return markdown code blocks or plain JSON
-                text = text.strip()
-                if text.startswith('```'):
-                    # Remove markdown code blocks
-                    lines = text.split('\n')
-                    text = '\n'.join(lines[1:-1]) if lines[0].startswith('```') else text
-                    if text.endswith('```'):
-                        text = text[:-3]
-                
-                # Parse JSON
-                try:
-                    llm_data = json.loads(text)
-                    return llm_data, token_usage
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse LLM JSON response: {e}")
-                    logger.error(f"Response text: {text[:500]}")
-                    raise Exception(f"LLM returned invalid JSON: {str(e)}")
-            else:
-                raise Exception("LLM response missing content or parts")
-        else:
-            raise Exception("LLM response missing candidates")
-            
-    except requests.exceptions.RequestException as e:
-        error_msg = f"Gemini API request failed: {str(e)}"
-        if hasattr(e, 'response') and e.response is not None:
-            try:
-                error_data = e.response.json()
-                error_msg += f" - {error_data}"
-            except:
-                error_msg += f" - Status: {e.response.status_code}"
-        logger.error(error_msg)
-        raise Exception(error_msg)
-
-
-def generate_concept_prompt(
-    term: str,
-    part_of_speech: Optional[str],
-    core_meaning_en: Optional[str],
-    excluded_senses: List[str],
-    languages: List[str]
-) -> str:
-    """
-    Generate the prompt for the LLM.
-    
-    Args:
-        term: The term to generate concept for
-        part_of_speech: Part of speech (optional - will be inferred if not provided)
-        core_meaning_en: Core meaning in English (optional)
-        excluded_senses: List of excluded senses
-        languages: List of language codes
-        
-    Returns:
-        The prompt string
-    """
-    excluded_text = ""
-    if excluded_senses:
-        excluded_text = f"\nExcluded senses (do not include these meanings): {', '.join(excluded_senses)}"
-    
-    core_meaning_instruction = ""
-    if core_meaning_en:
-        core_meaning_instruction = f"\nCore meaning in English: {core_meaning_en}\nUse this exact meaning for all language cards."
-    else:
-        core_meaning_instruction = "\nIMPORTANT: No core meaning was provided. You must infer ONE specific semantic meaning for this term based on its part of speech and common usage. Choose the most common or primary meaning. All cards across all languages MUST represent this exact same semantic concept."
-    
-    # Handle part of speech - if not provided, instruct LLM to infer it
-    part_of_speech_instruction = ""
-    if part_of_speech:
-        part_of_speech_instruction = f"\nPart of speech: {part_of_speech}"
-    else:
-        part_of_speech_instruction = "\nPart of speech: NOT PROVIDED - You must infer the part of speech from the term itself. Analyze the term to determine if it's a noun, verb, adjective, adverb, etc."
-    
-    prompt = f"""You are a language learning assistant. Generate concept and card data for the term "{term}".{part_of_speech_instruction}{core_meaning_instruction}{excluded_text}
-
-Generate data for the following languages: {', '.join(languages)}
-
-Return ONLY valid JSON in this exact format (no markdown, no explanations):
-{{
-  "concept": {{
-    "description": "string describing the concept in English (the core semantic meaning)",
-    "frequency_bucket": "very high | high | medium | low | very low"
-  }},
-  "cards": [
-    {{
-      "language_code": "en",
-      "term": "string (use infinitive for verbs)",
-      "ipa": "string or null (use standard IPA symbols)",
-      "description": "string (REQUIRED - in the target language, do NOT translate from English)",
-      "gender": "masculine | feminine | neuter | null (for languages with gender)",
-      "article": "string or null (for languages with articles)",
-      "plural_form": "string or null (for nouns)",
-      "verb_type": "string or null (for verbs)",
-      "auxiliary_verb": "string or null (for verbs in languages like French)",
-      "register": "neutral | formal | informal | slang | null"
-    }}
-  ]
-}}
-
-IMPORTANT - Valid values:
-- part_of_speech (if inferring): Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence
-- frequency_bucket: Must be one of: very high, high, medium, low, very low
-- gender: Must be one of: masculine, feminine, neuter, or null
-
-Rules:
-1. Generate exactly one card per requested language
-2. CRITICAL: All cards must express the EXACT SAME core semantic meaning across all languages
-3. If no core meaning was provided, infer ONE specific meaning and ensure ALL language cards represent that same meaning consistently
-4. If part of speech was not provided, you must infer it from the term - analyze the term's form, context, and common usage patterns. The part of speech must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence
-5. Use infinitive form for verbs
-6. Use null for non-applicable fields
-7. IPA must use standard IPA symbols
-8. Descriptions should be in the target language, not translated from English
-9. All cards must represent the same semantic concept - consistency across languages is essential
-10. The concept description should clearly define the single semantic meaning that all cards share
-11. frequency_bucket must be exactly one of: "very high", "high", "medium", "low", or "very low"
-12. gender must be exactly one of: "masculine", "feminine", "neuter", or null
-13. REQUIRED FIELDS: Both "term" and "description" are REQUIRED for each card - they cannot be missing, empty, or null"""
-    
-    return prompt
-
-
-def generate_card_translation_prompt(
-    term: str,
-    description: Optional[str],
-    part_of_speech: Optional[str],
-    target_language: str
-) -> str:
-    """
-    Generate a prompt for translating a term and generating a description in the target language.
-    
-    Args:
-        term: The English term to translate
-        description: The English description of the concept
-        part_of_speech: Part of speech
-        target_language: Target language code
-        
-    Returns:
-        The prompt string
-    """
-    description_text = ""
-    if description:
-        description_text = f"\nDescription: {description}"
-    
-    part_of_speech_text = ""
-    if part_of_speech:
-        part_of_speech_text = f"\nPart of speech: {part_of_speech}"
-    
-    # Add instruction about sticking to the provided meaning
-    meaning_instruction = ""
-    if description:
-        meaning_instruction = f"\n\nCRITICAL: The term \"{term}\" may have multiple meanings, but you MUST use ONLY the specific meaning provided in the Description above. Ignore all other meanings this term might have. Your translation and description must reflect ONLY this exact semantic meaning."
-    
-    prompt = f"""You are a language learning assistant. Translate the term "{term}" into {target_language.upper()} and generate a description in {target_language.upper()}.{part_of_speech_text}{description_text}{meaning_instruction}
-
-Return ONLY valid JSON in this exact format (no markdown, no explanations):
-{{
-  "term": "string (the translation in {target_language.upper()}, use infinitive for verbs)",
-  "ipa": "string or null (pronunciation in standard IPA symbols)",
-  "description": "string (REQUIRED - generate a description in {target_language.upper()}, do NOT translate from English, write naturally in {target_language.upper()})",
-  "gender": "masculine | feminine | neuter | null (for languages with gender)",
-  "article": "string or null (for languages with articles)",
-  "plural_form": "string or null (for nouns)",
-  "verb_type": "string or null (for verbs)",
-  "auxiliary_verb": "string or null (for verbs in languages like French)",
-  "register": "neutral | formal | informal | slang | null"
-}}
-
-IMPORTANT:
-- Translate the term "{term}" into {target_language.upper()}
-- Generate a description in {target_language.upper()} (IMPORTANT: write the description naturally in {target_language.upper()}, do not translate word-for-word from English)
-- The description should be a lemma definition of the term in {target_language.upper()}
-- {f"CRITICAL: Use ONLY the meaning provided in the Description above. Ignore all other meanings the term \"{term}\" might have." if description else ""}
-- Provide IPA pronunciation
-- Include gender, article, plural_form, and register if applicable for the language. Use null for non-applicable fields
-- Fields "term", "description", "ipa" are REQUIRED and cannot be null or empty"""
-    
-    return prompt
 
 
 @router.post("/create", response_model=CreateConceptResponse, status_code=status.HTTP_201_CREATED)
@@ -481,32 +201,6 @@ async def create_concept(
     )
 
 
-@router.get("", response_model=List[ConceptResponse])
-async def list_concepts(
-    skip: int = 0,
-    limit: int = 100,
-    session: Session = Depends(get_session)
-):
-    """
-    List all concepts in the database.
-    
-    Args:
-        skip: Number of concepts to skip (for pagination)
-        limit: Maximum number of concepts to return (default: 100, max: 1000)
-    
-    Returns:
-        List of concepts
-    """
-    if limit > 1000:
-        limit = 1000
-    
-    concepts = session.exec(
-        select(Concept).offset(skip).limit(limit).order_by(Concept.created_at.desc())
-    ).all()
-    
-    return [ConceptResponse.model_validate(concept) for concept in concepts]
-
-
 @router.get("/by-term", response_model=List[ConceptResponse])
 async def get_concepts_by_term(
     term: str,
@@ -542,69 +236,6 @@ async def get_concepts_by_term(
     ).all()
     
     return [ConceptResponse.model_validate(concept) for concept in concepts]
-
-
-@router.get("/count")
-async def get_concept_count(
-    session: Session = Depends(get_session)
-):
-    """
-    Get the total count of concepts in the database.
-    
-    Returns:
-        Dictionary with concept count
-    """
-    # Count concepts by querying all and getting length
-    # This is simple but not optimal for large datasets
-    all_concepts = session.exec(select(Concept)).all()
-    count = len(all_concepts)
-    
-    return {"count": count}
-
-
-@router.get("/integrity-check")
-async def check_data_integrity(
-    session: Session = Depends(get_session)
-):
-    """
-    Check data integrity between concepts and cards.
-    Verifies that all cards have valid concept_id references.
-    
-    Returns:
-        Dictionary with integrity check results
-    """
-    # Check for orphaned cards (cards with concept_id that doesn't exist)
-    orphaned_cards_query = text("""
-        SELECT COUNT(*) as count
-        FROM card
-        WHERE concept_id NOT IN (SELECT id FROM concept)
-    """)
-    
-    orphaned_result = session.exec(orphaned_cards_query).first()
-    orphaned_count = orphaned_result[0] if orphaned_result else 0
-    
-    # Get total counts
-    total_concepts = len(session.exec(select(Concept)).all())
-    total_cards = len(session.exec(select(Card)).all())
-    
-    # Get cards grouped by concept
-    cards_by_concept_query = text("""
-        SELECT concept_id, COUNT(*) as card_count
-        FROM card
-        GROUP BY concept_id
-    """)
-    
-    cards_by_concept = session.exec(cards_by_concept_query).all()
-    concepts_with_cards = len(cards_by_concept)
-    
-    return {
-        "total_concepts": total_concepts,
-        "total_cards": total_cards,
-        "concepts_with_cards": concepts_with_cards,
-        "orphaned_cards": orphaned_count,
-        "integrity_ok": orphaned_count == 0,
-        "message": "Data integrity check passed" if orphaned_count == 0 else f"Found {orphaned_count} orphaned card(s) - these should be deleted"
-    }
 
 
 @router.post("/create-only", response_model=ConceptResponse, status_code=status.HTTP_201_CREATED)
@@ -670,6 +301,13 @@ async def get_concepts_with_missing_languages(
     """
     Get concepts that are missing cards for the given list of languages.
     
+    Only includes concepts with term, description, and part_of_speech present.
+    For each concept, includes languages that either:
+    1. Don't have a card in Card table, OR
+    2. Have a card but the card is missing term, description, or ipa
+    
+    Results are sorted by max(created_at, updated_at) descending (recent first).
+    
     Args:
         request: Request containing languages list
     
@@ -691,37 +329,86 @@ async def get_concepts_with_missing_languages(
             detail=f"Invalid language codes: {', '.join(sorted(missing_languages))}"
         )
     
-    # Get all concepts
-    all_concepts = session.exec(select(Concept)).all()
+    # Get concepts with term, description, and part_of_speech present
+    all_concepts = session.exec(
+        select(Concept).where(
+            Concept.term.isnot(None),
+            Concept.term != "",
+            Concept.description.isnot(None),
+            Concept.description != "",
+            Concept.part_of_speech.isnot(None),
+            Concept.part_of_speech != ""
+        )
+    ).all()
     
-    # Shuffle concepts to return in random order
-    concepts_list = list(all_concepts)
-    random.shuffle(concepts_list)
-    
-    # For each concept, find which languages are missing
+    # For each concept, find which languages need cards (missing or incomplete)
     concepts_with_missing = []
-    for concept in concepts_list:
+    for concept in all_concepts:
         # Get existing cards for this concept
         existing_cards = session.exec(
             select(Card).where(Card.concept_id == concept.id)
         ).all()
         
-        existing_language_codes = {card.language_code.lower() for card in existing_cards}
-        missing_for_concept = [lang for lang in language_codes if lang not in existing_language_codes]
+        # Create a map of existing cards by language code
+        existing_cards_by_lang = {card.language_code.lower(): card for card in existing_cards}
+        
+        # Find languages that need cards
+        missing_for_concept = []
+        for lang in language_codes:
+            card = existing_cards_by_lang.get(lang)
+            
+            # Language needs a card if:
+            # 1. No card exists, OR
+            # 2. Card exists but is missing term, description, or ipa
+            if not card:
+                missing_for_concept.append(lang)
+            elif not card.term or not card.term.strip() or \
+                 not card.description or not card.description.strip() or \
+                 not card.ipa or not card.ipa.strip():
+                missing_for_concept.append(lang)
         
         if missing_for_concept:
-            concepts_with_missing.append(
-                ConceptWithMissingLanguages(
-                    concept=ConceptResponse.model_validate(concept),
-                    missing_languages=missing_for_concept
-                )
-            )
+            # Calculate max timestamp for sorting (concept created_at, updated_at, and max card timestamp)
+            concept_timestamps = []
+            if concept.created_at:
+                concept_timestamps.append(concept.created_at)
+            if concept.updated_at:
+                concept_timestamps.append(concept.updated_at)
             
-            # Limit to 100 concepts max
-            if len(concepts_with_missing) >= 100:
-                break
+            # Get max timestamp from cards for this concept
+            for card in existing_cards:
+                if card.created_at:
+                    concept_timestamps.append(card.created_at)
+                if card.updated_at:
+                    concept_timestamps.append(card.updated_at)
+            
+            max_timestamp = max(concept_timestamps) if concept_timestamps else None
+            
+            concepts_with_missing.append(
+                (max_timestamp, concept, missing_for_concept)
+            )
     
-    return ConceptsWithMissingLanguagesResponse(concepts=concepts_with_missing)
+    # Sort by max timestamp descending (recent first), then by concept term alphabetical (ascending A to Z)
+    # Use negative timestamp for descending order, then term for ascending alphabetical
+    concepts_with_missing.sort(
+        key=lambda x: (
+            -(x[0].timestamp() if x[0] else datetime.min.replace(tzinfo=timezone.utc).timestamp()),
+            (x[1].term or "").lower() if x[1].term else ""
+        ),
+        reverse=False  # Explicitly set to False to ensure ascending order for terms
+    )
+    
+    # Build response (limit to 100 concepts max)
+    result = []
+    for max_timestamp, concept, missing_langs in concepts_with_missing[:100]:
+        result.append(
+            ConceptWithMissingLanguages(
+                concept=ConceptResponse.model_validate(concept),
+                missing_languages=missing_langs
+            )
+        )
+    
+    return ConceptsWithMissingLanguagesResponse(concepts=result)
 
 
 @router.post("/generate-cards", response_model=GenerateCardsForConceptsResponse)
@@ -772,8 +459,29 @@ async def generate_cards_for_concepts(
     logger.info(f"Request JSON Input: concept_ids={request.concept_ids}, languages={request.languages}")
     logger.info(f"Concepts to process: {[{'id': c.id, 'term': c.term, 'description': c.description} for c in concepts]}")
     
-    # Shuffle concepts to process in random order
-    random.shuffle(concepts)
+    # Sort concepts by max(created_at, updated_at) descending (recent first)
+    # If timestamps are the same, sort alphabetically by concept term
+    # This ensures we process the most recently created/updated concepts first
+    def get_concept_sort_key(concept):
+        timestamps = []
+        if concept.created_at:
+            timestamps.append(concept.created_at)
+        if concept.updated_at:
+            timestamps.append(concept.updated_at)
+        # Also check cards for this concept
+        concept_cards = session.exec(
+            select(Card).where(Card.concept_id == concept.id)
+        ).all()
+        for card in concept_cards:
+            if card.created_at:
+                timestamps.append(card.created_at)
+            if card.updated_at:
+                timestamps.append(card.updated_at)
+        max_timestamp = max(timestamps) if timestamps else datetime.min.replace(tzinfo=timezone.utc)
+        # Use negative timestamp for descending order (most recent first), then term for ascending alphabetical (A to Z)
+        return (-max_timestamp.timestamp(), (concept.term or "").lower() if concept.term else "")
+    
+    concepts.sort(key=get_concept_sort_key, reverse=False)  # Explicitly set to False to ensure ascending order for terms
     
     concepts_processed = 0
     cards_created = 0
@@ -806,25 +514,50 @@ async def generate_cards_for_concepts(
             # Create a map of existing cards by language code for easy lookup
             existing_cards_by_lang = {card.language_code.lower(): card for card in existing_cards}
             
-            # Process all requested languages (will overwrite existing cards)
+            # Filter languages that need cards: either missing or incomplete (missing term, description, or ipa)
+            languages_to_process = []
+            for target_lang in language_codes:
+                card = existing_cards_by_lang.get(target_lang.lower())
+                
+                # Language needs a card if:
+                # 1. No card exists, OR
+                # 2. Card exists but is missing term, description, or ipa
+                if not card:
+                    languages_to_process.append(target_lang)
+                elif not card.term or not card.term.strip() or \
+                     not card.description or not card.description.strip() or \
+                     not card.ipa or not card.ipa.strip():
+                    languages_to_process.append(target_lang)
+            
+            # Skip concept if no languages need processing
+            if not languages_to_process:
+                logger.info(f"Skipping concept {concept.id} ({concept.term}): all requested languages already have complete cards")
+                continue
+            
+            # Process languages that need cards
             created_cards = []
             updated_cards = []
             
-            for target_lang in language_codes:
+            # Generate system instruction once per concept (provides context once)
+            system_instruction = generate_card_translation_system_instruction(
+                term=concept.term or "",
+                description=concept.description,
+                part_of_speech=concept.part_of_speech
+            )
+            
+            for target_lang in languages_to_process:
                 try:
-                    # Generate prompt for this specific language
-                    prompt = generate_card_translation_prompt(
-                        term=concept.term or "",
-                        description=concept.description,
-                        part_of_speech=concept.part_of_speech,
-                        target_language=target_lang
-                    )
+                    # Generate simple user prompt for this specific language (reuses system instruction)
+                    user_prompt = generate_card_translation_user_prompt(target_language=target_lang)
                     
                     logger.info(f"Calling Gemini API for concept {concept.id}: term='{concept.term}', language={target_lang}")
                     
-                    # Call Gemini API
+                    # Call Gemini API with system instruction (context provided once, reused for all languages)
                     try:
-                        llm_data, token_usage = call_gemini_api(prompt)
+                        llm_data, token_usage = call_gemini_api(
+                            prompt=user_prompt,
+                            system_instruction=system_instruction
+                        )
                         total_cost_usd += token_usage['cost_usd']
                         total_tokens += token_usage['total_tokens']
                         logger.info(f"Gemini API call completed for concept {concept.id}, language {target_lang}. Tokens: {token_usage['total_tokens']}, Cost: ${token_usage['cost_usd']:.6f}")

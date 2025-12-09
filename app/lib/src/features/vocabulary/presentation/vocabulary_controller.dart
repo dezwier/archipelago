@@ -141,42 +141,40 @@ class VocabularyController extends ChangeNotifier {
         _currentUser = User.fromJson(userMap);
         _sourceLanguageCode = _currentUser!.langNative;
         _targetLanguageCode = _currentUser!.langLearning;
+      } else {
+        // When logged out, default to English
+        _currentUser = null;
+        _sourceLanguageCode = 'en';
+        _targetLanguageCode = null;
       }
 
-      // Load vocabulary
-      if (_currentUser != null) {
-        final result = await VocabularyService.getVocabulary(
-          userId: _currentUser!.id,
-          page: 1,
-          pageSize: _pageSize,
-          sortBy: _getSortByParameter(),
-          search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
-          searchLanguageCodes: _searchLanguageCodes,
-        );
+      // Load vocabulary - call API even when logged out (English-only)
+      final result = await VocabularyService.getVocabulary(
+        userId: _currentUser?.id,
+        page: 1,
+        pageSize: _pageSize,
+        sortBy: _getSortByParameter(),
+        search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
+        searchLanguageCodes: _searchLanguageCodes,
+      );
 
-        if (result['success'] == true) {
-          final List<dynamic> itemsData = result['items'] as List<dynamic>;
-          final items = itemsData
-              .map((json) => PairedVocabularyItem.fromJson(json as Map<String, dynamic>))
-              .toList();
-          
-          _pairedItems = items;
-          _applySorting();
-          _currentPage = result['page'] as int;
-          _totalItems = result['total'] as int;
-          _hasNextPage = result['has_next'] as bool;
-          if (showLoading) {
-            _isLoading = false;
-          }
-          _errorMessage = null;
-        } else {
-          _errorMessage = result['message'] as String? ?? 'Failed to load vocabulary';
-          if (showLoading) {
-            _isLoading = false;
-          }
+      if (result['success'] == true) {
+        final List<dynamic> itemsData = result['items'] as List<dynamic>;
+        final items = itemsData
+            .map((json) => PairedVocabularyItem.fromJson(json as Map<String, dynamic>))
+            .toList();
+        
+        _pairedItems = items;
+        _applySorting();
+        _currentPage = result['page'] as int;
+        _totalItems = result['total'] as int;
+        _hasNextPage = result['has_next'] as bool;
+        if (showLoading) {
+          _isLoading = false;
         }
+        _errorMessage = null;
       } else {
-        _errorMessage = 'Please log in to view vocabulary';
+        _errorMessage = result['message'] as String? ?? 'Failed to load vocabulary';
         if (showLoading) {
           _isLoading = false;
         }
@@ -191,7 +189,7 @@ class VocabularyController extends ChangeNotifier {
   }
 
   Future<void> loadMoreVocabulary() async {
-    if (_isLoadingMore || !_hasNextPage || _currentUser == null) {
+    if (_isLoadingMore || !_hasNextPage) {
       return;
     }
 
@@ -201,7 +199,7 @@ class VocabularyController extends ChangeNotifier {
     try {
       final nextPage = _currentPage + 1;
       final result = await VocabularyService.getVocabulary(
-        userId: _currentUser!.id,
+        userId: _currentUser?.id,
         page: nextPage,
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
@@ -438,15 +436,13 @@ class VocabularyController extends ChangeNotifier {
   }
   
   Future<void> _performSearch() async {
-    if (_currentUser == null) return;
-    
     // Don't show loading indicator - keep old content visible
     _errorMessage = null;
     notifyListeners();
     
     try {
       final result = await VocabularyService.getVocabulary(
-        userId: _currentUser!.id,
+        userId: _currentUser?.id,
         page: 1,
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),

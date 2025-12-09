@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone
+from typing import Optional
 from app.core.database import get_session
 from app.models.models import Concept, Card, User, UserCard, Image
 from app.schemas.flashcard import (
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/flashcards", tags=["flashcards"])
 
 @router.get("/vocabulary", response_model=VocabularyResponse)
 async def get_vocabulary(
-    user_id: int,
+    user_id: Optional[int] = None,
     page: int = 1,
     page_size: int = 20,
     sort_by: str = "alphabetical",  # Options: "alphabetical", "recent"
@@ -36,9 +37,10 @@ async def get_vocabulary(
     """
     Get cards for a user's source and target languages, paired by concept_id.
     Returns paginated vocabulary items that match the user's native and learning languages.
+    When user_id is not provided, returns English-only vocabulary for logged-out users.
     
     Args:
-        user_id: The user ID
+        user_id: The user ID (optional - if not provided, returns English-only vocabulary)
         page: Page number (1-indexed, default: 1)
         page_size: Number of items per page (default: 20)
         sort_by: Sort order - "alphabetical" (default) or "recent" (by created_at, newest first)
@@ -64,18 +66,29 @@ async def get_vocabulary(
             detail="Page size must be between 1 and 100"
         )
     
-    # Get user
-    user = session.get(User, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
+    # Determine source and target languages
+    source_language = "en"  # Default to English for logged-out users
+    target_language = None
     
-    # Get all cards for user's native and learning languages (for filtering/searching)
-    language_codes = [user.lang_native]
-    if user.lang_learning:
-        language_codes.append(user.lang_learning)
+    if user_id is not None:
+        # Get user
+        user = session.get(User, user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        source_language = user.lang_native
+        target_language = user.lang_learning
+    else:
+        # Logged-out users: English only
+        source_language = "en"
+        target_language = None
+    
+    # Get all cards for source and target languages (for filtering/searching)
+    language_codes = [source_language]
+    if target_language:
+        language_codes.append(target_language)
     
     # Apply search filter if provided
     matching_concept_ids = None
@@ -87,6 +100,10 @@ async def get_vocabulary(
         if search_languages:
             search_language_codes = [lang.strip().lower() for lang in search_languages.split(',') if lang.strip()]
         
+        # If no search languages specified and user is logged out, default to English only
+        if not search_language_codes and user_id is None:
+            search_language_codes = ["en"]
+        
         # Build search query
         if search_language_codes:
             # Search in specified languages
@@ -97,7 +114,7 @@ async def get_vocabulary(
                 )
             ).all()
         else:
-            # Search in all languages
+            # Search in all languages (only when user is logged in)
             matching_cards = session.exec(
                 select(Card).where(
                     func.lower(Card.term).contains(search_term)
@@ -127,8 +144,8 @@ async def get_vocabulary(
     # Get all concept_ids and sort based on sort_by parameter
     concept_sort_keys = []
     for concept_id, lang_cards in concept_cards_map.items():
-        target_card = lang_cards.get(user.lang_learning) if user.lang_learning else None
-        source_card = lang_cards.get(user.lang_native)
+        target_card = lang_cards.get(target_language) if target_language else None
+        source_card = lang_cards.get(source_language)
         
         if sort_by == "recent":
             # For recent sort, use the most recent created_at among all cards for this concept
@@ -215,8 +232,8 @@ async def get_vocabulary(
     paired_items = []
     for concept_id in paginated_concept_ids:
         lang_cards = concept_cards_map.get(concept_id, {})
-        source_card = lang_cards.get(user.lang_native)
-        target_card = lang_cards.get(user.lang_learning) if user.lang_learning else None
+        source_card = lang_cards.get(source_language)
+        target_card = lang_cards.get(target_language) if target_language else None
         
         # Get images and concept data for this concept
         concept_images = concept_images_map.get(concept_id, [])
