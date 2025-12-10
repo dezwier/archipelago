@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../domain/paired_vocabulary_item.dart';
 import '../../domain/vocabulary_card.dart';
 import '../../../../utils/html_entity_decoder.dart';
@@ -14,10 +13,7 @@ class VocabularyItemWidget extends StatelessWidget {
   final List<String> languagesToShow;
   final bool showDescription;
   final bool showExtraInfo;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
   final List<PairedVocabularyItem> allItems;
-  final VoidCallback onRandomCard;
   final VoidCallback onTap;
 
   const VocabularyItemWidget({
@@ -29,10 +25,7 @@ class VocabularyItemWidget extends StatelessWidget {
     required this.languagesToShow,
     this.showDescription = true,
     this.showExtraInfo = true,
-    required this.onEdit,
-    required this.onDelete,
     required this.allItems,
-    required this.onRandomCard,
     required this.onTap,
   });
 
@@ -40,56 +33,31 @@ class VocabularyItemWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Slidable(
-        endActionPane: ActionPane(
-          motion: const DrawerMotion(),
-          children: [
-            SlidableAction(
-              onPressed: (_) => onEdit(),
-              backgroundColor: const Color(0xFFFFD4A3), // Pastel orange
-              foregroundColor: const Color(0xFF8B4513), // Dark brown for contrast
-              icon: Icons.edit,
-              label: 'Edit',
-              borderRadius: BorderRadius.circular(12),
-              padding: const EdgeInsets.symmetric(vertical: 12.0),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16.0),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+              width: 1,
             ),
-            SlidableAction(
-              onPressed: (_) => onDelete(),
-              backgroundColor: const Color(0xFFFFB3B3), // Pastel red
-              foregroundColor: const Color(0xFF8B0000), // Dark red for contrast
-              icon: Icons.delete,
-              label: 'Delete',
-              borderRadius: BorderRadius.circular(12),
-              padding: const EdgeInsets.symmetric(vertical: 12.0),
-            ),
-          ],
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16.0),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                width: 1,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-              child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _buildLanguageSections(context),
-              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _buildLanguageSections(context),
             ),
           ),
         ),

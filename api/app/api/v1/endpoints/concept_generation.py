@@ -3,6 +3,7 @@ Concept generation endpoints.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
+from sqlalchemy import or_, and_
 from app.core.database import get_session
 from app.models.models import Concept, Card, Language, Topic
 from app.schemas.flashcard import (
@@ -125,6 +126,7 @@ async def generate_concept_with_cards(
         # Create concept record with the given term, description, and topic (if given)
         concept = Concept(
             topic_id=request.topic_id,  # Topic ID if provided
+            user_id=request.user_id,  # User ID if provided (null for script-created concepts)
             term=request.term,  # Term from user input
             description=validated_data.concept.description,  # Description from LLM response
             part_of_speech=request.part_of_speech,
@@ -229,6 +231,7 @@ async def generate_concept_only(
     try:
         concept = Concept(
             topic_id=request.topic_id,
+            user_id=request.user_id,  # User ID if provided (null for script-created concepts)
             term=request.term.strip(),
             description=request.description.strip() if request.description else None,
             status="active"
@@ -258,15 +261,15 @@ async def get_concepts_with_missing_languages(
     """
     Get concepts that are missing cards for the given list of languages.
     
-    Only includes concepts with term, description, and part_of_speech present.
+    Includes concepts that have (term, description, and part_of_speech present) OR (user_id present).
     For each concept, includes languages that either:
     1. Don't have a card in Card table, OR
     2. Have a card but the card is missing term, description, or ipa
     
-    Results are sorted by max(created_at, updated_at) descending (recent first).
+    Results are sorted by: user's concepts first (if user_id provided), then alphabetically by term.
     
     Args:
-        request: Request containing languages list
+        request: Request containing languages list and optional user_id
     
     Returns:
         List of concepts with their missing languages
@@ -286,15 +289,20 @@ async def get_concepts_with_missing_languages(
             detail=f"Invalid language codes: {', '.join(sorted(missing_languages))}"
         )
     
-    # Get concepts with term, description, and part_of_speech present
+    # Get concepts with (term, description, and part_of_speech present) OR (user_id present)
     all_concepts = session.exec(
         select(Concept).where(
-            Concept.term.isnot(None),
-            Concept.term != "",
-            Concept.description.isnot(None),
-            Concept.description != "",
-            Concept.part_of_speech.isnot(None),
-            Concept.part_of_speech != ""
+            or_(
+                and_(
+                    Concept.term.isnot(None),
+                    Concept.term != "",
+                    Concept.description.isnot(None),
+                    Concept.description != "",
+                    Concept.part_of_speech.isnot(None),
+                    Concept.part_of_speech != ""
+                ),
+                Concept.user_id.isnot(None)
+            )
         )
     ).all()
     
@@ -325,39 +333,24 @@ async def get_concepts_with_missing_languages(
                 missing_for_concept.append(lang)
         
         if missing_for_concept:
-            # Calculate max timestamp for sorting (concept created_at, updated_at, and max card timestamp)
-            concept_timestamps = []
-            if concept.created_at:
-                concept_timestamps.append(concept.created_at)
-            if concept.updated_at:
-                concept_timestamps.append(concept.updated_at)
-            
-            # Get max timestamp from cards for this concept
-            for card in existing_cards:
-                if card.created_at:
-                    concept_timestamps.append(card.created_at)
-                if card.updated_at:
-                    concept_timestamps.append(card.updated_at)
-            
-            max_timestamp = max(concept_timestamps) if concept_timestamps else None
-            
             concepts_with_missing.append(
-                (max_timestamp, concept, missing_for_concept)
+                (concept, missing_for_concept)
             )
     
-    # Sort by max timestamp descending (recent first), then by concept term alphabetical (ascending A to Z)
-    # Use negative timestamp for descending order, then term for ascending alphabetical
+    # Sort concepts: prioritize user's concepts, then alphabetically by term
+    # Sort key: (is_user_concept, term)
+    # is_user_concept: 0 for user's concepts (to prioritize them), 1 for others
     concepts_with_missing.sort(
         key=lambda x: (
-            -(x[0].timestamp() if x[0] else datetime.min.replace(tzinfo=timezone.utc).timestamp()),
-            (x[1].term or "").lower() if x[1].term else ""
+            0 if (request.user_id is not None and x[0].user_id == request.user_id) else 1,
+            (x[0].term or "").lower() if x[0].term else ""
         ),
-        reverse=False  # Explicitly set to False to ensure ascending order for terms
+        reverse=False
     )
     
     # Build response (limit to 100 concepts max)
     result = []
-    for max_timestamp, concept, missing_langs in concepts_with_missing[:100]:
+    for concept, missing_langs in concepts_with_missing[:100]:
         result.append(
             ConceptWithMissingLanguages(
                 concept=ConceptResponse.model_validate(concept),

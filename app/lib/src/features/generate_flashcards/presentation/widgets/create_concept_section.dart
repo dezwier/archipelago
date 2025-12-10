@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../../data/topic_service.dart' show Topic, TopicService;
 import '../../data/flashcard_service.dart';
+import '../../../profile/domain/user.dart';
 
 class CreateConceptSection extends StatefulWidget {
   const CreateConceptSection({super.key});
@@ -132,12 +135,27 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
         _isCreatingConcept = true;
       });
       
+      // Load user ID if available
+      int? userId;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final userJson = prefs.getString('current_user');
+        if (userJson != null) {
+          final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+          final user = User.fromJson(userMap);
+          userId = user.id;
+        }
+      } catch (e) {
+        // If loading user fails, continue without user_id
+      }
+      
       final result = await FlashcardService.createConceptOnly(
         term: term,
         description: _descriptionController.text.trim().isNotEmpty 
             ? _descriptionController.text.trim() 
             : null,
         topicId: topicId,
+        userId: userId,
       );
       
       setState(() {

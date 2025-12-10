@@ -45,6 +45,7 @@ class ConceptResponse(BaseModel):
     """Concept response schema."""
     id: int
     topic_id: Optional[int] = None
+    user_id: Optional[int] = None
     term: Optional[str] = None
     description: Optional[str] = None
     part_of_speech: Optional[str] = None
@@ -221,6 +222,7 @@ class CreateConceptRequest(BaseModel):
     """Request schema for creating a concept with cards."""
     term: str = Field(..., min_length=1, description="The term to create a concept for")
     topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
+    user_id: Optional[int] = Field(None, description="User ID who created the concept")
     part_of_speech: Optional[str] = Field(None, description="Part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence. If not provided, will be inferred from the term.")
     core_meaning_en: Optional[str] = Field(None, description="Core meaning in English")
     excluded_senses: Optional[List[str]] = Field(default=[], description="List of excluded senses")
@@ -324,6 +326,7 @@ class ConfirmConceptRequest(BaseModel):
     """Request schema for confirming a previewed concept."""
     term: str = Field(..., min_length=1, description="The term")
     topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
+    user_id: Optional[int] = Field(None, description="User ID who created the concept")
     part_of_speech: Optional[str] = Field(None, description="Part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence. May be inferred if not provided.")
     concept: LLMConceptData = Field(..., description="Concept data from preview")
     cards: List[LLMCardData] = Field(..., description="Card data from preview")
@@ -344,6 +347,7 @@ class CreateConceptOnlyRequest(BaseModel):
     term: str = Field(..., min_length=1, description="The term")
     description: Optional[str] = Field(None, description="Description of the concept")
     topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
+    user_id: Optional[int] = Field(None, description="User ID who created the concept")
 
 
 class ConceptWithMissingLanguages(BaseModel):
@@ -360,12 +364,14 @@ class ConceptsWithMissingLanguagesResponse(BaseModel):
 class GetConceptsWithMissingLanguagesRequest(BaseModel):
     """Request schema for getting concepts with missing languages."""
     languages: List[str] = Field(..., min_items=1, description="List of language codes to check for missing cards")
+    user_id: Optional[int] = Field(None, description="Optional user ID for prioritizing user's concepts in sorting")
 
 
 class GenerateCardsForConceptsRequest(BaseModel):
     """Request schema for generating cards for concepts."""
     concept_ids: List[int] = Field(..., min_items=1, description="List of concept IDs to generate cards for")
     languages: List[str] = Field(..., min_items=1, description="List of language codes to generate cards for")
+    user_id: Optional[int] = Field(None, description="Optional user ID for prioritizing user's concepts in sorting")
 
 
 class GenerateCardsForConceptsResponse(BaseModel):

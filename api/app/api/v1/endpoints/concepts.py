@@ -63,6 +63,61 @@ async def get_concepts(
     return result
 
 
+@router.get("/by-term", response_model=List[ConceptResponse])
+async def get_concepts_by_term(
+    term: str,
+    session: Session = Depends(get_session)
+):
+    """
+    Get all concepts that match the given term.
+    
+    Searches for concepts where the term field matches (case-insensitive).
+    Uses partial matching - will find concepts where the term contains the search term.
+    
+    Args:
+        term: The term to search for
+    
+    Returns:
+        List of concepts matching the term
+    """
+    if not term or not term.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Term parameter cannot be empty"
+        )
+    
+    # Use case-insensitive partial matching
+    # Filter out concepts where term is None and use case-insensitive matching
+    search_term = term.strip()
+    # Use ilike for PostgreSQL case-insensitive pattern matching with wildcards
+    concepts = session.exec(
+        select(Concept).where(
+            Concept.term.isnot(None),
+            Concept.term.ilike(f"%{search_term}%")
+        ).order_by(Concept.created_at.desc())
+    ).all()
+    
+    # Load images for each concept
+    concept_ids = [c.id for c in concepts]
+    images = session.exec(
+        select(Image).where(Image.concept_id.in_(concept_ids))
+    ).all()
+    
+    image_map = {}
+    for img in images:
+        if img.concept_id not in image_map:
+            image_map[img.concept_id] = []
+        image_map[img.concept_id].append(img)
+    
+    result = []
+    for concept in concepts:
+        concept_dict = ConceptResponse.model_validate(concept).model_dump()
+        concept_dict['images'] = [ImageResponse.model_validate(img) for img in image_map.get(concept.id, [])]
+        result.append(ConceptResponse(**concept_dict))
+    
+    return result
+
+
 @router.get("/{concept_id}", response_model=ConceptResponse)
 async def get_concept(
     concept_id: int,
@@ -199,59 +254,4 @@ async def delete_concept(
     session.commit()
     
     return None
-
-
-@router.get("/by-term", response_model=List[ConceptResponse])
-async def get_concepts_by_term(
-    term: str,
-    session: Session = Depends(get_session)
-):
-    """
-    Get all concepts that match the given term.
-    
-    Searches for concepts where the term field matches (case-insensitive).
-    Uses partial matching - will find concepts where the term contains the search term.
-    
-    Args:
-        term: The term to search for
-    
-    Returns:
-        List of concepts matching the term
-    """
-    if not term or not term.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Term parameter cannot be empty"
-        )
-    
-    # Use case-insensitive partial matching
-    # Filter out concepts where term is None and use case-insensitive matching
-    search_term = term.strip()
-    # Use ilike for PostgreSQL case-insensitive pattern matching with wildcards
-    concepts = session.exec(
-        select(Concept).where(
-            Concept.term.isnot(None),
-            Concept.term.ilike(f"%{search_term}%")
-        ).order_by(Concept.created_at.desc())
-    ).all()
-    
-    # Load images for each concept
-    concept_ids = [c.id for c in concepts]
-    images = session.exec(
-        select(Image).where(Image.concept_id.in_(concept_ids))
-    ).all()
-    
-    image_map = {}
-    for img in images:
-        if img.concept_id not in image_map:
-            image_map[img.concept_id] = []
-        image_map[img.concept_id].append(img)
-    
-    result = []
-    for concept in concepts:
-        concept_dict = ConceptResponse.model_validate(concept).model_dump()
-        concept_dict['images'] = [ImageResponse.model_validate(img) for img in image_map.get(concept.id, [])]
-        result.append(ConceptResponse(**concept_dict))
-    
-    return result
 

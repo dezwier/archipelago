@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../constants/api_config.dart';
+import '../../profile/domain/user.dart';
 
 class FlashcardService {
   /// Preview a concept with cards for multiple languages using LLM generation.
@@ -106,6 +108,7 @@ class FlashcardService {
   static Future<Map<String, dynamic>> confirmConcept({
     required String term,
     int? topicId,
+    int? userId,
     String? partOfSpeech,
     required Map<String, dynamic> conceptData,
     required List<Map<String, dynamic>> cardsData,
@@ -221,6 +224,11 @@ class FlashcardService {
         body['topic_id'] = topicId;
       }
       
+      // Only include user_id if provided
+      if (userId != null) {
+        body['user_id'] = userId;
+      }
+      
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -304,6 +312,7 @@ class FlashcardService {
   static Future<Map<String, dynamic>> createConcept({
     required String term,
     int? topicId,
+    int? userId,
     required String partOfSpeech,
     String? coreMeaningEn,
     required List<String> languages,
@@ -330,6 +339,11 @@ class FlashcardService {
       // Only include topic_id if provided
       if (topicId != null) {
         body['topic_id'] = topicId;
+      }
+      
+      // Only include user_id if provided
+      if (userId != null) {
+        body['user_id'] = userId;
       }
       
       // Only include core_meaning_en if provided
@@ -395,6 +409,7 @@ class FlashcardService {
     required String term,
     String? description,
     int? topicId,
+    int? userId,
   }) async {
     // Validate term is not empty
     final trimmedTerm = term.trim();
@@ -420,6 +435,11 @@ class FlashcardService {
       // Only include topic_id if provided
       if (topicId != null) {
         body['topic_id'] = topicId;
+      }
+      
+      // Only include user_id if provided
+      if (userId != null) {
+        body['user_id'] = userId;
       }
       
       final response = await http.post(
@@ -480,12 +500,31 @@ class FlashcardService {
       };
     }
     
+    // Load user ID if available
+    int? userId;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString('current_user');
+      if (userJson != null) {
+        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+        final user = User.fromJson(userMap);
+        userId = user.id;
+      }
+    } catch (e) {
+      // If loading user fails, continue without user_id
+    }
+    
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/missing-languages');
     
     try {
-      final body = {
+      final body = <String, dynamic>{
         'languages': languages.map((lang) => lang.toLowerCase()).toList(),
       };
+      
+      // Only include user_id if available
+      if (userId != null) {
+        body['user_id'] = userId;
+      }
       
       final response = await http.post(
         url,
@@ -547,13 +586,32 @@ class FlashcardService {
       };
     }
     
+    // Load user ID if available
+    int? userId;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString('current_user');
+      if (userJson != null) {
+        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+        final user = User.fromJson(userMap);
+        userId = user.id;
+      }
+    } catch (e) {
+      // If loading user fails, continue without user_id
+    }
+    
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/cards/generate');
     
     try {
-      final body = {
+      final body = <String, dynamic>{
         'concept_ids': [conceptId],
         'languages': languages.map((lang) => lang.toLowerCase()).toList(),
       };
+      
+      // Only include user_id if available
+      if (userId != null) {
+        body['user_id'] = userId;
+      }
       
       print('=== FLASHCARD SERVICE REQUEST (generateCardsForConcept) ===');
       print('URL: $url');

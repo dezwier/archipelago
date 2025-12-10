@@ -18,7 +18,7 @@ class VocabularyDetailDrawer extends StatefulWidget {
   final Map<String, bool> languageVisibility;
   final List<String> languagesToShow;
   final VoidCallback? onEdit;
-  final VoidCallback? onRandomCard;
+  final VoidCallback? onDelete;
   final Function(PairedVocabularyItem)? onItemUpdated;
 
   const VocabularyDetailDrawer({
@@ -29,7 +29,7 @@ class VocabularyDetailDrawer extends StatefulWidget {
     required this.languageVisibility,
     required this.languagesToShow,
     this.onEdit,
-    this.onRandomCard,
+    this.onDelete,
     this.onItemUpdated,
   });
 
@@ -146,129 +146,118 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final maxHeight = screenHeight * 0.85; // 85% of screen height
     
-    return Dialog(
-      insetPadding: EdgeInsets.zero,
-      backgroundColor: Colors.transparent,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: maxHeight,
+    return Container(
+      height: screenHeight * 0.9,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
         ),
-        child: Container(
-          margin: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 8,
-            bottom: MediaQuery.of(context).padding.bottom + 8,
-            left: 16,
-            right: 16,
-          ),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 20,
-                spreadRadius: 5,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-            // Close button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                  tooltip: 'Close',
-                ),
-              ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
             ),
-            // Images and buttons layout
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: _isEditing
-                  ? Column(
-                      children: [
-                        // Images on top
-                        VocabularyImageSection(
-                          item: widget.item,
-                          isEditing: _isEditing,
-                          onItemUpdated: widget.onItemUpdated,
-                        ),
-                        const SizedBox(height: 12),
-                        // Action buttons horizontally below
-                        VocabularyActionButtons(
-                          isEditing: _isEditing,
-                          onEdit: () {
-                            setState(() {
-                              _isEditing = true;
-                            });
-                          },
-                          onSave: _handleSave,
-                          onCancel: _handleCancel,
-                          onRandomCard: () {
-                            Navigator.of(context).pop();
-                            widget.onRandomCard?.call();
-                          },
-                          onRegenerate: _handleRegenerate,
-                        ),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Image on left
-                        VocabularyImageSection(
-                          item: widget.item,
-                          isEditing: _isEditing,
-                          onItemUpdated: widget.onItemUpdated,
-                        ),
-                        const SizedBox(width: 12),
-                        // Action buttons stacked vertically on right
-                        VocabularyActionButtons(
-                          isEditing: _isEditing,
-                          onEdit: () {
-                            setState(() {
-                              _isEditing = true;
-                            });
-                          },
-                          onSave: _handleSave,
-                          onCancel: _handleCancel,
-                          onRandomCard: () {
-                            Navigator.of(context).pop();
-                            widget.onRandomCard?.call();
-                          },
-                          onRegenerate: _handleRegenerate,
-                        ),
-                      ],
-                    ),
-            ),
-            const SizedBox(height: 12),
-            // Content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                      const SizedBox(height: 24),
-                    ..._buildLanguageSections(context),
-                    if (widget.item.conceptTerm != null || 
-                        widget.item.conceptDescription != null) ...[
-                      const SizedBox(height: 34),
-                      ConceptInfoWidget(item: widget.item),
+          ),
+          // Close button
+                  const SizedBox(height: 20),
+          // Images and buttons layout
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: _isEditing
+                ? Column(
+                    children: [
+                      // Images on top
+                      VocabularyImageSection(
+                        item: widget.item,
+                        isEditing: _isEditing,
+                        onItemUpdated: widget.onItemUpdated,
+                      ),
+                      const SizedBox(height: 12),
+                      // Action buttons horizontally below
+                      VocabularyActionButtons(
+                        isEditing: _isEditing,
+                        onEdit: () {
+                          // Keep screen as is - no functionality yet
+                        },
+                        onSave: _handleSave,
+                        onCancel: _handleCancel,
+                        onRegenerate: _handleRegenerate,
+                        onDelete: () {
+                          widget.onDelete?.call();
+                        },
+                      ),
                     ],
-                  ],
-                ),
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Image on left - 50% width
+                      Expanded(
+                        flex: 1,
+                        child: VocabularyImageSection(
+                          item: widget.item,
+                          isEditing: _isEditing,
+                          onItemUpdated: widget.onItemUpdated,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Concept info and buttons on right - 50% width
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Concept info on top
+                            if (widget.item.conceptTerm != null || 
+                                widget.item.conceptDescription != null)
+                              ConceptInfoWidget(item: widget.item),
+                            if (widget.item.conceptTerm != null || 
+                                widget.item.conceptDescription != null)
+                              const SizedBox(height: 12),
+                            // Action buttons below
+                            VocabularyActionButtons(
+                              isEditing: _isEditing,
+                              onEdit: () {
+                                // Keep screen as is - no functionality yet
+                              },
+                              onSave: _handleSave,
+                              onCancel: _handleCancel,
+                              onRegenerate: _handleRegenerate,
+                              onDelete: () {
+                                widget.onDelete?.call();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 24),
+                  ..._buildLanguageSections(context),
+                ],
               ),
             ),
-          ],
-        ),
-        ),
+          ),
+        ],
       ),
     );
   }

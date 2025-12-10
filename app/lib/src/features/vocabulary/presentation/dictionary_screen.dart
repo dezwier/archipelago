@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'vocabulary_controller.dart';
 import '../domain/paired_vocabulary_item.dart';
@@ -9,7 +8,6 @@ import 'widgets/vocabulary_error_state.dart';
 import 'widgets/edit_vocabulary_dialog.dart';
 import 'widgets/delete_vocabulary_dialog.dart';
 import 'widgets/vocabulary_detail_dialog.dart';
-import '../data/vocabulary_service.dart';
 import '../../../utils/language_emoji.dart';
 import '../../profile/data/language_service.dart';
 import '../../profile/domain/language.dart';
@@ -219,10 +217,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                           languagesToShow: _languagesToShow,
                           showDescription: _showDescription,
                           showExtraInfo: _showExtraInfo,
-                          onEdit: () => _handleEdit(item),
-                          onDelete: () => _handleDelete(item),
                           allItems: _controller.filteredItems,
-                          onRandomCard: () => _handleRandomCard(context),
                           onTap: () => _handleItemTap(item),
                         );
                       },
@@ -326,7 +321,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     final displayCount = _controller.searchQuery.isNotEmpty
         ? _controller.filteredItems.length
         : _controller.totalItems;
-    return '$displayCount ${displayCount == 1 ? 'phrase' : 'phrases'}';
+    return '$displayCount ${displayCount == 1 ? 'lemma' : 'lemmas'}';
   }
 
   List<String> _getVisibleLanguageCodes() {
@@ -675,6 +670,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       final success = await _controller.deleteItem(item);
 
       if (mounted) {
+        // Close the detail drawer if deletion was successful
+        if (success) {
+          Navigator.of(context).pop();
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -692,9 +692,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
 
   void _handleItemTap(PairedVocabularyItem item) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => VocabularyDetailDrawer(
         item: item,
         sourceLanguageCode: _controller.sourceLanguageCode,
@@ -702,7 +703,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         languageVisibility: _languageVisibility,
         languagesToShow: _languagesToShow,
         onEdit: () => _handleEdit(item),
-        onRandomCard: () => _handleRandomCard(context),
+        onDelete: () => _handleDelete(item),
         onItemUpdated: (updatedItem) => _handleItemUpdated(context, updatedItem),
       ),
     );
@@ -719,25 +720,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       orElse: () => item,
     );
     
-    // Close current dialog and reopen with updated item
+    // Close current drawer and reopen with updated item
     if (mounted) {
-      Navigator.of(context).pop(); // Close current dialog
+      Navigator.of(context).pop(); // Close current drawer
       _handleItemTap(updatedItem); // Reopen with updated item
     }
-  }
-
-  void _handleRandomCard(BuildContext context) {
-    final items = _controller.filteredItems;
-    if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No cards available')),
-      );
-      return;
-    }
-
-    final random = Random();
-    final randomItem = items[random.nextInt(items.length)];
-    _handleItemTap(randomItem);
   }
 
 }

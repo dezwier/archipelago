@@ -6,10 +6,10 @@ class DeleteVocabularyDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Delete Translation'),
+      title: const Text('Delete Concept'),
       content: const Text(
-        'Are you sure you want to delete this translation? '
-        'This will delete all translations and the related concept.',
+        'Are you sure you want to delete this concept? '
+        'This will delete all lemmas and the related concept.',
       ),
       actions: [
         TextButton(

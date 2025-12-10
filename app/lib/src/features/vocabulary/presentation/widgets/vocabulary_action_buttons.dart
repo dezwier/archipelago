@@ -5,8 +5,8 @@ class VocabularyActionButtons extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onSave;
   final VoidCallback onCancel;
-  final VoidCallback? onRandomCard;
   final VoidCallback? onRegenerate;
+  final VoidCallback? onDelete;
 
   const VocabularyActionButtons({
     super.key,
@@ -14,8 +14,8 @@ class VocabularyActionButtons extends StatelessWidget {
     required this.onEdit,
     required this.onSave,
     required this.onCancel,
-    this.onRandomCard,
     this.onRegenerate,
+    this.onDelete,
   });
 
   @override
@@ -46,30 +46,51 @@ class VocabularyActionButtons extends StatelessWidget {
       );
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildSquareIconButton(
-          context,
-          icon: Icons.edit,
-          tooltip: 'Edit',
-          onPressed: onEdit,
-        ),
-        const SizedBox(height: 8),
-        _buildSquareIconButton(
-          context,
-          icon: Icons.auto_fix_high,
-          tooltip: 'Regenerate LLM Output',
-          onPressed: onRegenerate,
-        ),
-        const SizedBox(height: 8),
-        _buildSquareIconButton(
-          context,
-          icon: Icons.shuffle,
-          tooltip: 'Random Card',
-          onPressed: onRandomCard,
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calculate if buttons fit, if not, reduce size further
+        final buttonWidth = 36.0;
+        final spacing = 4.0;
+        final totalWidth = (buttonWidth * 3) + (spacing * 2);
+        
+        // If buttons don't fit, use smaller size
+        final useSmallButtons = constraints.maxWidth < totalWidth && constraints.maxWidth > 0;
+        final actualButtonWidth = useSmallButtons ? 32.0 : 36.0;
+        final actualIconSize = useSmallButtons ? 16.0 : 18.0;
+        
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            _buildSquareIconButton(
+              context,
+              icon: Icons.edit,
+              tooltip: 'Edit',
+              onPressed: onEdit,
+              buttonWidth: actualButtonWidth,
+              iconSize: actualIconSize,
+            ),
+            SizedBox(width: useSmallButtons ? 2 : 4),
+            _buildSquareIconButton(
+              context,
+              icon: Icons.auto_fix_high,
+              tooltip: 'Regenerate LLM Output',
+              onPressed: onRegenerate,
+              buttonWidth: actualButtonWidth,
+              iconSize: actualIconSize,
+            ),
+            SizedBox(width: useSmallButtons ? 2 : 4),
+            _buildSquareIconButton(
+              context,
+              icon: Icons.delete,
+              tooltip: 'Delete',
+              onPressed: onDelete,
+              buttonWidth: actualButtonWidth,
+              iconSize: actualIconSize,
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -79,6 +100,8 @@ class VocabularyActionButtons extends StatelessWidget {
     required String tooltip,
     required VoidCallback? onPressed,
     Widget? child,
+    double buttonWidth = 36,
+    double iconSize = 18,
   }) {
     return Tooltip(
       message: tooltip,
@@ -88,8 +111,8 @@ class VocabularyActionButtons extends StatelessWidget {
           onTap: onPressed,
           borderRadius: BorderRadius.circular(8),
           child: Container(
-            width: 40,
-            height: 40,
+            width: buttonWidth,
+            height: buttonWidth,
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
@@ -101,10 +124,12 @@ class VocabularyActionButtons extends StatelessWidget {
             child: child ??
                 Icon(
                   icon,
-                  size: 20,
+                  size: iconSize,
                   color: onPressed == null
                       ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)
-                      : Theme.of(context).colorScheme.onSurface,
+                      : icon == Icons.delete
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.onSurface,
                 ),
           ),
         ),

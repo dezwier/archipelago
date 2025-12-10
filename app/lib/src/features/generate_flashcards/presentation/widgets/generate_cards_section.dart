@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../features/profile/domain/language.dart';
 import '../../data/flashcard_service.dart';
+import '../../data/card_generation_background_service.dart';
 import 'language_selection_widget.dart';
 import 'card_generation_progress_widget.dart';
 
@@ -32,12 +34,101 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
   bool _isCancelled = false;
   bool _isGeneratingCards = false;
   double _sessionCostUsd = 0.0;
+  
+  Timer? _progressPollTimer;
 
   @override
   void initState() {
     super.initState();
     // Default to all languages if available
     _updateSelectedLanguages();
+    // Load existing task state if any
+    _loadExistingTaskState();
+    // Start polling for progress updates
+    _startProgressPolling();
+  }
+
+  @override
+  void dispose() {
+    _progressPollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadExistingTaskState() async {
+    final state = await CardGenerationBackgroundService.getTaskState();
+    if (state != null && state['isRunning'] == true) {
+      setState(() {
+        _isGeneratingCards = true;
+        _totalConcepts = state['totalConcepts'] as int?;
+        _currentConceptIndex = state['currentIndex'] as int? ?? 0;
+        _currentConceptTerm = state['currentTerm'] as String?;
+        _conceptsProcessed = state['conceptsProcessed'] as int? ?? 0;
+        _cardsCreated = state['cardsCreated'] as int? ?? 0;
+        _sessionCostUsd = state['sessionCostUsd'] as double? ?? 0.0;
+        _errors = List<String>.from(state['errors'] as List? ?? []);
+        _isCancelled = state['isCancelled'] as bool? ?? false;
+        _selectedLanguages = List<String>.from(state['selectedLanguages'] as List? ?? []);
+      });
+      
+      // Resume the task if it's not cancelled
+      if (!_isCancelled) {
+        _resumeTask();
+      }
+    }
+  }
+
+  void _startProgressPolling() {
+    _progressPollTimer?.cancel();
+    _progressPollTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (!_isGeneratingCards) {
+        timer.cancel();
+        return;
+      }
+
+      final state = await CardGenerationBackgroundService.getTaskState();
+      if (state == null || state['isRunning'] != true) {
+        // Task completed
+        timer.cancel();
+        setState(() {
+          _isGeneratingCards = false;
+        });
+        _showCompletionMessage();
+        return;
+      }
+
+      setState(() {
+        _currentConceptIndex = state['currentIndex'] as int? ?? 0;
+        _currentConceptTerm = state['currentTerm'] as String?;
+        _conceptsProcessed = state['conceptsProcessed'] as int? ?? 0;
+        _cardsCreated = state['cardsCreated'] as int? ?? 0;
+        _sessionCostUsd = state['sessionCostUsd'] as double? ?? 0.0;
+        _errors = List<String>.from(state['errors'] as List? ?? []);
+        _isCancelled = state['isCancelled'] as bool? ?? false;
+      });
+
+      if (_isCancelled) {
+        timer.cancel();
+        setState(() {
+          _isGeneratingCards = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _resumeTask() async {
+    // Run the task asynchronously - it will continue even if widget is disposed
+    _runBackgroundTask();
+  }
+
+  void _runBackgroundTask() {
+    // Fire and forget - this will continue running even when app goes to background
+    CardGenerationBackgroundService.executeTask().catchError((error) {
+      print('Error in background task: $error');
+      return <String, dynamic>{
+        'success': false,
+        'message': 'Task failed: $error',
+      };
+    });
   }
 
   @override
@@ -65,7 +156,8 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
     });
   }
 
-  void _handleCancel() {
+  void _handleCancel() async {
+    await CardGenerationBackgroundService.cancelTask();
     setState(() {
       _isCancelled = true;
       _isGeneratingCards = false;
@@ -153,54 +245,22 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
       _totalConcepts = conceptIds.length;
     });
     
-    // Process concepts one by one
-    for (int i = 0; i < conceptIds.length; i++) {
-      // Check if cancelled
-      if (_isCancelled) {
-        break;
-      }
-      
-      final conceptId = conceptIds[i];
-      final conceptTerm = conceptTerms[conceptId] ?? 'Unknown';
-      final missingLanguages = conceptMissingLanguages[conceptId] ?? [];
-      
-      setState(() {
-        _currentConceptIndex = i;
-        _currentConceptTerm = conceptTerm;
-        _currentConceptMissingLanguages = missingLanguages;
-      });
-      
-      // Generate cards for this concept
-      final generateResult = await FlashcardService.generateCardsForConcept(
-        conceptId: conceptId,
-        languages: _selectedLanguages,
-      );
-      
-      if (generateResult['success'] == true) {
-        final data = generateResult['data'] as Map<String, dynamic>?;
-        final cardsCreated = data?['cards_created'] as int? ?? 0;
-        final costUsd = (data?['session_cost_usd'] as num?)?.toDouble() ?? 0.0;
-        
-        setState(() {
-          _conceptsProcessed++;
-          _cardsCreated += cardsCreated;
-          _sessionCostUsd += costUsd;
-        });
-      } else {
-        final errorMsg = generateResult['message'] as String? ?? 'Unknown error';
-        setState(() {
-          _errors.add('Concept $conceptId ($conceptTerm): $errorMsg');
-        });
-      }
-    }
+    // Start the background task
+    await CardGenerationBackgroundService.startTask(
+      conceptIds: conceptIds,
+      conceptTerms: conceptTerms,
+      conceptMissingLanguages: conceptMissingLanguages,
+      selectedLanguages: _selectedLanguages,
+    );
     
-    setState(() {
-      _isGeneratingCards = false;
-      _currentConceptTerm = null;
-      _currentConceptMissingLanguages = [];
-    });
+    // Run the task asynchronously - it will continue even when app goes to background
+    _runBackgroundTask();
     
-    // Show completion message
+    // Start polling for progress updates
+    _startProgressPolling();
+  }
+
+  void _showCompletionMessage() {
     if (!_isCancelled) {
       String message = 'Generated $_cardsCreated card(s) for $_conceptsProcessed of $_totalConcepts concept(s)';
       if (_errors.isNotEmpty) {
@@ -223,6 +283,11 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
         ),
       );
     }
+    
+    setState(() {
+      _currentConceptTerm = null;
+      _currentConceptMissingLanguages = [];
+    });
   }
 
   @override

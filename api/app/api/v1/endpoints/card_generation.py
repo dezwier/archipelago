@@ -69,32 +69,18 @@ async def generate_cards_for_concepts(
     
     # Log request input
     logger.info(f"=== GENERATE CARDS REQUEST ===")
-    logger.info(f"Request JSON Input: concept_ids={request.concept_ids}, languages={request.languages}")
-    logger.info(f"Concepts to process: {[{'id': c.id, 'term': c.term, 'description': c.description} for c in concepts]}")
+    logger.info(f"Request JSON Input: concept_ids={request.concept_ids}, languages={request.languages}, user_id={request.user_id}")
+    logger.info(f"Concepts to process: {[{'id': c.id, 'term': c.term, 'description': c.description, 'user_id': c.user_id} for c in concepts]}")
     
-    # Sort concepts by max(created_at, updated_at) descending (recent first)
-    # If timestamps are the same, sort alphabetically by concept term
-    # This ensures we process the most recently created/updated concepts first
+    # Sort concepts: prioritize user's concepts, then alphabetically by term
+    # Sort key: (is_user_concept, term)
+    # is_user_concept: 0 for user's concepts (to prioritize them), 1 for others
     def get_concept_sort_key(concept):
-        timestamps = []
-        if concept.created_at:
-            timestamps.append(concept.created_at)
-        if concept.updated_at:
-            timestamps.append(concept.updated_at)
-        # Also check cards for this concept
-        concept_cards = session.exec(
-            select(Card).where(Card.concept_id == concept.id)
-        ).all()
-        for card in concept_cards:
-            if card.created_at:
-                timestamps.append(card.created_at)
-            if card.updated_at:
-                timestamps.append(card.updated_at)
-        max_timestamp = max(timestamps) if timestamps else datetime.min.replace(tzinfo=timezone.utc)
-        # Use negative timestamp for descending order (most recent first), then term for ascending alphabetical (A to Z)
-        return (-max_timestamp.timestamp(), (concept.term or "").lower() if concept.term else "")
+        is_user_concept = 0 if (request.user_id is not None and concept.user_id == request.user_id) else 1
+        term = (concept.term or "").lower() if concept.term else ""
+        return (is_user_concept, term)
     
-    concepts.sort(key=get_concept_sort_key, reverse=False)  # Explicitly set to False to ensure ascending order for terms
+    concepts.sort(key=get_concept_sort_key, reverse=False)
     
     concepts_processed = 0
     cards_created = 0

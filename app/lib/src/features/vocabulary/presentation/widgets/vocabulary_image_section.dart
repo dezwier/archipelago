@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../data/vocabulary_service.dart';
 import '../../domain/paired_vocabulary_item.dart';
 
 class VocabularyImageSection extends StatelessWidget {
@@ -43,7 +42,7 @@ class VocabularyImageSection extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: _buildImage(context, firstImageUrl, 1, showDeleteButton: false),
+      child: _buildImage(context, firstImageUrl, 1, showDeleteButton: false, showCenterEditButton: true),
     );
   }
 
@@ -129,7 +128,7 @@ class VocabularyImageSection extends StatelessWidget {
     );
   }
 
-  Widget _buildImage(BuildContext context, String url, int imageIndex, {bool showDeleteButton = true}) {
+  Widget _buildImage(BuildContext context, String url, int imageIndex, {bool showDeleteButton = true, bool showCenterEditButton = false}) {
     return Stack(
       children: [
         Container(
@@ -201,6 +200,32 @@ class VocabularyImageSection extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        if (showCenterEditButton)
+          Positioned.fill(
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    // No functionality yet
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.edit,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
       ],
