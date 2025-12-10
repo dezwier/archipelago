@@ -9,7 +9,6 @@ import 'language_lemma_widget.dart';
 import 'vocabulary_image_section.dart';
 import 'vocabulary_action_buttons.dart';
 import 'concept_info_widget.dart';
-import 'regenerate_language_dialog.dart';
 
 class VocabularyDetailDrawer extends StatefulWidget {
   final PairedVocabularyItem item;
@@ -56,86 +55,6 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
     });
   }
 
-  Future<void> _handleRegenerate() async {
-    // Load available languages
-    final languages = await LanguageService.getLanguages();
-    if (languages.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No languages available')),
-      );
-      return;
-    }
-
-    // Show language selection dialog
-    if (!mounted) return;
-    final selectedLanguages = await RegenerateLanguageDialog.show(context, languages);
-    
-    if (selectedLanguages == null || selectedLanguages.isEmpty) {
-      return; // User cancelled or didn't select any languages
-    }
-
-    // Show loading indicator
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-
-    try {
-      print('=== REGENERATE CARDS REQUEST ===');
-      print('Concept ID: ${widget.item.conceptId}');
-      print('Selected Languages: $selectedLanguages');
-      
-      final result = await FlashcardService.generateCardsForConcept(
-        conceptId: widget.item.conceptId,
-        languages: selectedLanguages,
-      );
-
-      print('=== REGENERATE CARDS RESPONSE ===');
-      print('Result: $result');
-      print('Success: ${result['success']}');
-      print('Message: ${result['message']}');
-
-      if (!mounted) return;
-      Navigator.of(context).pop(); // Close loading dialog
-
-      if (result['success'] == true) {
-        // Notify parent to refresh the item
-        widget.onItemUpdated?.call(widget.item);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cards regenerated successfully')),
-        );
-      } else {
-        final errorMessage = result['message'] as String? ?? 'Failed to regenerate cards';
-        print('Error message: $errorMessage');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Theme.of(context).colorScheme.error,
-            duration: const Duration(seconds: 5), // Show error longer
-          ),
-        );
-      }
-    } catch (e, stackTrace) {
-      print('=== REGENERATE CARDS EXCEPTION ===');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
-      if (!mounted) return;
-      Navigator.of(context).pop(); // Close loading dialog
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error regenerating cards: ${e.toString()}'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          duration: const Duration(seconds: 5), // Show error longer
-        ),
-      );
-    }
-  }
 
   @override
   void dispose() {
@@ -192,7 +111,7 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                         },
                         onSave: _handleSave,
                         onCancel: _handleCancel,
-                        onRegenerate: _handleRegenerate,
+                        onRegenerate: null, // Removed generate all button
                         onDelete: () {
                           widget.onDelete?.call();
                         },
@@ -233,7 +152,7 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                               },
                               onSave: _handleSave,
                               onCancel: _handleCancel,
-                              onRegenerate: _handleRegenerate,
+                              onRegenerate: null, // Removed generate all button
                               onDelete: () {
                                 widget.onDelete?.call();
                               },
@@ -484,9 +403,31 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
     });
 
     try {
-      final result = await FlashcardService.generateCardsForConcept(
+      // Get concept term, description, and part_of_speech
+      final term = widget.item.conceptTerm ?? widget.item.sourceCard?.translation ?? '';
+      final description = widget.item.conceptDescription;
+      final partOfSpeech = widget.item.partOfSpeech;
+      
+      if (term.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _retrievingLanguages.remove(languageCode);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Concept term is missing'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      final result = await FlashcardService.generateLemma(
+        term: term,
+        targetLanguage: languageCode,
+        description: description,
+        partOfSpeech: partOfSpeech,
         conceptId: widget.item.conceptId,
-        languages: [languageCode],
       );
 
       if (!mounted) return;

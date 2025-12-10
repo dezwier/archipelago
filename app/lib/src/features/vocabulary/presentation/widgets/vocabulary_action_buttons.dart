@@ -51,26 +51,30 @@ class VocabularyActionButtons extends StatelessWidget {
         // Calculate if buttons fit, if not, reduce size further
         final buttonWidth = 36.0;
         final spacing = 4.0;
-        final totalWidth = (buttonWidth * 3) + (spacing * 2);
+        // Calculate total width based on number of visible buttons
+        final buttonCount = 2 + (onRegenerate != null ? 1 : 0);
+        final totalWidth = (buttonWidth * buttonCount) + (spacing * (buttonCount - 1));
         
         // If buttons don't fit, use smaller size
         final useSmallButtons = constraints.maxWidth < totalWidth && constraints.maxWidth > 0;
         final actualButtonWidth = useSmallButtons ? 32.0 : 36.0;
         final actualIconSize = useSmallButtons ? 16.0 : 18.0;
         
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            _buildSquareIconButton(
-              context,
-              icon: Icons.edit,
-              tooltip: 'Edit',
-              onPressed: onEdit,
-              buttonWidth: actualButtonWidth,
-              iconSize: actualIconSize,
-            ),
-            SizedBox(width: useSmallButtons ? 2 : 4),
+        final buttons = <Widget>[
+          _buildSquareIconButton(
+            context,
+            icon: Icons.edit,
+            tooltip: 'Edit',
+            onPressed: onEdit,
+            buttonWidth: actualButtonWidth,
+            iconSize: actualIconSize,
+          ),
+        ];
+        
+        // Only show regenerate button if onRegenerate is provided
+        if (onRegenerate != null) {
+          buttons.add(SizedBox(width: useSmallButtons ? 2 : 4));
+          buttons.add(
             _buildSquareIconButton(
               context,
               icon: Icons.auto_fix_high,
@@ -79,16 +83,25 @@ class VocabularyActionButtons extends StatelessWidget {
               buttonWidth: actualButtonWidth,
               iconSize: actualIconSize,
             ),
-            SizedBox(width: useSmallButtons ? 2 : 4),
-            _buildSquareIconButton(
-              context,
-              icon: Icons.delete,
-              tooltip: 'Delete',
-              onPressed: onDelete,
-              buttonWidth: actualButtonWidth,
-              iconSize: actualIconSize,
-            ),
-          ],
+          );
+        }
+        
+        buttons.add(SizedBox(width: useSmallButtons ? 2 : 4));
+        buttons.add(
+          _buildSquareIconButton(
+            context,
+            icon: Icons.delete,
+            tooltip: 'Delete',
+            onPressed: onDelete,
+            buttonWidth: actualButtonWidth,
+            iconSize: actualIconSize,
+          ),
+        );
+        
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: buttons,
         );
       },
     );

@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 import hashlib
-from sqlalchemy import UniqueConstraint, Column, String as SAString
+from sqlalchemy import Column, String as SAString
 
 
 class UserCardStatus(str, Enum):
@@ -91,9 +91,9 @@ class Language(SQLModel, table=True):
 class Card(SQLModel, table=True):
     """Card table - language-specific representation of a concept."""
     __tablename__ = "card"
-    __table_args__ = (
-        UniqueConstraint('concept_id', 'language_code', 'term', name='uq_card_concept_language_term'),
-    )
+    # Note: Unique constraint is enforced via case-insensitive functional index
+    # uq_card_concept_language_term_ci on (concept_id, language_code, LOWER(TRIM(term)))
+    # This prevents duplicates like "Abandon" and "abandon"
     
     id: Optional[int] = Field(default=None, primary_key=True)
     concept_id: int = Field(foreign_key="concept.id")

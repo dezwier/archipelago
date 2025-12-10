@@ -1,211 +1,137 @@
 """
 Helper functions for generating LLM prompts.
 """
-from typing import List, Optional
+from typing import Optional
 
 
-def build_concept_context(
+def generate_lemma_system_instruction(
     term: str,
-    part_of_speech: Optional[str],
     description: Optional[str] = None,
-    core_meaning_en: Optional[str] = None,
-    excluded_senses: Optional[List[str]] = None
-) -> tuple[str, str, str]:
+    part_of_speech: Optional[str] = None
+) -> str:
     """
-    Build the shared context components for concept prompts.
-    This function is used by both generate_concept_prompt and generate_card_translation_system_instruction.
+    Generate the system instruction for lemma generation.
+    This provides reusable context that can be sent once and reused for multiple languages.
     
     Args:
-        term: The term
-        part_of_speech: Part of speech (optional)
-        description: Existing description (for existing concepts)
-        core_meaning_en: Core meaning in English (for new concepts)
-        excluded_senses: List of excluded senses (for new concepts)
+        term: The term to translate (can be a single word, phrase, or full sentence)
+        description: Optional description/context for the term
+        part_of_speech: Optional part of speech (will be inferred if not provided)
         
     Returns:
-        Tuple of (part_of_speech_text, meaning_instruction, excluded_text)
+        The system instruction string
     """
     # Handle part of speech
     part_of_speech_text = ""
     if part_of_speech:
         part_of_speech_text = f"\nPart of speech: {part_of_speech}"
     else:
-        part_of_speech_text = "\nPart of speech: NOT PROVIDED - You must infer the part of speech from the term itself. Analyze the term to determine if it's a noun, verb, adjective, adverb, etc."
+        part_of_speech_text = "\nPart of speech: NOT PROVIDED - You must infer the part of speech from the term itself. The term can be a single word, a phrase, or a full sentence. For single words, determine if it's a noun, verb, adjective, adverb, etc. For phrases or sentences, use 'Saying' or 'Sentence' as appropriate."
     
-    # Handle meaning/description
-    meaning_instruction = ""
+    # Handle description/context
+    description_text = ""
     if description:
-        # For existing concepts with description
-        meaning_instruction = f"\n\nCRITICAL: The term \"{term}\" may have multiple meanings, but you MUST use ONLY the specific meaning provided in the Description above. Ignore all other meanings this term might have. Your translation and description must reflect ONLY this exact semantic meaning."
-    elif core_meaning_en:
-        # For new concepts with provided core meaning
-        meaning_instruction = f"\nCore meaning in English: {core_meaning_en}\nUse this exact meaning for all language cards."
+        description_text = f"\nDescription/Context: {description}\n\nCRITICAL: The term \"{term}\" may have multiple meanings, but you MUST use ONLY the specific meaning provided in the Description above. Ignore all other meanings this term might have. Your translation and description must reflect ONLY this exact semantic meaning."
     else:
-        # For new concepts without core meaning
-        meaning_instruction = "\nIMPORTANT: No core meaning was provided. You must infer ONE specific semantic meaning for this term based on its part of speech and common usage. Choose the most common or primary meaning. All cards across all languages MUST represent this exact same semantic concept."
+        description_text = "\nIMPORTANT: No description was provided. You must infer ONE specific semantic meaning for this term. For single words, choose the most common or primary meaning. For phrases or sentences, understand the action or concept being expressed."
     
-    # Handle excluded senses (only for new concepts)
-    excluded_text = ""
-    if excluded_senses:
-        excluded_text = f"\nExcluded senses (do not include these meanings): {', '.join(excluded_senses)}"
-    
-    return part_of_speech_text, meaning_instruction, excluded_text
+    system_instruction = f"""You are a language learning assistant. Your task is to generate lemmas (translations and card data) for language learning flashcards.
 
+Context for the current term:
+Term: {term}{part_of_speech_text}{description_text}
 
-def generate_concept_prompt(
-    term: str,
-    part_of_speech: Optional[str],
-    core_meaning_en: Optional[str],
-    excluded_senses: List[str],
-    languages: List[str]
-) -> str:
-    """
-    Generate the prompt for the LLM to create a new concept with cards.
-    
-    Args:
-        term: The term to generate concept for
-        part_of_speech: Part of speech (optional - will be inferred if not provided)
-        core_meaning_en: Core meaning in English (optional)
-        excluded_senses: List of excluded senses
-        languages: List of language codes
-        
-    Returns:
-        The prompt string
-    """
-    # Build shared context components
-    part_of_speech_instruction, core_meaning_instruction, excluded_text = build_concept_context(
-        term=term,
-        part_of_speech=part_of_speech,
-        core_meaning_en=core_meaning_en,
-        excluded_senses=excluded_senses
-    )
-    
-    prompt = f"""You are a language learning assistant. Generate concept and card data for the term "{term}".{part_of_speech_instruction}{core_meaning_instruction}{excluded_text}
+The term can be:
+- A single word (e.g., "hello", "run", "beautiful")
+- A phrase (e.g., "how are you", "good morning", "thank you very much")
+- A full sentence (e.g., "I love you", "Where is the bathroom?", "Can you help me?")
 
-Generate data for the following languages: {', '.join(languages)}
-
-Return ONLY valid JSON in this exact format (no markdown, no explanations):
-{{
-  "concept": {{
-    "description": "string describing the concept in English (the core semantic meaning)",
-    "frequency_bucket": "very high | high | medium | low | very low"
-  }},
-  "cards": [
-    {{
-      "language_code": "en",
-      "term": "string (use infinitive for verbs)",
-      "ipa": "string or null (use standard IPA symbols)",
-      "description": "string (REQUIRED - in the target language, do NOT translate from English)",
-      "gender": "masculine | feminine | neuter | null (for languages with gender)",
-      "article": "string or null (for languages with articles)",
-      "plural_form": "string or null (for nouns)",
-      "verb_type": "string or null (for verbs)",
-      "auxiliary_verb": "string or null (for verbs in languages like French)",
-      "register": "neutral | formal | informal | slang | null"
-    }}
-  ]
-}}
+When given a target language, you must:
+1. Translate the term accurately to the target language (for phrases/sentences, translate naturally, not word-for-word)
+2. Generate a description in the target language:
+   - For single words: Provide a lemma definition (what the word means)
+   - For phrases/sentences: Describe the action, situation, or meaning being expressed
+   - Write naturally in the target language, do NOT translate word-for-word from English
+3. Provide IPA pronunciation using standard IPA symbols
+4. Include language-specific fields ONLY when applicable:
+   - For SINGLE WORDS: Include gender, article, plural_form, verb_type, auxiliary_verb when applicable
+   - For PHRASES/SENTENCES: These fields should be null (they don't apply to multi-word expressions)
+5. Use null for non-applicable fields
+6. Always return valid JSON in the specified format
 
 IMPORTANT - Valid values:
 - part_of_speech (if inferring): Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence
-- frequency_bucket: Must be one of: very high, high, medium, low, very low
-- gender: Must be one of: masculine, feminine, neuter, or null
+- gender: Must be one of: masculine, feminine, neuter, or null (only for single words)
+- register: Must be one of: neutral, formal, informal, slang, or null
 
 Rules:
-1. Generate exactly one card per requested language
-2. CRITICAL: All cards must express the EXACT SAME core semantic meaning across all languages
-3. If no core meaning was provided, infer ONE specific meaning and ensure ALL language cards represent that same meaning consistently
-4. If part of speech was not provided, you must infer it from the term - analyze the term's form, context, and common usage patterns. The part of speech must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence
-5. Use infinitive form for verbs
-6. Use null for non-applicable fields
-7. IPA must use standard IPA symbols
-8. Descriptions should be in the target language, not translated from English
-9. All cards must represent the same semantic concept - consistency across languages is essential
-10. The concept description should clearly define the single semantic meaning that all cards share
-11. frequency_bucket must be exactly one of: "very high", "high", "medium", "low", or "very low"
-12. gender must be exactly one of: "masculine", "feminine", "neuter", or null
-13. REQUIRED FIELDS: Both "term" and "description" are REQUIRED for each card - they cannot be missing, empty, or null"""
-    
-    return prompt
-
-
-def generate_card_translation_system_instruction(
-    term: str,
-    description: Optional[str],
-    part_of_speech: Optional[str]
-) -> str:
-    """
-    Generate a system instruction that provides context once per concept.
-    This context is reused for all language translations.
-    
-    Args:
-        term: The English term to translate
-        description: The English description of the concept
-        part_of_speech: Part of speech
-        
-    Returns:
-        The system instruction string
-    """
-    # Build shared context components
-    part_of_speech_text, meaning_instruction, _ = build_concept_context(
-        term=term,
-        part_of_speech=part_of_speech,
-        description=description
-    )
-    
-    description_text = ""
-    if description:
-        description_text = f"\nDescription: {description}"
-    
-    system_instruction = f"""You are a language learning assistant. Your task is to translate terms and generate card data for language learning flashcards.
-
-Context for the current concept:
-Term: {term}{part_of_speech_text}{description_text}{meaning_instruction}
-
-When asked to translate to a specific language, you must:
-1. Translate the term accurately to the target language
-2. Generate a description in the target language (do NOT translate word-for-word from English, write naturally in the target language)
-3. Provide IPA pronunciation
-4. Include language-specific fields (gender, article, plural_form, verb_type, auxiliary_verb, register) when applicable
-5. Use null for non-applicable fields
-6. Always return valid JSON in the specified format"""
+1. The term can be a single word, phrase, OR full sentence - handle all appropriately
+2. For single words that are verbs: Use infinitive form
+3. For phrases/sentences: Translate naturally and idiomatically, preserving the meaning
+4. Fields "term", "description", and "ipa" are REQUIRED and cannot be null or empty
+5. For phrases/sentences: Set gender, article, plural_form, verb_type, and auxiliary_verb to null
+6. The description should explain what the term means or what action/situation it expresses"""
     
     return system_instruction
 
 
-def generate_card_translation_user_prompt(target_language: str) -> str:
+def generate_lemma_user_prompt(target_language: str) -> str:
     """
-    Generate a simple user prompt for translating to a specific language.
-    This is used with the system instruction to avoid repeating context.
-    
-    This function is shared and reused by both the generate screen and dictionary screen.
+    Generate the user prompt for a specific target language.
+    This is a simple prompt that just specifies the target language and expected output format.
+    The system instruction provides all the context about the term.
     
     Args:
-        target_language: Target language code
+        target_language: Target language code to translate to
         
     Returns:
         The user prompt string
     """
     prompt = f"""Translate to {target_language.upper()} and return ONLY valid JSON in this exact format (no markdown, no explanations):
 {{
-  "term": "string (the translation in {target_language.upper()}, use infinitive for verbs)",
+  "term": "string (the translation in {target_language.upper()}. For single words that are verbs, use infinitive form. For phrases/sentences, translate naturally and idiomatically)",
   "ipa": "string or null (pronunciation in standard IPA symbols)",
-  "description": "string (REQUIRED - generate a description in {target_language.upper()}, do NOT translate from English, write naturally in {target_language.upper()})",
-  "gender": "masculine | feminine | neuter | null (for languages with gender)",
-  "article": "string or null (for languages with articles)",
-  "plural_form": "string or null (for nouns)",
-  "verb_type": "string or null (for verbs)",
-  "auxiliary_verb": "string or null (for verbs in languages like French)",
+  "description": "string (REQUIRED - generate a description in {target_language.upper()}, do NOT translate from English, write naturally in {target_language.upper()}. For single words: provide a definition. For phrases/sentences: describe the action or meaning being expressed)",
+  "gender": "masculine | feminine | neuter | null (ONLY for single words in languages with gender, null for phrases/sentences)",
+  "article": "string or null (ONLY for single words in languages with articles, null for phrases/sentences)",
+  "plural_form": "string or null (ONLY for single-word nouns, null for phrases/sentences)",
+  "verb_type": "string or null (ONLY for single-word verbs, null for phrases/sentences)",
+  "auxiliary_verb": "string or null (ONLY for single-word verbs in languages like French, null for phrases/sentences)",
   "register": "neutral | formal | informal | slang | null"
 }}
 
 IMPORTANT:
-- Translate the term into {target_language.upper()}
-- Generate a description in {target_language.upper()} (IMPORTANT: write the description naturally in {target_language.upper()}, do not translate word-for-word from English)
-- The description should be a lemma definition of the term in {target_language.upper()}
-- Provide IPA pronunciation
-- Include gender, article, plural_form, and register if applicable for the language. Use null for non-applicable fields
-- Fields "term", "description", "ipa" are REQUIRED and cannot be null or empty"""
+- If the term is a phrase or sentence, set gender, article, plural_form, verb_type, and auxiliary_verb to null
+- These fields only apply to single words, not to multi-word expressions"""
     
     return prompt
+
+
+def generate_lemma_prompt(
+    term: str,
+    target_language: str,
+    description: Optional[str] = None,
+    part_of_speech: Optional[str] = None
+) -> tuple[str, str]:
+    """
+    Generate both system instruction and user prompt for lemma generation.
+    This is a convenience function that returns both for single-call scenarios.
+    
+    Args:
+        term: The term to translate (can be a single word, phrase, or full sentence)
+        target_language: Target language code to translate to
+        description: Optional description/context for the term
+        part_of_speech: Optional part of speech (will be inferred if not provided)
+        
+    Returns:
+        Tuple of (system_instruction, user_prompt)
+    """
+    system_instruction = generate_lemma_system_instruction(
+        term=term,
+        description=description,
+        part_of_speech=part_of_speech
+    )
+    
+    user_prompt = generate_lemma_user_prompt(target_language=target_language)
+    
+    return system_instruction, user_prompt
 

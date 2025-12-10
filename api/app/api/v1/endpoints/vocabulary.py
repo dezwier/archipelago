@@ -331,8 +331,8 @@ async def get_vocabulary(
                 target_card=target_card_response,
                 images=concept_images,
                 part_of_speech=concept.part_of_speech,
-                concept_term=concept.term,
-                concept_description=concept.description,
+                concept_term=concept.term if concept.term and concept.term.strip() else None,
+                concept_description=concept.description if concept.description and concept.description.strip() else None,
                 concept_level=concept.level.value if concept.level else None,
             )
         )

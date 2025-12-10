@@ -3,6 +3,55 @@ from typing import Optional, List
 from datetime import datetime
 
 
+def normalize_part_of_speech(v: Optional[str]) -> Optional[str]:
+    """
+    Normalize part_of_speech value to proper case.
+    Handles both lowercase and capitalized inputs.
+    
+    Args:
+        v: Part of speech value (can be None, lowercase, or capitalized)
+        
+    Returns:
+        Normalized part of speech value in proper case, or None
+    """
+    if v is None:
+        return None
+    
+    v_normalized = v.strip()
+    if not v_normalized:
+        return None
+    
+    # Map of lowercase to proper case
+    pos_map = {
+        'noun': 'Noun',
+        'verb': 'Verb',
+        'adjective': 'Adjective',
+        'adverb': 'Adverb',
+        'pronoun': 'Pronoun',
+        'preposition': 'Preposition',
+        'conjunction': 'Conjunction',
+        'determiner / article': 'Determiner / Article',
+        'determiner': 'Determiner / Article',
+        'article': 'Determiner / Article',
+        'interjection': 'Interjection',
+        'saying': 'Saying',
+        'sentence': 'Sentence'
+    }
+    
+    # Try to normalize
+    v_lower = v_normalized.lower()
+    if v_lower in pos_map:
+        return pos_map[v_lower]
+    
+    # If already in proper format, check if valid
+    valid_values = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence']
+    if v_normalized in valid_values:
+        return v_normalized
+    
+    # If not found, raise error
+    raise ValueError(f"part_of_speech must be one of: {', '.join(valid_values)}. Got: {v}")
+
+
 class CardResponse(BaseModel):
     """Card response schema."""
     id: int
@@ -233,12 +282,8 @@ class CreateConceptRequest(BaseModel):
     @field_validator('part_of_speech')
     @classmethod
     def validate_part_of_speech(cls, v):
-        """Validate part_of_speech field if provided."""
-        if v is not None:
-            valid_values = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence']
-            if v not in valid_values:
-                raise ValueError(f"part_of_speech must be one of: {', '.join(valid_values)}. Got: {v}")
-        return v
+        """Validate and normalize part_of_speech field if provided."""
+        return normalize_part_of_speech(v)
 
 
 class LLMConceptData(BaseModel):
@@ -336,12 +381,8 @@ class ConfirmConceptRequest(BaseModel):
     @field_validator('part_of_speech')
     @classmethod
     def validate_part_of_speech(cls, v):
-        """Validate part_of_speech field if provided."""
-        if v is not None:
-            valid_values = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence']
-            if v not in valid_values:
-                raise ValueError(f"part_of_speech must be one of: {', '.join(valid_values)}. Got: {v}")
-        return v
+        """Validate and normalize part_of_speech field if provided."""
+        return normalize_part_of_speech(v)
 
 
 class CreateConceptOnlyRequest(BaseModel):
@@ -389,4 +430,54 @@ class GenerateCardsForConceptsResponse(BaseModel):
 class ConceptCountResponse(BaseModel):
     """Response schema for concept count endpoints."""
     count: int = Field(..., description="Total count of concepts")
+
+
+class GenerateLemmaRequest(BaseModel):
+    """Request schema for generating a lemma (translation)."""
+    term: str = Field(..., min_length=1, description="The term to translate (can be a single word or phrase)")
+    target_language: str = Field(..., min_length=1, description="Language code to translate to")
+    description: Optional[str] = Field(None, description="Optional description/context for the term")
+    part_of_speech: Optional[str] = Field(None, description="Optional part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence. If not provided, will be inferred.")
+    concept_id: Optional[int] = Field(None, description="Optional concept ID. If provided, the generated lemma will be saved as a card for this concept.")
+    
+    @field_validator('part_of_speech')
+    @classmethod
+    def validate_part_of_speech(cls, v):
+        """Validate and normalize part_of_speech field if provided."""
+        return normalize_part_of_speech(v)
+
+
+class GenerateLemmaResponse(BaseModel):
+    """Response schema for lemma generation."""
+    term: str = Field(..., description="The translated term in the target language")
+    ipa: Optional[str] = Field(None, description="IPA pronunciation")
+    description: str = Field(..., description="Description in the target language")
+    gender: Optional[str] = Field(None, description="Gender (masculine, feminine, neuter, or null)")
+    article: Optional[str] = Field(None, description="Article (for languages with articles)")
+    plural_form: Optional[str] = Field(None, description="Plural form (for nouns)")
+    verb_type: Optional[str] = Field(None, description="Verb type (for verbs)")
+    auxiliary_verb: Optional[str] = Field(None, description="Auxiliary verb (for verbs in languages like French)")
+    register: Optional[str] = Field(None, description="Register (neutral, formal, informal, slang, or null)")
+    token_usage: Optional[dict] = Field(None, description="Token usage information from LLM call")
+
+
+class GenerateLemmasBatchRequest(BaseModel):
+    """Request schema for generating multiple lemmas for the same term in different languages."""
+    term: str = Field(..., min_length=1, description="The term to translate (can be a single word or phrase)")
+    target_languages: List[str] = Field(..., min_items=1, description="List of language codes to translate to")
+    description: Optional[str] = Field(None, description="Optional description/context for the term")
+    part_of_speech: Optional[str] = Field(None, description="Optional part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence. If not provided, will be inferred.")
+    concept_id: Optional[int] = Field(None, description="Optional concept ID. If provided, the generated lemmas will be saved as cards for this concept.")
+    
+    @field_validator('part_of_speech')
+    @classmethod
+    def validate_part_of_speech(cls, v):
+        """Validate and normalize part_of_speech field if provided."""
+        return normalize_part_of_speech(v)
+
+
+class GenerateLemmasBatchResponse(BaseModel):
+    """Response schema for batch lemma generation."""
+    lemmas: List[GenerateLemmaResponse] = Field(..., description="List of generated lemmas, one per target language")
+    total_token_usage: Optional[dict] = Field(None, description="Total token usage across all generations")
 

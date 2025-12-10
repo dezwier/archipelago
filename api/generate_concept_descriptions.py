@@ -1,6 +1,6 @@
 """
 Script to generate lemma definitions/descriptions for concepts using Gemini API in batches.
-Retrieves concepts without descriptions and generates definitions for them.
+Retrieves concepts without descriptions and with missing user_id, then generates definitions for them.
 If a term+PoS combination has multiple distinct meanings, creates duplicate records.
 """
 import sys
@@ -296,7 +296,8 @@ Return only valid JSON, no markdown formatting, no code blocks, no additional te
 
 def get_concepts_without_descriptions() -> List[Concept]:
     """
-    Retrieve all concepts that have a term and part_of_speech but no description.
+    Retrieve all concepts that have a term and part_of_speech but no description,
+    and only those with a missing user_id.
     
     Returns:
         List of Concept objects
@@ -305,10 +306,11 @@ def get_concepts_without_descriptions() -> List[Concept]:
         statement = select(Concept).where(
             Concept.term.isnot(None),
             Concept.part_of_speech.isnot(None),
-            (Concept.description.is_(None) | (Concept.description == ""))
+            (Concept.description.is_(None) | (Concept.description == "")),
+            Concept.user_id.is_(None)
         )
         concepts = session.exec(statement).all()
-        logger.info("Found %d concepts without descriptions", len(concepts))
+        logger.info("Found %d concepts without descriptions and missing user_id", len(concepts))
         return list(concepts)
 
 

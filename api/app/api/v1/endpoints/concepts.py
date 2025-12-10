@@ -7,8 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, exists
 from datetime import datetime, timezone
 from app.core.database import get_session
-from app.models.models import Concept, Image, Card
-from app.schemas.flashcard import ConceptResponse, ImageResponse, ConceptCountResponse
+from app.models.models import Concept, Image, Card, Language
+from app.schemas.flashcard import (
+    ConceptResponse, ImageResponse, ConceptCountResponse, CreateConceptOnlyRequest,
+    GetConceptsWithMissingLanguagesRequest, ConceptsWithMissingLanguagesResponse,
+    ConceptWithMissingLanguages
+)
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -62,6 +66,62 @@ async def get_concepts(
         result.append(ConceptResponse(**concept_dict))
     
     return result
+
+
+@router.post("/generate-only", response_model=ConceptResponse, status_code=status.HTTP_201_CREATED)
+async def create_concept_only(
+    request: CreateConceptOnlyRequest,
+    session: Session = Depends(get_session)
+):
+    """
+    Create a concept without generating cards.
+    
+    This endpoint creates a concept with just the term, description, topic_id, and user_id.
+    No cards are generated - this is useful for creating concepts that will have cards
+    generated later.
+    
+    Args:
+        request: CreateConceptOnlyRequest with term, description, topic_id, and user_id
+    
+    Returns:
+        The created concept
+    """
+    # Validate term is not empty
+    term_stripped = request.term.strip()
+    if not term_stripped:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Term cannot be empty"
+        )
+    
+    # Create the concept
+    concept = Concept(
+        term=term_stripped,
+        description=request.description.strip() if request.description else None,
+        topic_id=request.topic_id,
+        user_id=request.user_id,
+        created_at=datetime.now(timezone.utc)
+    )
+    
+    try:
+        session.add(concept)
+        session.commit()
+        session.refresh(concept)
+    except IntegrityError as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Failed to create concept: constraint violation"
+        ) from e
+    
+    # Load images for the concept (will be empty for new concept)
+    images = session.exec(
+        select(Image).where(Image.concept_id == concept.id)
+    ).all()
+    
+    concept_dict = ConceptResponse.model_validate(concept).model_dump()
+    concept_dict['images'] = [ImageResponse.model_validate(img) for img in images]
+    return ConceptResponse(**concept_dict)
 
 
 @router.get("/by-term", response_model=List[ConceptResponse])
@@ -442,4 +502,101 @@ async def get_concept_count_with_cards_for_languages(
             count += 1
     
     return ConceptCountResponse(count=count)
+
+
+@router.post("/missing-languages", response_model=ConceptsWithMissingLanguagesResponse)
+async def get_concepts_with_missing_languages(
+    request: GetConceptsWithMissingLanguagesRequest,
+    session: Session = Depends(get_session)
+):
+    """
+    Get concepts that are missing cards for the specified languages.
+    
+    This endpoint returns concepts that don't have cards for one or more of the
+    specified languages. It's useful for identifying concepts that need card
+    generation for specific languages.
+    
+    Args:
+        request: GetConceptsWithMissingLanguagesRequest with languages and optional user_id
+    
+    Returns:
+        ConceptsWithMissingLanguagesResponse with list of concepts and their missing languages
+    """
+    # Validate languages
+    if not request.languages or len(request.languages) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one language must be specified"
+        )
+    
+    # Validate all language codes exist
+    language_codes = [lang.lower() for lang in request.languages]
+    languages = session.exec(
+        select(Language).where(Language.code.in_(language_codes))
+    ).all()
+    
+    found_codes = {lang.code.lower() for lang in languages}
+    missing_codes = set(language_codes) - found_codes
+    if missing_codes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid language codes: {', '.join(sorted(missing_codes))}"
+        )
+    
+    # Get all concepts
+    # Prioritize concepts with filled user_id, then sort alphabetically (case-insensitive)
+    concepts_with_user_id = session.exec(
+        select(Concept).where(Concept.user_id.isnot(None))
+        .order_by(func.lower(Concept.term).asc())
+    ).all()
+    
+    concepts_without_user_id = session.exec(
+        select(Concept).where(Concept.user_id.is_(None))
+        .order_by(func.lower(Concept.term).asc())
+    ).all()
+    
+    # Combine: concepts with user_id first, then those without, both alphabetically sorted
+    all_concepts = list(concepts_with_user_id) + list(concepts_without_user_id)
+    
+    # Get all cards for the specified languages
+    cards = session.exec(
+        select(Card).where(Card.language_code.in_(language_codes))
+    ).all()
+    
+    # Group cards by concept_id and language_code
+    concept_cards_map = {}
+    for card in cards:
+        if card.concept_id not in concept_cards_map:
+            concept_cards_map[card.concept_id] = set()
+        concept_cards_map[card.concept_id].add(card.language_code.lower())
+    
+    # Find concepts with missing languages
+    result_concepts = []
+    for concept in all_concepts:
+        # Get cards for this concept (if any)
+        concept_card_languages = concept_cards_map.get(concept.id, set())
+        
+        # Find which languages are missing
+        missing_languages = []
+        for lang_code in language_codes:
+            if lang_code not in concept_card_languages:
+                missing_languages.append(lang_code)
+        
+        # Only include concepts that are missing at least one language
+        if missing_languages:
+            # Load images for the concept
+            images = session.exec(
+                select(Image).where(Image.concept_id == concept.id)
+            ).all()
+            
+            concept_dict = ConceptResponse.model_validate(concept).model_dump()
+            concept_dict['images'] = [ImageResponse.model_validate(img) for img in images]
+            concept_response = ConceptResponse(**concept_dict)
+            
+            result_concepts.append(ConceptWithMissingLanguages(
+                concept=concept_response,
+                missing_languages=missing_languages
+            ))
+    
+    return ConceptsWithMissingLanguagesResponse(concepts=result_concepts)
 
