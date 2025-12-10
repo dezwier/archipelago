@@ -188,6 +188,8 @@ class VocabularyResponse(BaseModel):
     page_size: int = Field(..., description="Number of items per page")
     has_next: bool = Field(..., description="Whether there are more pages")
     has_previous: bool = Field(..., description="Whether there are previous pages")
+    concepts_with_all_visible_languages: Optional[int] = Field(None, description="Count of concepts that have cards for all visible languages")
+    total_concepts_with_term: Optional[int] = Field(None, description="Total number of concepts with at least a term (not affected by search)")
 
 
 class UpdateCardRequest(BaseModel):
@@ -382,4 +384,9 @@ class GenerateCardsForConceptsResponse(BaseModel):
     total_concepts: int = Field(..., description="Total number of concepts to process")
     session_cost_usd: float = Field(default=0.0, description="Total cost in USD for this generation session")
     total_tokens: int = Field(default=0, description="Total tokens used in this session")
+
+
+class ConceptCountResponse(BaseModel):
+    """Response schema for concept count endpoints."""
+    count: int = Field(..., description="Total count of concepts")
 

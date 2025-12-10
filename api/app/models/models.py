@@ -62,7 +62,7 @@ class Concept(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     topic_id: Optional[int] = Field(default=None, foreign_key="topic.id")
     user_id: Optional[int] = Field(default=None, foreign_key="users.id")  # User who created the concept (null for script-created concepts)
-    term: Optional[str] = None  # Former internal_name - English translation for the concept
+    term: str  # Former internal_name - English translation for the concept (mandatory)
     description: Optional[str] = None
     part_of_speech: Optional[str] = None
     frequency_bucket: Optional[str] = None

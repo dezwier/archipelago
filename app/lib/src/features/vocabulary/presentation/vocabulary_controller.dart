@@ -37,8 +37,13 @@ class VocabularyController extends ChangeNotifier {
   String _searchQuery = '';
   Timer? _searchDebounceTimer;
   
-  // Language filter state - used for both filtering concepts and limiting search
-  List<String> _languageCodes = []; // Languages to filter by - only show concepts with terms in these languages, and limit search to these languages
+  // Language filter state - used only for limiting search (does not filter which concepts are shown)
+  List<String> _languageCodes = []; // Languages to limit search to (does not filter which concepts are shown)
+  List<String> _visibleLanguageCodes = []; // Visible languages - used to calculate count of concepts with cards for all visible languages
+  int? _conceptsWithAllVisibleLanguages; // Count of concepts with cards for all visible languages
+  
+  // Concept counts - fetched separately and not affected by search
+  int? _totalConceptCount; // Total count of all concepts (doesn't change during search)
   
   // Getters
   User? get currentUser => _currentUser;
@@ -63,12 +68,30 @@ class VocabularyController extends ChangeNotifier {
   
   // Language filter getters
   List<String> get languageCodes => _languageCodes;
+  int? get conceptsWithAllVisibleLanguages => _conceptsWithAllVisibleLanguages;
+  int? get totalConceptCount => _totalConceptCount;
   
-  // Set language filter (used for both filtering concepts and limiting search)
+  // Set language filter (used for limiting search only, not for filtering concepts)
   void setLanguageCodes(List<String> languageCodes) {
     if (_languageCodes != languageCodes) {
       _languageCodes = languageCodes;
-      _loadUserAndVocabulary(reset: true, showLoading: false);
+      // Only reload if there's a search query, otherwise just update the filter for future searches
+      if (_searchQuery.trim().isNotEmpty) {
+        _loadUserAndVocabulary(reset: true, showLoading: false);
+      }
+    }
+  }
+  
+  // Set visible languages (used to calculate count of concepts with cards for all visible languages)
+  void setVisibleLanguageCodes(List<String> visibleLanguageCodes) {
+    if (_visibleLanguageCodes != visibleLanguageCodes) {
+      _visibleLanguageCodes = visibleLanguageCodes;
+      // Reload count for visible languages (doesn't affect vocabulary items)
+      _loadConceptCountWithCardsForLanguages();
+      // Only reload vocabulary if there's a search query (to update search results)
+      if (_searchQuery.trim().isNotEmpty) {
+        _loadUserAndVocabulary(reset: true, showLoading: false);
+      }
     }
   }
   
@@ -160,14 +183,19 @@ class VocabularyController extends ChangeNotifier {
         _targetLanguageCode = null;
       }
 
-      // Load vocabulary - call API even when logged out (English-only)
+      // Load concept count for visible languages if not already loaded or if languages changed
+      if (_visibleLanguageCodes.isNotEmpty) {
+        _loadConceptCountWithCardsForLanguages();
+      }
+      
+      // Load vocabulary - pass visible languages to get cards for those languages only
       final result = await VocabularyService.getVocabulary(
         userId: _currentUser?.id,
         page: 1,
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
-        languageCodes: _languageCodes,
+        visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
       );
 
       if (result['success'] == true) {
@@ -181,6 +209,7 @@ class VocabularyController extends ChangeNotifier {
         _currentPage = result['page'] as int;
         _totalItems = result['total'] as int;
         _hasNextPage = result['has_next'] as bool;
+        // Don't update counts from vocabulary endpoint - they're fetched separately
         if (showLoading) {
           _isLoading = false;
         }
@@ -216,7 +245,7 @@ class VocabularyController extends ChangeNotifier {
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
-        languageCodes: _languageCodes,
+        visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
       );
 
       if (result['success'] == true) {
@@ -316,10 +345,56 @@ class VocabularyController extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh() => _loadUserAndVocabulary(reset: true);
+  Future<void> refresh() {
+    // Reload concept counts when refreshing
+    _loadConceptCountTotal();
+    if (_visibleLanguageCodes.isNotEmpty) {
+      _loadConceptCountWithCardsForLanguages();
+    }
+    return _loadUserAndVocabulary(reset: true);
+  }
 
   void initialize() {
+    // Load concept counts separately (not affected by search)
+    _loadConceptCountTotal();
+    // Load vocabulary
     _loadUserAndVocabulary();
+  }
+  
+  /// Load total concept count (doesn't change during search)
+  Future<void> _loadConceptCountTotal() async {
+    try {
+      final result = await VocabularyService.getConceptCountTotal();
+      if (result['success'] == true) {
+        _totalConceptCount = result['count'] as int;
+        notifyListeners();
+      }
+    } catch (e) {
+      // Silently fail - don't show error for count
+      print('Error loading total concept count: $e');
+    }
+  }
+  
+  /// Load concept count with cards for all visible languages
+  Future<void> _loadConceptCountWithCardsForLanguages() async {
+    if (_visibleLanguageCodes.isEmpty) {
+      _conceptsWithAllVisibleLanguages = null;
+      notifyListeners();
+      return;
+    }
+    
+    try {
+      final result = await VocabularyService.getConceptCountWithCardsForLanguages(
+        languageCodes: _visibleLanguageCodes,
+      );
+      if (result['success'] == true) {
+        _conceptsWithAllVisibleLanguages = result['count'] as int;
+        notifyListeners();
+      }
+    } catch (e) {
+      // Silently fail - don't show error for count
+      print('Error loading concept count with cards for languages: $e');
+    }
   }
 
   /// Start generating descriptions for cards that don't have them
@@ -445,7 +520,7 @@ class VocabularyController extends ChangeNotifier {
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim(),
-        languageCodes: _languageCodes,
+        visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
       );
       
       if (result['success'] == true) {
@@ -459,6 +534,7 @@ class VocabularyController extends ChangeNotifier {
         _currentPage = result['page'] as int;
         _totalItems = result['total'] as int;
         _hasNextPage = result['has_next'] as bool;
+        // Don't update counts from vocabulary endpoint - they're fetched separately
         _errorMessage = null;
       } else {
         // On error, keep previous items visible

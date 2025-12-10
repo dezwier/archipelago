@@ -34,6 +34,9 @@ async def generate_cards_for_concepts(
     Retrieves LLM output, validates it, and writes cards directly to the database.
     No preview step - cards are created immediately.
     
+    Processes concepts that have (term, description, and part_of_speech present) OR (user_id present).
+    This matches the filtering logic in the missing-languages endpoint.
+    
     Execution flow:
     1. Validate concept IDs and language codes exist
     2. For each concept, generate prompt and call LLM
@@ -92,17 +95,17 @@ async def generate_cards_for_concepts(
     # Process each concept
     for concept in concepts:
         try:
-            # Filter: Only process concepts with filled term, description, and part_of_speech
-            if not concept.term or not concept.term.strip():
-                logger.info(f"Skipping concept {concept.id}: term is missing or empty")
-                continue
+            # Filter: Process concepts with (term, description, and part_of_speech present) OR (user_id present)
+            # This matches the filtering logic in the missing-languages endpoint
+            has_complete_data = (
+                concept.term and concept.term.strip() and
+                concept.description and concept.description.strip() and
+                concept.part_of_speech and concept.part_of_speech.strip()
+            )
+            has_user_id = concept.user_id is not None
             
-            if not concept.description or not concept.description.strip():
-                logger.info(f"Skipping concept {concept.id} ({concept.term}): description is missing or empty")
-                continue
-            
-            if not concept.part_of_speech or not concept.part_of_speech.strip():
-                logger.info(f"Skipping concept {concept.id} ({concept.term}): part_of_speech is missing or empty")
+            if not (has_complete_data or has_user_id):
+                logger.info(f"Skipping concept {concept.id}: missing required fields (needs term+description+pos OR user_id)")
                 continue
             
             # Get existing cards for this concept

@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../../../../features/profile/domain/language.dart';
+import '../../../../features/profile/domain/user.dart';
 import '../../data/flashcard_service.dart';
 import '../../data/card_generation_background_service.dart';
 import 'language_selection_widget.dart';
@@ -40,12 +43,36 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
   @override
   void initState() {
     super.initState();
-    // Default to all languages if available
-    _updateSelectedLanguages();
-    // Load existing task state if any
-    _loadExistingTaskState();
+    // Load existing task state first, then set defaults if no task exists
+    _loadExistingTaskState().then((_) {
+      // Only set defaults if no existing task was loaded
+      _loadUserAndUpdateSelection();
+    });
     // Start polling for progress updates
     _startProgressPolling();
+  }
+
+  Future<void> _loadUserAndUpdateSelection() async {
+    // Only set defaults if selection is still empty (no existing task was loaded)
+    if (_selectedLanguages.isNotEmpty) {
+      return;
+    }
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString('current_user');
+      if (userJson != null) {
+        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+        final user = User.fromJson(userMap);
+        _updateSelectedLanguages(user);
+      } else {
+        // If no user, default to all languages
+        _updateSelectedLanguages(null);
+      }
+    } catch (e) {
+      // If loading fails, default to all languages
+      _updateSelectedLanguages(null);
+    }
   }
 
   @override
@@ -136,17 +163,46 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
     super.didUpdateWidget(oldWidget);
     // Update selection when languages are loaded
     if (oldWidget.languages.isEmpty && widget.languages.isNotEmpty) {
-      _updateSelectedLanguages();
+      _loadUserAndUpdateSelection();
     }
   }
 
-  void _updateSelectedLanguages() {
-    // Select all languages by default if none are selected or if languages just loaded
-    if (widget.languages.isNotEmpty && 
-        (_selectedLanguages.isEmpty || _selectedLanguages.length != widget.languages.length)) {
-      setState(() {
-        _selectedLanguages = widget.languages.map((lang) => lang.code).toList();
-      });
+  void _updateSelectedLanguages(User? user) {
+    // Select native and learning languages by default if user is available
+    if (widget.languages.isNotEmpty) {
+      if (user != null) {
+        // Select only native and learning languages that exist in available languages
+        final availableLanguageCodes = widget.languages.map((lang) => lang.code).toSet();
+        final defaultLanguages = <String>[];
+        if (user.langNative.isNotEmpty && availableLanguageCodes.contains(user.langNative)) {
+          defaultLanguages.add(user.langNative);
+        }
+        if (user.langLearning != null && 
+            user.langLearning!.isNotEmpty && 
+            availableLanguageCodes.contains(user.langLearning!)) {
+          defaultLanguages.add(user.langLearning!);
+        }
+        
+        // Only update if we have valid languages and selection is empty or was all languages
+        if (defaultLanguages.isNotEmpty && 
+            (_selectedLanguages.isEmpty || _selectedLanguages.length == widget.languages.length)) {
+          setState(() {
+            _selectedLanguages = defaultLanguages;
+          });
+        } else if (defaultLanguages.isEmpty && _selectedLanguages.isEmpty) {
+          // If user languages don't exist in available languages, fall back to all languages
+          setState(() {
+            _selectedLanguages = widget.languages.map((lang) => lang.code).toList();
+          });
+        }
+      } else {
+        // If no user, select all languages by default
+        if (_selectedLanguages.isEmpty || _selectedLanguages.length != widget.languages.length) {
+          setState(() {
+            _selectedLanguages = widget.languages.map((lang) => lang.code).toList();
+          });
+        }
+      }
     }
   }
 

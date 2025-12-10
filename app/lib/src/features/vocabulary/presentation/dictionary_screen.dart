@@ -87,8 +87,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
             _languagesToShow.add(targetCode);
           }
         });
-        // Set language filter to visible languages
+        // Set language filter to visible languages (for search only)
         _controller.setLanguageCodes(_getVisibleLanguageCodes());
+        // Set visible languages for count calculation
+        _controller.setVisibleLanguageCodes(_getVisibleLanguageCodes());
       }
     } else if (_controller.currentUser == null && _allLanguages.isNotEmpty) {
       // When logged out, default to English only
@@ -101,8 +103,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           // Initialize with English only
           _languagesToShow = ['en'];
         });
-        // Set language filter to visible languages
+        // Set language filter to visible languages (for search only)
         _controller.setLanguageCodes(_getVisibleLanguageCodes());
+        // Set visible languages for count calculation
+        _controller.setVisibleLanguageCodes(_getVisibleLanguageCodes());
       }
     }
   }
@@ -129,9 +133,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     // Update defaults based on user state
     _onControllerChanged();
     
-    // Set language filter after visibility is initialized
+    // Set language filter after visibility is initialized (for search only)
     if (_languagesToShow.isNotEmpty) {
       _controller.setLanguageCodes(_getVisibleLanguageCodes());
+      // Set visible languages for count calculation
+      _controller.setVisibleLanguageCodes(_getVisibleLanguageCodes());
     }
   }
 
@@ -190,19 +196,18 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                   child: CustomScrollView(
               controller: _scrollController,
               slivers: [
-                // Phrase count at top of cards
-                if (_controller.filteredItems.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 4.0),
-                      child: Text(
-                        _buildPhraseCountText(),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
+                // Concept count at top of cards
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 4.0),
+                    child: Text(
+                      _buildPhraseCountText(),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ),
+                ),
                 // Paired vocabulary items
                 if (_controller.filteredItems.isNotEmpty)
                   SliverList(
@@ -318,10 +323,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
 
   String _buildPhraseCountText() {
-    final displayCount = _controller.searchQuery.isNotEmpty
-        ? _controller.filteredItems.length
-        : _controller.totalItems;
-    return '$displayCount ${displayCount == 1 ? 'lemma' : 'lemmas'}';
+    // Always show total concepts count (doesn't change during search)
+    final totalConcepts = _controller.totalConceptCount ?? 0;
+    
+    // Get count from API (calculated for visible languages, changes when visibility changes)
+    final conceptsWithAllCards = _controller.conceptsWithAllVisibleLanguages ?? 0;
+    
+    return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $conceptsWithAllCards complete lemmas';
   }
 
   List<String> _getVisibleLanguageCodes() {
@@ -536,9 +544,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                   _languagesToShow.remove(language.code);
                                 }
                                 
-                                // Update language filter to only show concepts with terms in visible languages
-                                // This will also limit search to these languages
+                                // Update language filter for search (concepts are no longer filtered by visibility)
                                 _controller.setLanguageCodes(_getVisibleLanguageCodes());
+                                // Update visible languages for count calculation
+                                _controller.setVisibleLanguageCodes(_getVisibleLanguageCodes());
                                 
                                 // Re-search if there's an active search query (will use updated language codes)
                                 if (_controller.searchQuery.isNotEmpty) {

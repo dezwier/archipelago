@@ -41,7 +41,7 @@ class LanguageSelectionWidget extends StatelessWidget {
     }
 
     // Calculate number of rows needed (5 per row)
-    const int itemsPerRow = 5;
+    const int itemsPerRow = 8;
     final int rowCount = (languages.length / itemsPerRow).ceil();
 
     return Column(
@@ -102,7 +102,7 @@ class LanguageSelectionWidget extends StatelessWidget {
     final isSelected = selectedLanguages.contains(language.code);
 
     return SizedBox(
-      height: 40,
+      height: 35,
       child: OutlinedButton(
         onPressed: () => _toggleLanguage(language.code),
         style: OutlinedButton.styleFrom(

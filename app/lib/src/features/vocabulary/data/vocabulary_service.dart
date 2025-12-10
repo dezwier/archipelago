@@ -14,6 +14,7 @@ class VocabularyService {
   /// - 'page_size': int (if successful) - items per page
   /// - 'has_next': bool (if successful) - whether there are more pages
   /// - 'has_previous': bool (if successful) - whether there are previous pages
+  /// - 'concepts_with_all_visible_languages': int? (if successful) - count of concepts with cards for all visible languages
   /// - 'message': String (if error)
   static Future<Map<String, dynamic>> getVocabulary({
     int? userId,
@@ -21,7 +22,7 @@ class VocabularyService {
     int pageSize = 20,
     String sortBy = 'alphabetical', // Options: 'alphabetical', 'recent'
     String? search,
-    List<String> languageCodes = const [],
+    List<String> visibleLanguageCodes = const [],
   }) async {
     final queryParams = <String, String>{
       'page': page.toString(),
@@ -38,9 +39,9 @@ class VocabularyService {
       queryParams['search'] = search;
     }
     
-    // Add languages parameter - filters concepts to show only those with terms in these languages, and limits search to these languages
-    if (languageCodes.isNotEmpty) {
-      queryParams['languages'] = languageCodes.join(',');
+    // Add visible_languages parameter - filters cards to these languages only
+    if (visibleLanguageCodes.isNotEmpty) {
+      queryParams['visible_languages'] = visibleLanguageCodes.join(',');
     }
     
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/vocabulary').replace(
@@ -64,6 +65,8 @@ class VocabularyService {
           'page_size': data['page_size'] as int,
           'has_next': data['has_next'] as bool,
           'has_previous': data['has_previous'] as bool,
+          'concepts_with_all_visible_languages': data['concepts_with_all_visible_languages'] as int?,
+          'total_concepts_with_term': data['total_concepts_with_term'] as int?,
         };
       } else {
         // Try to parse error response as JSON, but handle non-JSON responses
@@ -341,6 +344,111 @@ class VocabularyService {
       return {
         'success': false,
         'message': 'Error canceling task: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get the total count of all concepts.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'count': int (if successful) - total count of concepts
+  /// - 'message': String (if error)
+  static Future<Map<String, dynamic>> getConceptCountTotal() async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/count/total');
+    
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'count': data['count'] as int,
+        };
+      } else {
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to get concept count',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to get concept count: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error getting concept count: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get the count of concepts that have cards with terms for all of the given languages.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'count': int (if successful) - count of concepts with cards for all languages
+  /// - 'message': String (if error)
+  static Future<Map<String, dynamic>> getConceptCountWithCardsForLanguages({
+    required List<String> languageCodes,
+  }) async {
+    if (languageCodes.isEmpty) {
+      return {
+        'success': false,
+        'message': 'At least one language code must be provided',
+      };
+    }
+
+    final queryParams = <String, String>{
+      'languages': languageCodes.join(','),
+    };
+
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/count/with-cards-for-languages').replace(
+      queryParameters: queryParams,
+    );
+    
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'count': data['count'] as int,
+        };
+      } else {
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to get concept count',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to get concept count: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error getting concept count: ${e.toString()}',
       };
     }
   }
