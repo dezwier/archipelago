@@ -23,7 +23,7 @@ class VocabularyController extends ChangeNotifier {
   static const int _pageSize = 20;
   
   // Sort state
-  SortOption _sortOption = SortOption.timeCreatedRecentFirst;
+  SortOption _sortOption = SortOption.alphabetical;
   String? _alphabeticalSortLanguageCode; // Language code to sort by when alphabetical is selected
   
   // Description generation state
@@ -41,6 +41,17 @@ class VocabularyController extends ChangeNotifier {
   List<String> _languageCodes = []; // Languages to limit search to (does not filter which concepts are shown)
   List<String> _visibleLanguageCodes = []; // Visible languages - used to calculate count of concepts with cards for all visible languages
   int? _conceptsWithAllVisibleLanguages; // Count of concepts with cards for all visible languages
+  
+  // Own lemmas filter state
+  bool _ownLemmasFilter = false; // Filter for own user id cards
+  
+  // Topic, level, and POS filter state
+  Set<int> _selectedTopicIds = {}; // Selected topic IDs (empty means all topics) - will be set to all topics when loaded
+  Set<String> _selectedLevels = {'A1', 'A2', 'B1', 'B2', 'C1', 'C2'}; // Selected CEFR levels (default: all selected)
+  Set<String> _selectedPartOfSpeech = {
+    'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
+    'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence'
+  }; // Selected part of speech values (default: all selected)
   
   // Concept counts - fetched separately and not affected by search
   int? _totalConceptCount; // Total count of all concepts (doesn't change during search)
@@ -71,6 +82,14 @@ class VocabularyController extends ChangeNotifier {
   int? get conceptsWithAllVisibleLanguages => _conceptsWithAllVisibleLanguages;
   int? get totalConceptCount => _totalConceptCount;
   
+  // Own lemmas filter getter
+  bool get ownLemmasFilter => _ownLemmasFilter;
+  
+  // Topic, level, and POS filter getters
+  Set<int> get selectedTopicIds => _selectedTopicIds;
+  Set<String> get selectedLevels => _selectedLevels;
+  Set<String> get selectedPartOfSpeech => _selectedPartOfSpeech;
+  
   // Set language filter (used for limiting search only, not for filtering concepts)
   void setLanguageCodes(List<String> languageCodes) {
     if (_languageCodes != languageCodes) {
@@ -92,6 +111,42 @@ class VocabularyController extends ChangeNotifier {
       if (_searchQuery.trim().isNotEmpty) {
         _loadUserAndVocabulary(reset: true, showLoading: false);
       }
+    }
+  }
+  
+  // Set own lemmas filter
+  void setOwnLemmasFilter(bool ownLemmas) {
+    if (_ownLemmasFilter != ownLemmas) {
+      _ownLemmasFilter = ownLemmas;
+      // Reload vocabulary when filter changes
+      _loadUserAndVocabulary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set topic filter
+  void setTopicFilter(Set<int> topicIds) {
+    if (_selectedTopicIds != topicIds) {
+      _selectedTopicIds = topicIds;
+      // Reload vocabulary when filter changes
+      _loadUserAndVocabulary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set level filter
+  void setLevelFilter(Set<String> levels) {
+    if (_selectedLevels != levels) {
+      _selectedLevels = levels;
+      // Reload vocabulary when filter changes
+      _loadUserAndVocabulary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set part of speech filter
+  void setPartOfSpeechFilter(Set<String> partOfSpeech) {
+    if (_selectedPartOfSpeech != partOfSpeech) {
+      _selectedPartOfSpeech = partOfSpeech;
+      // Reload vocabulary when filter changes
+      _loadUserAndVocabulary(reset: true, showLoading: false);
     }
   }
   
@@ -196,6 +251,10 @@ class VocabularyController extends ChangeNotifier {
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
         visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
+        ownUserId: _ownLemmasFilter && _currentUser != null ? _currentUser!.id : null, // Pass own user id filter
+        topicIds: _selectedTopicIds.isNotEmpty ? _selectedTopicIds.toList() : null, // Pass topic filter
+        levels: _selectedLevels.isNotEmpty ? _selectedLevels.toList() : null, // Pass level filter
+        partOfSpeech: _selectedPartOfSpeech.isNotEmpty ? _selectedPartOfSpeech.toList() : null, // Pass POS filter
       );
 
       if (result['success'] == true) {
@@ -246,6 +305,10 @@ class VocabularyController extends ChangeNotifier {
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
         visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
+        ownUserId: _ownLemmasFilter && _currentUser != null ? _currentUser!.id : null, // Pass own user id filter
+        topicIds: _selectedTopicIds.isNotEmpty ? _selectedTopicIds.toList() : null, // Pass topic filter
+        levels: _selectedLevels.isNotEmpty ? _selectedLevels.toList() : null, // Pass level filter
+        partOfSpeech: _selectedPartOfSpeech.isNotEmpty ? _selectedPartOfSpeech.toList() : null, // Pass POS filter
       );
 
       if (result['success'] == true) {
@@ -521,6 +584,10 @@ class VocabularyController extends ChangeNotifier {
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim(),
         visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
+        ownUserId: _ownLemmasFilter && _currentUser != null ? _currentUser!.id : null, // Pass own user id filter
+        topicIds: _selectedTopicIds.isNotEmpty ? _selectedTopicIds.toList() : null, // Pass topic filter
+        levels: _selectedLevels.isNotEmpty ? _selectedLevels.toList() : null, // Pass level filter
+        partOfSpeech: _selectedPartOfSpeech.isNotEmpty ? _selectedPartOfSpeech.toList() : null, // Pass POS filter
       );
       
       if (result['success'] == true) {

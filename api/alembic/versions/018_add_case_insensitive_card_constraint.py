@@ -67,3 +67,5 @@ def downgrade() -> None:
         ['concept_id', 'language_code', 'term']
     )
 
+
+

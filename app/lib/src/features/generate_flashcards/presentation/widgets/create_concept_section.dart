@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../../data/topic_service.dart' show Topic, TopicService;
 import '../../data/flashcard_service.dart';
 import '../../../profile/domain/user.dart';
+import 'topic_drawer.dart';
 
 class CreateConceptSection extends StatefulWidget {
   const CreateConceptSection({super.key});
@@ -16,24 +17,23 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
   final _formKey = GlobalKey<FormState>();
   final _termController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _topicController = TextEditingController();
   final _termFocusNode = FocusNode();
   final _descriptionFocusNode = FocusNode();
-  final _topicFocusNode = FocusNode();
   
   List<Topic> _topics = [];
   bool _isCreatingConcept = false;
+  bool _isLoadingTopics = false;
   Topic? _selectedTopic;
+  int? _userId;
 
   @override
   void initState() {
     super.initState();
-    _loadTopics();
+    _loadUserId();
     
     // Prevent fields from requesting focus automatically
     _termFocusNode.canRequestFocus = false;
     _descriptionFocusNode.canRequestFocus = false;
-    _topicFocusNode.canRequestFocus = false;
     
     // Reset canRequestFocus when focus is lost
     _termFocusNode.addListener(() {
@@ -54,51 +54,88 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
         });
       }
     });
-    _topicFocusNode.addListener(() {
-      if (!_topicFocusNode.hasFocus) {
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted && !_topicFocusNode.hasFocus) {
-            _topicFocusNode.canRequestFocus = false;
-          }
-        });
-      }
-    });
   }
 
   @override
   void dispose() {
     _termController.dispose();
     _descriptionController.dispose();
-    _topicController.dispose();
     _termFocusNode.dispose();
     _descriptionFocusNode.dispose();
-    _topicFocusNode.dispose();
     super.dispose();
   }
 
+  Future<void> _loadUserId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString('current_user');
+      if (userJson != null) {
+        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+        final user = User.fromJson(userMap);
+        setState(() {
+          _userId = user.id;
+        });
+        _loadTopics();
+      }
+    } catch (e) {
+      // If loading user fails, still try to load topics without filter
+      _loadTopics();
+    }
+  }
+
   Future<void> _loadTopics() async {
-    final topics = await TopicService.getTopics();
+    setState(() {
+      _isLoadingTopics = true;
+    });
+    
+    final topics = await TopicService.getTopics(userId: _userId);
     
     setState(() {
       _topics = topics;
+      // Set the most recent topic as default (first in list since sorted by created_at desc)
+      if (_topics.isNotEmpty && _selectedTopic == null) {
+        _selectedTopic = _topics.first;
+      }
+      _isLoadingTopics = false;
     });
   }
 
-  Future<void> _createOrGetTopic(String topicName) async {
-    if (topicName.trim().isEmpty) {
-      return;
-    }
-
-    final topic = await TopicService.createTopic(topicName);
-    if (topic != null) {
-      setState(() {
-        _selectedTopic = topic;
-        // Add to topics list if not already there
-        if (!_topics.any((t) => t.id == topic.id)) {
-          _topics.add(topic);
-        }
-      });
-    }
+  void _openTopicDrawer(BuildContext context) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Topic Selection',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return TopicDrawer(
+          topics: _topics,
+          initialSelectedTopic: _selectedTopic,
+          userId: _userId,
+          onTopicSelected: (Topic? topic) {
+            setState(() {
+              _selectedTopic = topic;
+            });
+          },
+          onTopicCreated: () async {
+            // Reload topics after creation
+            await _loadTopics();
+          },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1.0, 0.0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeInOut,
+          )),
+          child: child,
+        );
+      },
+    );
   }
 
   Future<void> _handleCreateConcept() async {
@@ -115,47 +152,17 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
         return;
       }
       
-      // Create or get topic if provided
-      int? topicId;
-      if (_topicController.text.trim().isNotEmpty) {
-        await _createOrGetTopic(_topicController.text);
-        if (_selectedTopic == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to create or get topic'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-        topicId = _selectedTopic!.id;
-      }
-      
       setState(() {
         _isCreatingConcept = true;
       });
-      
-      // Load user ID if available
-      int? userId;
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final userJson = prefs.getString('current_user');
-        if (userJson != null) {
-          final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-          final user = User.fromJson(userMap);
-          userId = user.id;
-        }
-      } catch (e) {
-        // If loading user fails, continue without user_id
-      }
       
       final result = await FlashcardService.createConceptOnly(
         term: term,
         description: _descriptionController.text.trim().isNotEmpty 
             ? _descriptionController.text.trim() 
             : null,
-        topicId: topicId,
-        userId: userId,
+        topicId: _selectedTopic?.id,
+        userId: _userId,
       );
       
       setState(() {
@@ -172,10 +179,7 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
         // Clear form after successful creation
         _termController.clear();
         _descriptionController.clear();
-        _topicController.clear();
-        setState(() {
-          _selectedTopic = null;
-        });
+        // Keep the selected topic (don't reset it)
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -231,6 +235,26 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
                   hintText: 'Enter the word or phrase',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
@@ -261,6 +285,26 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
                   hintText: 'Enter the core meaning in English (optional)',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).brightness == Brightness.light
+                          ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)
+                          : Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
@@ -269,60 +313,83 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
               ),
               const SizedBox(height: 12),
 
-              // Topic field
-              TextFormField(
-                controller: _topicController,
-                focusNode: _topicFocusNode,
-                autofocus: false,
-                enabled: true,
-                textCapitalization: TextCapitalization.sentences,
-                onTap: () {
-                  _topicFocusNode.canRequestFocus = true;
-                  _topicFocusNode.requestFocus();
-                },
-                onChanged: (value) {
-                  // Clear selected topic when user types
-                  setState(() {
-                    _selectedTopic = null;
-                  });
-                },
-                decoration: InputDecoration(
-                  labelText: 'Topic (optional)',
-                  hintText: 'Enter topic name (will be created if new)',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
-                maxLines: 1,
-              ),
-              const SizedBox(height: 16),
-              
-              // Create Concept button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isCreatingConcept ? null : _handleCreateConcept,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: _isCreatingConcept
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              // Topic selector and Create button on same line
+              Row(
+                children: [
+                  // Topic selector button
+                  Expanded(
+                    child: _isLoadingTopics
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        : OutlinedButton(
+                            onPressed: () => _openTopicDrawer(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(
+                                  color: Theme.of(context).brightness == Brightness.light
+                                      ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)
+                                      : Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              alignment: Alignment.centerLeft,
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _selectedTopic != null
+                                        ? (_selectedTopic!.name.isNotEmpty
+                                            ? _selectedTopic!.name[0].toUpperCase() + _selectedTopic!.name.substring(1)
+                                            : _selectedTopic!.name)
+                                        : 'Select Topic Island',
+                                    style: TextStyle(
+                                      color: _selectedTopic != null
+                                          ? Theme.of(context).colorScheme.onSurface
+                                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                ),
+                              ],
+                            ),
                           ),
-                        )
-                      : const Text(
-                          'Create Concept',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  
+                  // Create Concept button
+                  ElevatedButton(
+                    onPressed: _isCreatingConcept ? null : _handleCreateConcept,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: _isCreatingConcept
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            'Create Concept',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -331,4 +398,5 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
     );
   }
 }
+
 

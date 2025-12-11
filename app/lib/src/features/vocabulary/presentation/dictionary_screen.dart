@@ -11,6 +11,10 @@ import 'widgets/vocabulary_detail_dialog.dart';
 import '../../../utils/language_emoji.dart';
 import '../../profile/data/language_service.dart';
 import '../../profile/domain/language.dart';
+import '../../generate_flashcards/data/topic_service.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../profile/domain/user.dart';
 
 class DictionaryScreen extends StatefulWidget {
   const DictionaryScreen({super.key});
@@ -26,6 +30,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   final GlobalKey _sortButtonKey = GlobalKey();
   final GlobalKey _filterButtonKey = GlobalKey();
+  final GlobalKey _filteringButtonKey = GlobalKey();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
   // Filter state - all enabled by default
@@ -33,7 +38,28 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   List<String> _languagesToShow = []; // Ordered list of languages to show
   bool _showDescription = true;
   bool _showExtraInfo = true;
+  bool _ownLemmas = false; // Filter for own user id cards
   List<Language> _allLanguages = [];
+  List<Topic> _allTopics = [];
+  bool _isLoadingTopics = false;
+  
+  // CEFR levels
+  static const List<String> _cefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  
+  // Part of speech values (from the schema)
+  static const List<String> _partOfSpeechValues = [
+    'Noun',
+    'Verb',
+    'Adjective',
+    'Adverb',
+    'Pronoun',
+    'Preposition',
+    'Conjunction',
+    'Determiner / Article',
+    'Interjection',
+    'Saying',
+    'Sentence',
+  ];
   
 
   @override
@@ -43,6 +69,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     _controller.initialize();
     _scrollController.addListener(_onScroll);
     _loadLanguages();
+    _loadTopics();
     
     // Listen to controller changes to update language visibility when user loads
     _controller.addListener(_onControllerChanged);
@@ -138,6 +165,38 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       _controller.setLanguageCodes(_getVisibleLanguageCodes());
       // Set visible languages for count calculation
       _controller.setVisibleLanguageCodes(_getVisibleLanguageCodes());
+    }
+  }
+  
+  Future<void> _loadTopics() async {
+    setState(() {
+      _isLoadingTopics = true;
+    });
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString('current_user');
+      int? userId;
+      if (userJson != null) {
+        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+        final user = User.fromJson(userMap);
+        userId = user.id;
+      }
+      
+      final topics = await TopicService.getTopics(userId: userId);
+      
+      setState(() {
+        _allTopics = topics;
+        _isLoadingTopics = false;
+        // Set all topics as selected by default
+        if (topics.isNotEmpty && _controller.selectedTopicIds.isEmpty) {
+          _controller.setTopicFilter(topics.map((t) => t.id).toSet());
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingTopics = false;
+      });
     }
   }
 
@@ -289,13 +348,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
               // Filter button positioned above search bar
               Positioned(
                 right: 16,
-                bottom: MediaQuery.of(context).padding.bottom + 80,
+                bottom: MediaQuery.of(context).padding.bottom + 70,
                 child: FloatingActionButton.small(
                   key: _filterButtonKey,
                   heroTag: 'filter_fab',
                   onPressed: () => _showFilterMenu(context),
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
                   child: const Icon(Icons.visibility),
                   tooltip: 'Show/Hide',
                 ),
@@ -303,15 +362,29 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
               // Sort button positioned above filter button
               Positioned(
                 right: 16,
-                bottom: MediaQuery.of(context).padding.bottom + 140,
+                bottom: MediaQuery.of(context).padding.bottom + 120,
                 child: FloatingActionButton.small(
                   key: _sortButtonKey,
                   heroTag: 'sort_fab',
                   onPressed: () => _showSortMenu(context),
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
                   child: const Icon(Icons.sort),
                   tooltip: 'Sort',
+                ),
+              ),
+              // Filtering button positioned above sort button
+              Positioned(
+                right: 16,
+                bottom: MediaQuery.of(context).padding.bottom + 170,
+                child: FloatingActionButton.small(
+                  key: _filteringButtonKey,
+                  heroTag: 'filtering_fab',
+                  onPressed: () => _showFilteringMenu(context),
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  child: const Icon(Icons.filter_list),
+                  tooltip: 'Filter',
                 ),
               ),
             ],
@@ -473,6 +546,260 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         }
       });
     }
+  }
+
+  void _showFilteringMenu(BuildContext context) {
+    showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Title
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16.0, 12.0, 8.0, 8.0),
+                child: Row(
+                  children: [
+                    Text(
+                      'Filters',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              // Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Own Lemmas filter
+                      StatefulBuilder(
+                        builder: (context, setMenuState) {
+                          return CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            title: const Text('Own Lemmas'),
+                            value: _ownLemmas,
+                            onChanged: (value) {
+                              setMenuState(() {
+                                setState(() {
+                                  _ownLemmas = value ?? false;
+                                  _controller.setOwnLemmasFilter(_ownLemmas);
+                                });
+                              });
+                            },
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      // Topics filter
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
+                        child: Text(
+                          'Topics',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (_isLoadingTopics)
+                        const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_allTopics.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 16.0, bottom: 16.0),
+                          child: Text(
+                            'No topics available',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        )
+                      else
+                        StatefulBuilder(
+                          builder: (context, setMenuState) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 16.0),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _allTopics.map((topic) {
+                                  final isSelected = _controller.selectedTopicIds.contains(topic.id);
+                                  return ElevatedButton(
+                                    onPressed: () {
+                                      setMenuState(() {
+                                        setState(() {
+                                          final newSet = Set<int>.from(_controller.selectedTopicIds);
+                                          if (isSelected) {
+                                            newSet.remove(topic.id);
+                                          } else {
+                                            newSet.add(topic.id);
+                                          }
+                                          _controller.setTopicFilter(newSet);
+                                        });
+                                      });
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: isSelected
+                                          ? Theme.of(context).colorScheme.primaryContainer
+                                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      foregroundColor: isSelected
+                                          ? Theme.of(context).colorScheme.onPrimaryContainer
+                                          : Theme.of(context).colorScheme.onSurface,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    ),
+                                    child: Text(topic.name),
+                                  );
+                                }).toList(),
+                              ),
+                            );
+                          },
+                        ),
+                      const Divider(height: 1),
+                      // Levels filter
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
+                        child: Text(
+                          'CEFR Levels',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      StatefulBuilder(
+                        builder: (context, setMenuState) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16.0),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _cefrLevels.map((level) {
+                                final isSelected = _controller.selectedLevels.contains(level);
+                                return ElevatedButton(
+                                  onPressed: () {
+                                    setMenuState(() {
+                                      setState(() {
+                                        final newSet = Set<String>.from(_controller.selectedLevels);
+                                        if (isSelected) {
+                                          newSet.remove(level);
+                                        } else {
+                                          newSet.add(level);
+                                        }
+                                        _controller.setLevelFilter(newSet);
+                                      });
+                                    });
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isSelected
+                                        ? Theme.of(context).colorScheme.primaryContainer
+                                        : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                    foregroundColor: isSelected
+                                        ? Theme.of(context).colorScheme.onPrimaryContainer
+                                        : Theme.of(context).colorScheme.onSurface,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  ),
+                                  child: Text(level),
+                                );
+                              }).toList(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      // Part of Speech filter
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
+                        child: Text(
+                          'Part of Speech',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      StatefulBuilder(
+                        builder: (context, setMenuState) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16.0),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _partOfSpeechValues.map((pos) {
+                                final isSelected = _controller.selectedPartOfSpeech.contains(pos);
+                                return ElevatedButton(
+                                  onPressed: () {
+                                    setMenuState(() {
+                                      setState(() {
+                                        final newSet = Set<String>.from(_controller.selectedPartOfSpeech);
+                                        if (isSelected) {
+                                          newSet.remove(pos);
+                                        } else {
+                                          newSet.add(pos);
+                                        }
+                                        _controller.setPartOfSpeechFilter(newSet);
+                                      });
+                                    });
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isSelected
+                                        ? Theme.of(context).colorScheme.primaryContainer
+                                        : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                    foregroundColor: isSelected
+                                        ? Theme.of(context).colorScheme.onPrimaryContainer
+                                        : Theme.of(context).colorScheme.onSurface,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  ),
+                                  child: Text(pos),
+                                );
+                              }).toList(),
+                            ),
+                          );
+                        },
+                      ),
+                      // Bottom padding
+                      SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
   }
 
   void _showFilterMenu(BuildContext context) {

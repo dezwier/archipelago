@@ -13,6 +13,7 @@ class PairedVocabularyItem {
   final String? conceptTerm;
   final String? conceptDescription;
   final String? conceptLevel;
+  final String? topicName;
 
   PairedVocabularyItem({
     required this.conceptId,
@@ -27,6 +28,7 @@ class PairedVocabularyItem {
     this.conceptTerm,
     this.conceptDescription,
     this.conceptLevel,
+    this.topicName,
   }) : cards = cards ?? [];
 
   /// Get the first available image URL, or null if no images are available
@@ -72,6 +74,7 @@ class PairedVocabularyItem {
       conceptTerm: json['concept_term'] as String?,
       conceptDescription: json['concept_description'] as String?,
       conceptLevel: json['concept_level'] as String?,
+      topicName: json['topic_name'] as String?,
     );
   }
 }

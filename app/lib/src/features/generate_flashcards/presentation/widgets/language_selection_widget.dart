@@ -47,26 +47,7 @@ class LanguageSelectionWidget extends StatelessWidget {
     return Column(
       children: [
         // "Select All" button
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _toggleAllLanguages,
-            icon: Icon(
-              selectedLanguages.length == languages.length
-                  ? Icons.check_box
-                  : Icons.check_box_outline_blank,
-            ),
-            label: Text(
-              selectedLanguages.length == languages.length
-                  ? 'All Languages Selected'
-                  : 'Select All Languages',
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
         // Language buttons in grid (5 per row)
         for (int row = 0; row < rowCount; row++)
           Padding(
@@ -111,7 +92,7 @@ class LanguageSelectionWidget extends StatelessWidget {
             color: isSelected
                 ? Theme.of(context).colorScheme.primary
                 : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-            width: isSelected ? 2 : 1,
+            width: isSelected ? 1 : 1,
           ),
           backgroundColor: isSelected
               ? Theme.of(context).colorScheme.primaryContainer

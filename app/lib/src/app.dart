@@ -319,7 +319,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                                     children: [
                                       for (int i = 0; i < _languages.length; i += 2)
                                         Padding(
-                                          padding: EdgeInsets.only(bottom: i + 2 < _languages.length ? 0 : 0),
+                                          padding: EdgeInsets.only(bottom: i + 2 < _languages.length ? 2 : 0),
                                           child: Row(
                                             children: [
                                               Expanded(
@@ -384,7 +384,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                                     children: [
                                       for (int i = 0; i < _languages.length; i += 2)
                                         Padding(
-                                          padding: EdgeInsets.only(bottom: i + 2 < _languages.length ? 4 : 0),
+                                          padding: EdgeInsets.only(bottom: i + 2 < _languages.length ? 2 : 0),
                                           child: Row(
                                             children: [
                                               Expanded(

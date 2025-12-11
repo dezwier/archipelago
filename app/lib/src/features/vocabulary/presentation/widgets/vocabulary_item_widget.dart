@@ -131,6 +131,7 @@ class VocabularyItemWidget extends StatelessWidget {
           showDescription: showDescription,
           showExtraInfo: showExtraInfo,
           partOfSpeech: item.partOfSpeech,
+          topicName: item.topicName,
         ),
         // Notes
         if (card.notes != null && card.notes!.isNotEmpty) ...[

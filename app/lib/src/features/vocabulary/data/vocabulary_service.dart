@@ -23,6 +23,10 @@ class VocabularyService {
     String sortBy = 'alphabetical', // Options: 'alphabetical', 'recent'
     String? search,
     List<String> visibleLanguageCodes = const [],
+    int? ownUserId, // Filter for own user id cards
+    List<int>? topicIds, // Filter by topic IDs
+    List<String>? levels, // Filter by CEFR levels (A1, A2, B1, B2, C1, C2)
+    List<String>? partOfSpeech, // Filter by part of speech values
   }) async {
     final queryParams = <String, String>{
       'page': page.toString(),
@@ -42,6 +46,26 @@ class VocabularyService {
     // Add visible_languages parameter - filters cards to these languages only
     if (visibleLanguageCodes.isNotEmpty) {
       queryParams['visible_languages'] = visibleLanguageCodes.join(',');
+    }
+    
+    // Add own_user_id parameter - filters to concepts created by this user
+    if (ownUserId != null) {
+      queryParams['own_user_id'] = ownUserId.toString();
+    }
+    
+    // Add topic_ids parameter - filters to concepts with these topic IDs
+    if (topicIds != null && topicIds.isNotEmpty) {
+      queryParams['topic_ids'] = topicIds.join(',');
+    }
+    
+    // Add levels parameter - filters to concepts with these CEFR levels
+    if (levels != null && levels.isNotEmpty) {
+      queryParams['levels'] = levels.join(',');
+    }
+    
+    // Add part_of_speech parameter - filters to concepts with these part of speech values
+    if (partOfSpeech != null && partOfSpeech.isNotEmpty) {
+      queryParams['part_of_speech'] = partOfSpeech.join(',');
     }
     
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/vocabulary').replace(

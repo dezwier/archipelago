@@ -1,12 +1,12 @@
 """
 Vocabulary endpoints for retrieving paired vocabulary items.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, func, or_
 from sqlalchemy.orm import aliased
-from typing import Optional
+from typing import Optional, List
 from app.core.database import get_session
-from app.models.models import Concept, Card, Image
+from app.models.models import Concept, Card, Image, CEFRLevel
 from app.schemas.flashcard import (
     CardResponse,
     PairedVocabularyItem,
@@ -29,6 +29,10 @@ async def get_vocabulary(
     sort_by: str = "alphabetical",  # Options: "alphabetical", "recent"
     search: Optional[str] = None,  # Optional search query for concept.term and card.term
     visible_languages: Optional[str] = None,  # Comma-separated list of visible language codes - cards are filtered to these languages
+    own_user_id: Optional[int] = None,  # Filter for concepts created by this user (concept.user_id == own_user_id)
+    topic_ids: Optional[str] = None,  # Comma-separated list of topic IDs to filter by
+    levels: Optional[str] = None,  # Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
+    part_of_speech: Optional[str] = None,  # Comma-separated list of part of speech values to filter by
     session: Session = Depends(get_session)
 ):
     """
@@ -42,6 +46,10 @@ async def get_vocabulary(
         sort_by: Sort order - "alphabetical" (default) or "recent" (by created_at, newest first)
         search: Optional search query to filter by concept.term and card.term (for visible languages)
         visible_languages: Comma-separated list of visible language codes - only cards for these languages are returned
+        own_user_id: Filter for concepts created by this user (concept.user_id == own_user_id)
+        topic_ids: Comma-separated list of topic IDs to filter by
+        levels: Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
+        part_of_speech: Comma-separated list of part of speech values to filter by
     """
     # Validate parameters
     if sort_by not in ["alphabetical", "recent"]:
@@ -66,8 +74,54 @@ async def get_vocabulary(
     if visible_languages:
         visible_language_codes = [lang.strip().lower() for lang in visible_languages.split(',') if lang.strip()]
     
+    # Parse topic_ids parameter
+    topic_id_list = None
+    if topic_ids:
+        try:
+            topic_id_list = [int(tid.strip()) for tid in topic_ids.split(',') if tid.strip()]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="topic_ids must be comma-separated integers"
+            )
+    
+    # Parse levels parameter
+    level_list = None
+    if levels:
+        level_strs = [level.strip().upper() for level in levels.split(',') if level.strip()]
+        level_list = []
+        for level_str in level_strs:
+            try:
+                level_list.append(CEFRLevel(level_str))
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid CEFR level: {level_str}. Must be one of: A1, A2, B1, B2, C1, C2"
+                )
+    
+    # Parse part_of_speech parameter
+    pos_list = None
+    if part_of_speech:
+        pos_list = [pos.strip() for pos in part_of_speech.split(',') if pos.strip()]
+    
     # Build base query for concepts - start with all concepts
     concept_query = select(Concept)
+    
+    # Apply own_user_id filter if provided (filter for concepts created by this user)
+    if own_user_id is not None:
+        concept_query = concept_query.where(Concept.user_id == own_user_id)
+    
+    # Apply topic_ids filter if provided
+    if topic_id_list is not None and len(topic_id_list) > 0:
+        concept_query = concept_query.where(Concept.topic_id.in_(topic_id_list))
+    
+    # Apply levels filter if provided
+    if level_list is not None and len(level_list) > 0:
+        concept_query = concept_query.where(Concept.level.in_(level_list))
+    
+    # Apply part_of_speech filter if provided
+    if pos_list is not None and len(pos_list) > 0:
+        concept_query = concept_query.where(Concept.part_of_speech.in_(pos_list))
     
     # Apply search filter at database level if provided
     if search and search.strip():
@@ -323,6 +377,17 @@ async def get_vocabulary(
         source_card_response = visible_cards_list[0] if len(visible_cards_list) > 0 else None
         target_card_response = visible_cards_list[1] if len(visible_cards_list) > 1 else None
         
+        # Get topic name safely
+        topic_name = None
+        if concept.topic_id:
+            # Access topic relationship - SQLModel will lazy load if needed
+            try:
+                if concept.topic:
+                    topic_name = concept.topic.name
+            except Exception:
+                # If topic relationship is not loaded or doesn't exist, topic_name stays None
+                pass
+        
         paired_items.append(
             PairedVocabularyItem(
                 concept_id=concept.id,
@@ -334,6 +399,7 @@ async def get_vocabulary(
                 concept_term=concept.term if concept.term and concept.term.strip() else None,
                 concept_description=concept.description if concept.description and concept.description.strip() else None,
                 concept_level=concept.level.value if concept.level else None,
+                topic_name=topic_name,
             )
         )
     

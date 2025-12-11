@@ -31,16 +31,14 @@ class ConceptInfoWidget extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                Flexible(
-                  child: Text(
-                    item.conceptLevel != null
-                        ? '${item.conceptTerm!}, ${item.conceptLevel!.toUpperCase()}'
-                        : item.conceptTerm!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                    softWrap: true,
+                Text(
+                  item.conceptLevel != null
+                      ? '${item.conceptTerm!}, ${item.conceptLevel!.toUpperCase()}'
+                      : item.conceptTerm!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
+                  softWrap: true,
                 ),
               ],
             ),

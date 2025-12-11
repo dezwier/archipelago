@@ -26,7 +26,7 @@ class LanguageButton extends StatelessWidget {
             color: isSelected
                 ? Theme.of(context).colorScheme.primary
                 : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-            width: isSelected ? 2 : 1,
+            width: isSelected ? 1 : 1,
           ),
           backgroundColor: isSelected
               ? Theme.of(context).colorScheme.primaryContainer

@@ -14,6 +14,7 @@ class LanguageLemmaWidget extends StatefulWidget {
   final bool isEditing;
   final VoidCallback? onTranslationChanged;
   final String? partOfSpeech;
+  final String? topicName;
 
   const LanguageLemmaWidget({
     super.key,
@@ -25,6 +26,7 @@ class LanguageLemmaWidget extends StatefulWidget {
     this.isEditing = false,
     this.onTranslationChanged,
     this.partOfSpeech,
+    this.topicName,
   });
 
   @override
@@ -143,7 +145,7 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Row 1: Term and Play button
+              // Row 1: Term, Topic tag, and Play button
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
@@ -170,6 +172,11 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                             style: _getTitleTextStyle(context),
                           ),
                   ),
+                  // Topic tag
+                  if (!widget.isEditing && widget.topicName != null && widget.topicName!.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    _buildTopicTag(context),
+                  ],
                   // Play audio button - always show
                   if (!widget.isEditing) ...[
                     const SizedBox(width: 6),
@@ -219,26 +226,25 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
               // Row 2: IPA and Tags
               if (!widget.isEditing && widget.showExtraInfo) ...[
                 const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (widget.card.ipa != null && widget.card.ipa!.isNotEmpty) ...[
+                    if (widget.card.ipa != null && widget.card.ipa!.isNotEmpty)
                       Text(
                         '/${widget.card.ipa}/',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontFamily: 'monospace',
                           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                         ),
+                        softWrap: true,
+                        overflow: TextOverflow.visible,
                       ),
-                      const SizedBox(width: 8),
-                    ],
-                    Expanded(
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
+                    if (widget.card.ipa != null && widget.card.ipa!.isNotEmpty) const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
                     if (widget.partOfSpeech != null && widget.partOfSpeech!.isNotEmpty)
                       _buildDictionaryTag(
                         context,
@@ -271,7 +277,6 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                       ),
                         ],
                       ),
-                    ),
                   ],
                 ),
               ],
@@ -293,6 +298,29 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTopicTag(BuildContext context) {
+    final topicName = widget.topicName!;
+    final capitalizedName = topicName.isNotEmpty
+        ? topicName[0].toUpperCase() + topicName.substring(1)
+        : topicName;
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        capitalizedName,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+          color: Theme.of(context).colorScheme.onPrimaryContainer,
+        ),
+      ),
     );
   }
 

@@ -162,6 +162,8 @@ class TopicResponse(BaseModel):
     """Topic response schema."""
     id: int
     name: str
+    description: Optional[str] = None
+    user_id: int
     created_at: str
 
     class Config:
@@ -179,6 +181,7 @@ class PairedVocabularyItem(BaseModel):
     concept_term: Optional[str] = None
     concept_description: Optional[str] = None
     concept_level: Optional[str] = None
+    topic_name: Optional[str] = None
     
     # Backward compatibility: computed fields from images list
     @computed_field
