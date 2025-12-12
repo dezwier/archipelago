@@ -284,24 +284,45 @@ async def generate_cards_for_concept(
                     errors.append(f"Invalid register value for {lang_code}: {llm_data['register']}")
                     continue
             
-            # Check if card already exists
-            existing_card = session.exec(
-                select(Card).where(
-                    Card.concept_id == concept.id,
-                    Card.language_code == lang_code
-                )
-            ).first()
+            # Normalize term (trim whitespace)
+            term = llm_data.get('term')
+            if term:
+                term = term.strip()
             
-            if existing_card:
-                # Delete existing card to avoid unique constraint issues
-                session.delete(existing_card)
-                session.flush()
+            # Check for existing cards with same concept_id, language_code, and term (case-insensitive)
+            # This prevents duplicates and ensures the unique constraint is respected
+            if term:
+                existing_cards = session.exec(
+                    select(Card).where(
+                        Card.concept_id == concept.id,
+                        Card.language_code == lang_code,
+                        func.lower(func.trim(Card.term)) == term.lower()
+                    )
+                ).all()
+                
+                # Delete all matching cards to avoid unique constraint issues
+                for existing_card in existing_cards:
+                    session.delete(existing_card)
+                if existing_cards:
+                    session.flush()
+            else:
+                # If no term, check by concept_id and language_code only
+                existing_card = session.exec(
+                    select(Card).where(
+                        Card.concept_id == concept.id,
+                        Card.language_code == lang_code
+                    )
+                ).first()
+                
+                if existing_card:
+                    session.delete(existing_card)
+                    session.flush()
             
             # Create new card
             card = Card(
                 concept_id=concept.id,
                 language_code=lang_code,
-                term=llm_data.get('term'),
+                term=term,
                 ipa=llm_data.get('ipa'),
                 description=llm_data.get('description'),
                 gender=llm_data.get('gender'),
@@ -500,11 +521,45 @@ async def _generate_cards_for_concepts_list(
                             errors.append(f"Concept {concept.id}, {lang_code}: Invalid register value")
                             continue
                     
+                    # Normalize term (trim whitespace)
+                    term = llm_data.get('term')
+                    if term:
+                        term = term.strip()
+                    
+                    # Check for existing cards with same concept_id, language_code, and term (case-insensitive)
+                    # This prevents duplicates and ensures the unique constraint is respected
+                    if term:
+                        existing_cards = session.exec(
+                            select(Card).where(
+                                Card.concept_id == concept.id,
+                                Card.language_code == lang_code,
+                                func.lower(func.trim(Card.term)) == term.lower()
+                            )
+                        ).all()
+                        
+                        # Delete all matching cards to avoid unique constraint issues
+                        for existing_card in existing_cards:
+                            session.delete(existing_card)
+                        if existing_cards:
+                            session.flush()
+                    else:
+                        # If no term, check by concept_id and language_code only
+                        existing_card = session.exec(
+                            select(Card).where(
+                                Card.concept_id == concept.id,
+                                Card.language_code == lang_code
+                            )
+                        ).first()
+                        
+                        if existing_card:
+                            session.delete(existing_card)
+                            session.flush()
+                    
                     # Create new card
                     card = Card(
                         concept_id=concept.id,
                         language_code=lang_code,
-                        term=llm_data.get('term'),
+                        term=term,
                         ipa=llm_data.get('ipa'),
                         description=llm_data.get('description'),
                         gender=llm_data.get('gender'),

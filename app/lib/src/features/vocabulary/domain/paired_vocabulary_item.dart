@@ -9,11 +9,14 @@ class PairedVocabularyItem {
   final String? imagePath2;
   final String? imagePath3;
   final String? imagePath4;
+  final List<Map<String, dynamic>>? images; // Images array from API
   final String? partOfSpeech;
   final String? conceptTerm;
   final String? conceptDescription;
   final String? conceptLevel;
   final String? topicName;
+  final int? topicId; // Topic ID for image generation
+  final String? topicDescription; // Topic description for image generation
 
   PairedVocabularyItem({
     required this.conceptId,
@@ -24,11 +27,14 @@ class PairedVocabularyItem {
     this.imagePath2,
     this.imagePath3,
     this.imagePath4,
+    this.images,
     this.partOfSpeech,
     this.conceptTerm,
     this.conceptDescription,
     this.conceptLevel,
     this.topicName,
+    this.topicId,
+    this.topicDescription,
   }) : cards = cards ?? [];
 
   /// Get the first available image URL, or null if no images are available
@@ -57,6 +63,15 @@ class PairedVocabularyItem {
           .toList();
     }
     
+    // Parse images array if available
+    List<Map<String, dynamic>>? imagesList;
+    if (json['images'] != null) {
+      final imagesData = json['images'] as List<dynamic>;
+      imagesList = imagesData
+          .map((imgJson) => imgJson as Map<String, dynamic>)
+          .toList();
+    }
+    
     return PairedVocabularyItem(
       conceptId: json['concept_id'] as int,
       cards: cardsList,
@@ -70,11 +85,14 @@ class PairedVocabularyItem {
       imagePath2: json['image_path_2'] as String?,
       imagePath3: json['image_path_3'] as String?,
       imagePath4: json['image_path_4'] as String?,
+      images: imagesList,
       partOfSpeech: json['part_of_speech'] as String?,
       conceptTerm: json['concept_term'] as String?,
       conceptDescription: json['concept_description'] as String?,
       conceptLevel: json['concept_level'] as String?,
       topicName: json['topic_name'] as String?,
+      topicId: json['topic_id'] as int?,
+      topicDescription: json['topic_description'] as String?,
     );
   }
 }

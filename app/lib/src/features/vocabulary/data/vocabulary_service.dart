@@ -23,8 +23,11 @@ class VocabularyService {
     String sortBy = 'alphabetical', // Options: 'alphabetical', 'recent'
     String? search,
     List<String> visibleLanguageCodes = const [],
-    int? ownUserId, // Filter for own user id cards
+    int? ownUserId, // Filter for own user id cards (deprecated, use includePublic/includePrivate)
+    bool includePublic = true, // Include public concepts (user_id is null)
+    bool includePrivate = true, // Include private concepts (user_id == logged in user)
     List<int>? topicIds, // Filter by topic IDs
+    bool includeWithoutTopic = false, // Include concepts without a topic (topic_id is null)
     List<String>? levels, // Filter by CEFR levels (A1, A2, B1, B2, C1, C2)
     List<String>? partOfSpeech, // Filter by part of speech values
   }) async {
@@ -44,18 +47,34 @@ class VocabularyService {
     }
     
     // Add visible_languages parameter - filters cards to these languages only
+    // If empty, don't pass it (API will return cards for all languages)
     if (visibleLanguageCodes.isNotEmpty) {
       queryParams['visible_languages'] = visibleLanguageCodes.join(',');
     }
     
-    // Add own_user_id parameter - filters to concepts created by this user
+    // Add own_user_id parameter - filters to concepts created by this user (legacy support)
     if (ownUserId != null) {
       queryParams['own_user_id'] = ownUserId.toString();
+    }
+    
+    // Add include_public parameter - include public concepts (user_id is null)
+    if (!includePublic) {
+      queryParams['include_public'] = 'false';
+    }
+    
+    // Add include_private parameter - include private concepts (user_id == logged in user)
+    if (!includePrivate) {
+      queryParams['include_private'] = 'false';
     }
     
     // Add topic_ids parameter - filters to concepts with these topic IDs
     if (topicIds != null && topicIds.isNotEmpty) {
       queryParams['topic_ids'] = topicIds.join(',');
+    }
+    
+    // Add include_without_topic parameter - include concepts without a topic
+    if (includeWithoutTopic) {
+      queryParams['include_without_topic'] = 'true';
     }
     
     // Add levels parameter - filters to concepts with these CEFR levels

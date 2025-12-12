@@ -6,7 +6,10 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, exists
 from datetime import datetime, timezone
+from pathlib import Path
+import logging
 from app.core.database import get_session
+from app.core.config import settings
 from app.models.models import Concept, Image, Card, Language
 from app.schemas.flashcard import (
     ConceptResponse, ImageResponse, ConceptCountResponse, CreateConceptOnlyRequest,
@@ -15,6 +18,8 @@ from app.schemas.flashcard import (
 )
 from typing import List, Optional
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/concepts", tags=["concepts"])
 
@@ -329,16 +334,38 @@ async def update_concept(
     return ConceptResponse(**concept_dict)
 
 
+def _get_assets_directory() -> Path:
+    """
+    Get the assets directory path.
+    
+    Uses ASSETS_PATH environment variable if set (for Railway volumes),
+    otherwise falls back to api/assets directory.
+    
+    Returns:
+        Path to the assets directory
+    """
+    # Check if ASSETS_PATH is configured (for Railway volumes)
+    if settings.assets_path:
+        assets_dir = Path(settings.assets_path)
+    else:
+        # Fallback to API root/assets for local development
+        api_root = Path(__file__).parent.parent.parent.parent.parent
+        assets_dir = api_root / "assets"
+    
+    return assets_dir
+
+
 @router.delete("/{concept_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_concept(
     concept_id: int,
     session: Session = Depends(get_session)
 ):
     """
-    Delete a concept and all its associated cards and user_cards.
-    This will cascade delete:
+    Delete a concept and all its associated cards, user_cards, images, and image files.
+    This will delete:
     - All UserCards that reference cards for this concept
     - All Cards for this concept
+    - All Images for this concept (database records and files)
     - The Concept itself
     """
     concept = session.get(Concept, concept_id)
@@ -347,6 +374,34 @@ async def delete_concept(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Concept not found"
         )
+    
+    # Get all images for this concept
+    images = session.exec(
+        select(Image).where(Image.concept_id == concept_id)
+    ).all()
+    
+    # Delete image files from assets directory
+    if images:
+        assets_dir = _get_assets_directory()
+        for image in images:
+            # Extract filename from URL (e.g., "/assets/47099.jpg" -> "47099.jpg")
+            if image.url and image.url.startswith("/assets/"):
+                image_filename = image.url.replace("/assets/", "")
+                image_path = assets_dir / image_filename
+                
+                # Delete the image file if it exists
+                if image_path.exists():
+                    try:
+                        image_path.unlink()
+                        logger.info(f"Deleted image file: {image_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete image file {image_path}: {str(e)}")
+                else:
+                    logger.warning(f"Image file not found: {image_path}")
+    
+    # Delete all image records
+    for image in images:
+        session.delete(image)
     
     # Get all cards for this concept
     from app.models.models import Card, UserCard

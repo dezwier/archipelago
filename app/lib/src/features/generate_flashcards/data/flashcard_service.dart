@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../constants/api_config.dart';
@@ -898,6 +899,58 @@ class FlashcardService {
       final errorStr = e.toString();
       if (errorStr.contains('Connection refused') || 
           errorStr.contains('Failed host lookup') ||
+          errorStr.contains('SocketException')) {
+        final baseUrl = ApiConfig.baseUrl;
+        errorMessage = 'Cannot connect to server at $baseUrl.\n\n'
+            'Please ensure:\n'
+            '• The API server is running\n'
+            '• You are using the correct API URL for your platform';
+      }
+      
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
+
+  /// Upload an image for a concept.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'message': String
+  static Future<Map<String, dynamic>> uploadConceptImage({
+    required int conceptId,
+    required File imageFile,
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concept-image/upload/$conceptId');
+    
+    try {
+      final request = http.MultipartRequest('POST', url);
+      request.files.add(
+        await http.MultipartFile.fromPath('file', imageFile.path),
+      );
+      
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': 'Image uploaded successfully',
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to upload image',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error: ${e.toString()}';
+      
+      final errorStr = e.toString();
+      if (errorStr.contains('Failed host lookup') ||
           errorStr.contains('SocketException')) {
         final baseUrl = ApiConfig.baseUrl;
         errorMessage = 'Cannot connect to server at $baseUrl.\n\n'

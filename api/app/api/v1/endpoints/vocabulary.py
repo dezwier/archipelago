@@ -12,6 +12,7 @@ from app.schemas.flashcard import (
     PairedVocabularyItem,
     VocabularyResponse,
     ImageResponse,
+    normalize_part_of_speech,
 )
 from app.api.v1.endpoints.flashcard_helpers import ensure_capitalized
 import logging
@@ -30,7 +31,10 @@ async def get_vocabulary(
     search: Optional[str] = None,  # Optional search query for concept.term and card.term
     visible_languages: Optional[str] = None,  # Comma-separated list of visible language codes - cards are filtered to these languages
     own_user_id: Optional[int] = None,  # Filter for concepts created by this user (concept.user_id == own_user_id)
+    include_public: bool = True,  # Include public concepts (concept.user_id is null)
+    include_private: bool = True,  # Include private concepts (concept.user_id == logged in user)
     topic_ids: Optional[str] = None,  # Comma-separated list of topic IDs to filter by
+    include_without_topic: bool = False,  # Include concepts without a topic (topic_id is null)
     levels: Optional[str] = None,  # Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
     part_of_speech: Optional[str] = None,  # Comma-separated list of part of speech values to filter by
     session: Session = Depends(get_session)
@@ -46,8 +50,11 @@ async def get_vocabulary(
         sort_by: Sort order - "alphabetical" (default) or "recent" (by created_at, newest first)
         search: Optional search query to filter by concept.term and card.term (for visible languages)
         visible_languages: Comma-separated list of visible language codes - only cards for these languages are returned
-        own_user_id: Filter for concepts created by this user (concept.user_id == own_user_id)
+        own_user_id: Filter for concepts created by this user (concept.user_id == own_user_id) - deprecated, use include_public/include_private instead
+        include_public: Include public concepts (concept.user_id is null) - default: True
+        include_private: Include private concepts (concept.user_id == logged in user) - default: True
         topic_ids: Comma-separated list of topic IDs to filter by
+        include_without_topic: Include concepts without a topic (topic_id is null)
         levels: Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
         part_of_speech: Comma-separated list of part of speech values to filter by
     """
@@ -102,26 +109,76 @@ async def get_vocabulary(
     # Parse part_of_speech parameter
     pos_list = None
     if part_of_speech:
-        pos_list = [pos.strip() for pos in part_of_speech.split(',') if pos.strip()]
+        pos_list = []
+        for pos in part_of_speech.split(','):
+            pos_stripped = pos.strip()
+            if pos_stripped:
+                # Normalize POS value to proper case for comparison
+                try:
+                    normalized_pos = normalize_part_of_speech(pos_stripped)
+                    pos_list.append(normalized_pos)
+                except ValueError:
+                    # If normalization fails, try lowercase comparison as fallback
+                    # Database might have lowercase values
+                    pos_list.append(pos_stripped)
     
     # Build base query for concepts - start with all concepts
     concept_query = select(Concept)
     
-    # Apply own_user_id filter if provided (filter for concepts created by this user)
-    if own_user_id is not None:
-        concept_query = concept_query.where(Concept.user_id == own_user_id)
+    # Apply public/private filters
+    # If both are False, show nothing (empty result)
+    # If both are True, show all (no filter)
+    # Otherwise, filter by user_id
+    if not include_public and not include_private:
+        # Both filters are False - return empty result
+        concept_query = concept_query.where(False)  # This will return no results
+    elif include_public and include_private:
+        # Both filters are True - show all concepts (no user_id filter)
+        pass
+    elif include_public and not include_private:
+        # Only public - concepts where user_id is null
+        concept_query = concept_query.where(Concept.user_id.is_(None))
+    elif not include_public and include_private:
+        # Only private - concepts where user_id matches logged in user
+        if own_user_id is not None:
+            concept_query = concept_query.where(Concept.user_id == own_user_id)
+        else:
+            # No logged in user, but only private requested - return empty result
+            concept_query = concept_query.where(False)  # This will return no results
     
     # Apply topic_ids filter if provided
     if topic_id_list is not None and len(topic_id_list) > 0:
-        concept_query = concept_query.where(Concept.topic_id.in_(topic_id_list))
+        if include_without_topic:
+            # Include concepts with these topic IDs OR concepts without a topic
+            concept_query = concept_query.where(
+                or_(
+                    Concept.topic_id.in_(topic_id_list),
+                    Concept.topic_id.is_(None)
+                )
+            )
+        else:
+            # Only include concepts with these topic IDs
+            concept_query = concept_query.where(Concept.topic_id.in_(topic_id_list))
+    else:
+        # topic_id_list is None/empty (all topics selected in frontend)
+        if not include_without_topic:
+            # Exclude concepts without a topic (only show concepts with a topic)
+            concept_query = concept_query.where(Concept.topic_id.isnot(None))
+        # If include_without_topic is True, show ALL concepts (no topic filter)
     
     # Apply levels filter if provided
     if level_list is not None and len(level_list) > 0:
         concept_query = concept_query.where(Concept.level.in_(level_list))
     
     # Apply part_of_speech filter if provided
+    # Use case-insensitive comparison since database might have lowercase values
     if pos_list is not None and len(pos_list) > 0:
-        concept_query = concept_query.where(Concept.part_of_speech.in_(pos_list))
+        # Convert all POS values to lowercase for case-insensitive comparison
+        # Database stores lowercase ('noun', 'verb') but API receives proper case ('Noun', 'Verb')
+        pos_list_lower = [pos.lower() for pos in pos_list]
+        concept_query = concept_query.where(
+            func.lower(Concept.part_of_speech).in_(pos_list_lower)
+        )
     
     # Apply search filter at database level if provided
     if search and search.strip():
@@ -198,19 +255,31 @@ async def get_vocabulary(
     else:
         # Alphabetical sorting - use first visible language card term, fallback to concept.term
         if visible_language_codes and len(visible_language_codes) > 0:
-            # Create aliases for cards to get the first visible language card
+            # Use a subquery to get one card per concept for the first visible language
+            # This prevents duplicates when a concept has multiple cards for the same language
             first_lang = visible_language_codes[0]
-            card_alias = aliased(Card)
+            card_sort_subquery = (
+                select(
+                    Card.concept_id,
+                    func.min(Card.id).label('min_card_id')
+                )
+                .where(
+                    Card.language_code == first_lang,
+                    Card.term.isnot(None),
+                    Card.term != ""
+                )
+                .group_by(Card.concept_id)
+                .subquery()
+            )
             
-            # Join with first visible language card for sorting
+            # Join with the subquery to get the card ID, then join with Card to get the term
+            card_alias = aliased(Card)
             concept_query = (
                 concept_query
+                .outerjoin(card_sort_subquery, Concept.id == card_sort_subquery.c.concept_id)
                 .outerjoin(
                     card_alias,
-                    (card_alias.concept_id == Concept.id) & 
-                    (card_alias.language_code == first_lang) &
-                    (card_alias.term.isnot(None)) &
-                    (card_alias.term != "")
+                    (card_alias.id == card_sort_subquery.c.min_card_id)
                 )
                 .order_by(
                     func.coalesce(
@@ -229,6 +298,16 @@ async def get_vocabulary(
     
     # Execute query to get paginated concepts
     concepts = session.exec(concept_query).all()
+    
+    # Deduplicate concepts by ID (in case join created duplicates)
+    seen_concept_ids = set()
+    unique_concepts = []
+    for concept in concepts:
+        if concept.id not in seen_concept_ids:
+            seen_concept_ids.add(concept.id)
+            unique_concepts.append(concept)
+    concepts = unique_concepts
+    
     concept_ids = [c.id for c in concepts]
     
     # Calculate total_concepts_with_term (concepts with term or at least one card with term)
@@ -377,13 +456,17 @@ async def get_vocabulary(
         source_card_response = visible_cards_list[0] if len(visible_cards_list) > 0 else None
         target_card_response = visible_cards_list[1] if len(visible_cards_list) > 1 else None
         
-        # Get topic name safely
+        # Get topic information safely
         topic_name = None
+        topic_id = None
+        topic_description = None
         if concept.topic_id:
+            topic_id = concept.topic_id
             # Access topic relationship - SQLModel will lazy load if needed
             try:
                 if concept.topic:
                     topic_name = concept.topic.name
+                    topic_description = concept.topic.description
             except Exception:
                 # If topic relationship is not loaded or doesn't exist, topic_name stays None
                 pass
@@ -400,6 +483,8 @@ async def get_vocabulary(
                 concept_description=concept.description if concept.description and concept.description.strip() else None,
                 concept_level=concept.level.value if concept.level else None,
                 topic_name=topic_name,
+                topic_id=topic_id,
+                topic_description=topic_description,
             )
         )
     

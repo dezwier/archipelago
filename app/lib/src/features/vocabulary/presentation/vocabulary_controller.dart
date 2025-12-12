@@ -45,8 +45,14 @@ class VocabularyController extends ChangeNotifier {
   // Own lemmas filter state
   bool _ownLemmasFilter = false; // Filter for own user id cards
   
+  // Public/Private filter state
+  bool _includePublic = true; // Include public concepts (user_id is null)
+  bool _includePrivate = true; // Include private concepts (user_id == logged in user)
+  
   // Topic, level, and POS filter state
   Set<int> _selectedTopicIds = {}; // Selected topic IDs (empty means all topics) - will be set to all topics when loaded
+  Set<int>? _allAvailableTopicIds; // All available topic IDs (used to determine if all are selected)
+  bool _showLemmasWithoutTopic = true; // Show concepts without a topic (topic_id is null) - default: true
   Set<String> _selectedLevels = {'A1', 'A2', 'B1', 'B2', 'C1', 'C2'}; // Selected CEFR levels (default: all selected)
   Set<String> _selectedPartOfSpeech = {
     'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
@@ -85,8 +91,13 @@ class VocabularyController extends ChangeNotifier {
   // Own lemmas filter getter
   bool get ownLemmasFilter => _ownLemmasFilter;
   
+  // Public/Private filter getters
+  bool get includePublic => _includePublic;
+  bool get includePrivate => _includePrivate;
+  
   // Topic, level, and POS filter getters
   Set<int> get selectedTopicIds => _selectedTopicIds;
+  bool get showLemmasWithoutTopic => _showLemmasWithoutTopic;
   Set<String> get selectedLevels => _selectedLevels;
   Set<String> get selectedPartOfSpeech => _selectedPartOfSpeech;
   
@@ -123,10 +134,31 @@ class VocabularyController extends ChangeNotifier {
     }
   }
   
+  // Set public filter
+  void setIncludePublic(bool include) {
+    if (_includePublic != include) {
+      _includePublic = include;
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload vocabulary when filter changes
+      _loadUserAndVocabulary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set private filter
+  void setIncludePrivate(bool include) {
+    if (_includePrivate != include) {
+      _includePrivate = include;
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload vocabulary when filter changes
+      _loadUserAndVocabulary(reset: true, showLoading: false);
+    }
+  }
+  
   // Set topic filter
   void setTopicFilter(Set<int> topicIds) {
     if (_selectedTopicIds != topicIds) {
       _selectedTopicIds = topicIds;
+      notifyListeners(); // Notify listeners immediately for UI update
       // Reload vocabulary when filter changes
       _loadUserAndVocabulary(reset: true, showLoading: false);
     }
@@ -136,6 +168,7 @@ class VocabularyController extends ChangeNotifier {
   void setLevelFilter(Set<String> levels) {
     if (_selectedLevels != levels) {
       _selectedLevels = levels;
+      notifyListeners(); // Notify listeners immediately for UI update
       // Reload vocabulary when filter changes
       _loadUserAndVocabulary(reset: true, showLoading: false);
     }
@@ -145,9 +178,82 @@ class VocabularyController extends ChangeNotifier {
   void setPartOfSpeechFilter(Set<String> partOfSpeech) {
     if (_selectedPartOfSpeech != partOfSpeech) {
       _selectedPartOfSpeech = partOfSpeech;
+      notifyListeners(); // Notify listeners immediately for UI update
       // Reload vocabulary when filter changes
       _loadUserAndVocabulary(reset: true, showLoading: false);
     }
+  }
+  
+  // Set show lemmas without topic filter
+  void setShowLemmasWithoutTopic(bool show) {
+    if (_showLemmasWithoutTopic != show) {
+      _showLemmasWithoutTopic = show;
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload vocabulary when filter changes
+      _loadUserAndVocabulary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set all available topic IDs (called when topics are loaded)
+  void setAllAvailableTopicIds(Set<int> topicIds) {
+    _allAvailableTopicIds = topicIds;
+  }
+  
+  // Get effective topic IDs to pass to API
+  // Returns null if all topics are selected (no filter needed)
+  List<int>? _getEffectiveTopicIds() {
+    // If no topics selected, return null (show all)
+    if (_selectedTopicIds.isEmpty) {
+      return null;
+    }
+    // If all available topics are selected, return null (show all, more efficient)
+    // Only check this if we know what all available topics are
+    if (_allAvailableTopicIds != null && 
+        _allAvailableTopicIds!.isNotEmpty &&
+        _selectedTopicIds.length == _allAvailableTopicIds!.length &&
+        _selectedTopicIds.containsAll(_allAvailableTopicIds!) &&
+        _allAvailableTopicIds!.containsAll(_selectedTopicIds)) {
+      return null;
+    }
+    // Otherwise return the selected topic IDs
+    return _selectedTopicIds.toList();
+  }
+  
+  // Get effective levels to pass to API
+  // Returns null if all levels are selected (no filter needed)
+  List<String>? _getEffectiveLevels() {
+    const allLevels = {'A1', 'A2', 'B1', 'B2', 'C1', 'C2'};
+    // If all levels are selected, return null (show all)
+    if (_selectedLevels.length == allLevels.length && 
+        _selectedLevels.containsAll(allLevels)) {
+      return null;
+    }
+    // If no levels selected, return null (show all)
+    if (_selectedLevels.isEmpty) {
+      return null;
+    }
+    // Otherwise return the selected levels
+    return _selectedLevels.toList();
+  }
+  
+  // Get effective part of speech values to pass to API
+  // Returns null if all POS are selected (no filter needed)
+  List<String>? _getEffectivePartOfSpeech() {
+    const allPOS = {
+      'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
+      'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence'
+    };
+    // If all POS are selected, return null (show all)
+    if (_selectedPartOfSpeech.length == allPOS.length && 
+        _selectedPartOfSpeech.containsAll(allPOS)) {
+      return null;
+    }
+    // If no POS selected, return null (show all)
+    if (_selectedPartOfSpeech.isEmpty) {
+      return null;
+    }
+    // Otherwise return the selected POS
+    return _selectedPartOfSpeech.toList();
   }
   
   // Filtered items - when searching, items are already filtered by API
@@ -244,6 +350,13 @@ class VocabularyController extends ChangeNotifier {
       }
       
       // Load vocabulary - pass visible languages to get cards for those languages only
+      // Pass own_user_id when include_private is true (needed for filtering private concepts)
+      // or when legacy _ownLemmasFilter is true
+      final ownUserIdForApi = (_includePrivate && _currentUser != null) || 
+                              (_ownLemmasFilter && _currentUser != null) 
+                              ? _currentUser!.id 
+                              : null;
+      
       final result = await VocabularyService.getVocabulary(
         userId: _currentUser?.id,
         page: 1,
@@ -251,10 +364,13 @@ class VocabularyController extends ChangeNotifier {
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
         visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
-        ownUserId: _ownLemmasFilter && _currentUser != null ? _currentUser!.id : null, // Pass own user id filter
-        topicIds: _selectedTopicIds.isNotEmpty ? _selectedTopicIds.toList() : null, // Pass topic filter
-        levels: _selectedLevels.isNotEmpty ? _selectedLevels.toList() : null, // Pass level filter
-        partOfSpeech: _selectedPartOfSpeech.isNotEmpty ? _selectedPartOfSpeech.toList() : null, // Pass POS filter
+        ownUserId: ownUserIdForApi, // Pass own user id filter (for private concepts or legacy filter)
+        includePublic: _includePublic, // Pass public filter
+        includePrivate: _includePrivate, // Pass private filter
+        topicIds: _getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
+        includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
+        levels: _getEffectiveLevels(), // Pass level filter (null if all levels selected)
+        partOfSpeech: _getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
       );
 
       if (result['success'] == true) {
@@ -298,6 +414,13 @@ class VocabularyController extends ChangeNotifier {
 
     try {
       final nextPage = _currentPage + 1;
+      // Pass own_user_id when include_private is true (needed for filtering private concepts)
+      // or when legacy _ownLemmasFilter is true
+      final ownUserIdForApi = (_includePrivate && _currentUser != null) || 
+                              (_ownLemmasFilter && _currentUser != null) 
+                              ? _currentUser!.id 
+                              : null;
+      
       final result = await VocabularyService.getVocabulary(
         userId: _currentUser?.id,
         page: nextPage,
@@ -305,10 +428,13 @@ class VocabularyController extends ChangeNotifier {
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
         visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
-        ownUserId: _ownLemmasFilter && _currentUser != null ? _currentUser!.id : null, // Pass own user id filter
-        topicIds: _selectedTopicIds.isNotEmpty ? _selectedTopicIds.toList() : null, // Pass topic filter
-        levels: _selectedLevels.isNotEmpty ? _selectedLevels.toList() : null, // Pass level filter
-        partOfSpeech: _selectedPartOfSpeech.isNotEmpty ? _selectedPartOfSpeech.toList() : null, // Pass POS filter
+        ownUserId: ownUserIdForApi, // Pass own user id filter (for private concepts or legacy filter)
+        includePublic: _includePublic, // Pass public filter
+        includePrivate: _includePrivate, // Pass private filter
+        topicIds: _getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
+        includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
+        levels: _getEffectiveLevels(), // Pass level filter (null if all levels selected)
+        partOfSpeech: _getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
       );
 
       if (result['success'] == true) {
@@ -577,6 +703,13 @@ class VocabularyController extends ChangeNotifier {
     notifyListeners();
     
     try {
+      // Pass own_user_id when include_private is true (needed for filtering private concepts)
+      // or when legacy _ownLemmasFilter is true
+      final ownUserIdForApi = (_includePrivate && _currentUser != null) || 
+                              (_ownLemmasFilter && _currentUser != null) 
+                              ? _currentUser!.id 
+                              : null;
+      
       final result = await VocabularyService.getVocabulary(
         userId: _currentUser?.id,
         page: 1,
@@ -584,10 +717,13 @@ class VocabularyController extends ChangeNotifier {
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim(),
         visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
-        ownUserId: _ownLemmasFilter && _currentUser != null ? _currentUser!.id : null, // Pass own user id filter
-        topicIds: _selectedTopicIds.isNotEmpty ? _selectedTopicIds.toList() : null, // Pass topic filter
-        levels: _selectedLevels.isNotEmpty ? _selectedLevels.toList() : null, // Pass level filter
-        partOfSpeech: _selectedPartOfSpeech.isNotEmpty ? _selectedPartOfSpeech.toList() : null, // Pass POS filter
+        ownUserId: ownUserIdForApi, // Pass own user id filter (for private concepts or legacy filter)
+        includePublic: _includePublic, // Pass public filter
+        includePrivate: _includePrivate, // Pass private filter
+        topicIds: _getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
+        includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
+        levels: _getEffectiveLevels(), // Pass level filter (null if all levels selected)
+        partOfSpeech: _getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
       );
       
       if (result['success'] == true) {

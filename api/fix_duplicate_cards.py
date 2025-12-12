@@ -140,7 +140,7 @@ def main():
         normalize_terms(session)
         
         # Check for specific concept if provided
-        concept_id = 45405
+        concept_id = 44205
         
         # Find duplicates for this concept
         logger.info(f"Checking for duplicates for concept {concept_id}...")

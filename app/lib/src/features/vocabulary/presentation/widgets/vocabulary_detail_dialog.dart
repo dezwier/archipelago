@@ -4,9 +4,8 @@ import '../../../../utils/language_emoji.dart';
 import '../../domain/paired_vocabulary_item.dart';
 import '../../domain/vocabulary_card.dart';
 import '../../../generate_flashcards/data/flashcard_service.dart';
-import '../../../profile/data/language_service.dart';
 import 'language_lemma_widget.dart';
-import 'vocabulary_image_section.dart';
+import 'concept_image_widget.dart';
 import 'vocabulary_action_buttons.dart';
 import 'concept_info_widget.dart';
 
@@ -38,6 +37,7 @@ class VocabularyDetailDrawer extends StatefulWidget {
 
 class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
   bool _isEditing = false;
+  bool _showImageEditButtons = false;
   final Set<String> _retrievingLanguages = {}; // Track which languages are being retrieved
 
 
@@ -46,12 +46,14 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
     // Image changes are handled directly by VocabularyImageSection
     setState(() {
       _isEditing = false;
+      _showImageEditButtons = false;
     });
   }
 
   void _handleCancel() {
     setState(() {
       _isEditing = false;
+      _showImageEditButtons = false;
     });
   }
 
@@ -97,17 +99,25 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                 ? Column(
                     children: [
                       // Images on top
-                      VocabularyImageSection(
+                      ConceptImageWidget(
                         item: widget.item,
-                        isEditing: _isEditing,
                         onItemUpdated: widget.onItemUpdated,
+                        showEditButtons: _showImageEditButtons,
+                        onEditButtonsChanged: () {
+                          setState(() {
+                            _showImageEditButtons = false;
+                          });
+                        },
                       ),
                       const SizedBox(height: 12),
                       // Action buttons horizontally below
                       VocabularyActionButtons(
                         isEditing: _isEditing,
                         onEdit: () {
-                          // Keep screen as is - no functionality yet
+                          // Toggle image edit buttons
+                          setState(() {
+                            _showImageEditButtons = !_showImageEditButtons;
+                          });
                         },
                         onSave: _handleSave,
                         onCancel: _handleCancel,
@@ -124,10 +134,15 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                       // Image on left - 50% width
                       Expanded(
                         flex: 1,
-                        child: VocabularyImageSection(
+                        child: ConceptImageWidget(
                           item: widget.item,
-                          isEditing: _isEditing,
                           onItemUpdated: widget.onItemUpdated,
+                          showEditButtons: _showImageEditButtons,
+                          onEditButtonsChanged: () {
+                            setState(() {
+                              _showImageEditButtons = false;
+                            });
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -148,7 +163,10 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                             VocabularyActionButtons(
                               isEditing: _isEditing,
                               onEdit: () {
-                                // Keep screen as is - no functionality yet
+                                // Toggle image edit buttons
+                                setState(() {
+                                  _showImageEditButtons = !_showImageEditButtons;
+                                });
                               },
                               onSave: _handleSave,
                               onCancel: _handleCancel,

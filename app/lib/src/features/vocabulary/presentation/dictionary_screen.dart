@@ -8,6 +8,7 @@ import 'widgets/vocabulary_error_state.dart';
 import 'widgets/edit_vocabulary_dialog.dart';
 import 'widgets/delete_vocabulary_dialog.dart';
 import 'widgets/vocabulary_detail_dialog.dart';
+import 'widgets/vocabulary_filter_sheet.dart';
 import '../../../utils/language_emoji.dart';
 import '../../profile/data/language_service.dart';
 import '../../profile/domain/language.dart';
@@ -38,28 +39,9 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   List<String> _languagesToShow = []; // Ordered list of languages to show
   bool _showDescription = true;
   bool _showExtraInfo = true;
-  bool _ownLemmas = false; // Filter for own user id cards
   List<Language> _allLanguages = [];
   List<Topic> _allTopics = [];
   bool _isLoadingTopics = false;
-  
-  // CEFR levels
-  static const List<String> _cefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-  
-  // Part of speech values (from the schema)
-  static const List<String> _partOfSpeechValues = [
-    'Noun',
-    'Verb',
-    'Adjective',
-    'Adverb',
-    'Pronoun',
-    'Preposition',
-    'Conjunction',
-    'Determiner / Article',
-    'Interjection',
-    'Saying',
-    'Sentence',
-  ];
   
 
   @override
@@ -188,9 +170,12 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       setState(() {
         _allTopics = topics;
         _isLoadingTopics = false;
+        // Set all available topic IDs in controller first
+        final topicIds = topics.map((t) => t.id).toSet();
+        _controller.setAllAvailableTopicIds(topicIds);
         // Set all topics as selected by default
         if (topics.isNotEmpty && _controller.selectedTopicIds.isEmpty) {
-          _controller.setTopicFilter(topics.map((t) => t.id).toSet());
+          _controller.setTopicFilter(topicIds);
         }
       });
     } catch (e) {
@@ -199,6 +184,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       });
     }
   }
+  
 
   @override
   void dispose() {
@@ -402,7 +388,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     // Get count from API (calculated for visible languages, changes when visibility changes)
     final conceptsWithAllCards = _controller.conceptsWithAllVisibleLanguages ?? 0;
     
-    return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $conceptsWithAllCards complete lemmas';
+    // Get filtered count (number of concepts with filters applied)
+    final filteredLemmas = _controller.totalItems;
+    
+    return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $conceptsWithAllCards complete lemmas • $filteredLemmas filtered lemmas';
   }
 
   List<String> _getVisibleLanguageCodes() {
@@ -549,257 +538,12 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
 
   void _showFilteringMenu(BuildContext context) {
-    showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.8,
-          ),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              // Title
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16.0, 12.0, 8.0, 8.0),
-                child: Row(
-                  children: [
-                    Text(
-                      'Filters',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-              ),
-              // Content
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Own Lemmas filter
-                      StatefulBuilder(
-                        builder: (context, setMenuState) {
-                          return CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            title: const Text('Own Lemmas'),
-                            value: _ownLemmas,
-                            onChanged: (value) {
-                              setMenuState(() {
-                                setState(() {
-                                  _ownLemmas = value ?? false;
-                                  _controller.setOwnLemmasFilter(_ownLemmas);
-                                });
-                              });
-                            },
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      // Topics filter
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-                        child: Text(
-                          'Topics',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      if (_isLoadingTopics)
-                        const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (_allTopics.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 16.0, bottom: 16.0),
-                          child: Text(
-                            'No topics available',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                          ),
-                        )
-                      else
-                        StatefulBuilder(
-                          builder: (context, setMenuState) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 16.0),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: _allTopics.map((topic) {
-                                  final isSelected = _controller.selectedTopicIds.contains(topic.id);
-                                  return ElevatedButton(
-                                    onPressed: () {
-                                      setMenuState(() {
-                                        setState(() {
-                                          final newSet = Set<int>.from(_controller.selectedTopicIds);
-                                          if (isSelected) {
-                                            newSet.remove(topic.id);
-                                          } else {
-                                            newSet.add(topic.id);
-                                          }
-                                          _controller.setTopicFilter(newSet);
-                                        });
-                                      });
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: isSelected
-                                          ? Theme.of(context).colorScheme.primaryContainer
-                                          : Theme.of(context).colorScheme.surfaceContainerHighest,
-                                      foregroundColor: isSelected
-                                          ? Theme.of(context).colorScheme.onPrimaryContainer
-                                          : Theme.of(context).colorScheme.onSurface,
-                                      elevation: 0,
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    ),
-                                    child: Text(topic.name),
-                                  );
-                                }).toList(),
-                              ),
-                            );
-                          },
-                        ),
-                      const Divider(height: 1),
-                      // Levels filter
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-                        child: Text(
-                          'CEFR Levels',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      StatefulBuilder(
-                        builder: (context, setMenuState) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 16.0),
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _cefrLevels.map((level) {
-                                final isSelected = _controller.selectedLevels.contains(level);
-                                return ElevatedButton(
-                                  onPressed: () {
-                                    setMenuState(() {
-                                      setState(() {
-                                        final newSet = Set<String>.from(_controller.selectedLevels);
-                                        if (isSelected) {
-                                          newSet.remove(level);
-                                        } else {
-                                          newSet.add(level);
-                                        }
-                                        _controller.setLevelFilter(newSet);
-                                      });
-                                    });
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isSelected
-                                        ? Theme.of(context).colorScheme.primaryContainer
-                                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                                    foregroundColor: isSelected
-                                        ? Theme.of(context).colorScheme.onPrimaryContainer
-                                        : Theme.of(context).colorScheme.onSurface,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  ),
-                                  child: Text(level),
-                                );
-                              }).toList(),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      // Part of Speech filter
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-                        child: Text(
-                          'Part of Speech',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      StatefulBuilder(
-                        builder: (context, setMenuState) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 16.0),
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _partOfSpeechValues.map((pos) {
-                                final isSelected = _controller.selectedPartOfSpeech.contains(pos);
-                                return ElevatedButton(
-                                  onPressed: () {
-                                    setMenuState(() {
-                                      setState(() {
-                                        final newSet = Set<String>.from(_controller.selectedPartOfSpeech);
-                                        if (isSelected) {
-                                          newSet.remove(pos);
-                                        } else {
-                                          newSet.add(pos);
-                                        }
-                                        _controller.setPartOfSpeechFilter(newSet);
-                                      });
-                                    });
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isSelected
-                                        ? Theme.of(context).colorScheme.primaryContainer
-                                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                                    foregroundColor: isSelected
-                                        ? Theme.of(context).colorScheme.onPrimaryContainer
-                                        : Theme.of(context).colorScheme.onSurface,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  ),
-                                  child: Text(pos),
-                                );
-                              }).toList(),
-                            ),
-                          );
-                        },
-                      ),
-                      // Bottom padding
-                      SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+    showVocabularyFilterSheet(
+      context: context,
+      controller: _controller,
+      topics: _allTopics,
+      isLoadingTopics: _isLoadingTopics,
+    );
   }
 
   void _showFilterMenu(BuildContext context) {
@@ -894,7 +638,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                 color: isVisible
                                     ? Theme.of(context).colorScheme.primary
                                     : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                                width: isVisible ? 2 : 1,
+                                width: isVisible ? 1 : 1,
                               ),
                             ),
                             child: Text(

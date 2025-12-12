@@ -9,4 +9,5 @@ pydantic-settings
 email-validator
 python-dotenv
 nltk
+pillow
 

@@ -4,6 +4,7 @@ Lemma generation endpoint - unified endpoint for generating translations.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from app.core.database import get_session
 from app.models.models import Language, Concept, Card
 from app.schemas.flashcard import (
@@ -129,25 +130,47 @@ async def generate_lemma(
                     detail=f"Concept with id {request.concept_id} not found"
                 )
             
-            # Check if card already exists
-            existing_card = session.exec(
-                select(Card).where(
-                    Card.concept_id == request.concept_id,
-                    Card.language_code == target_language_code
-                )
-            ).first()
+            # Normalize term (trim whitespace)
+            term = llm_data.get('term')
+            if term:
+                term = term.strip()
             
-            if existing_card:
-                # Delete existing card to avoid unique constraint issues when term changes
-                session.delete(existing_card)
-                session.flush()
-                card_updated = True
+            # Check for existing cards with same concept_id, language_code, and term (case-insensitive)
+            # This prevents duplicates and ensures the unique constraint is respected
+            if term:
+                existing_cards = session.exec(
+                    select(Card).where(
+                        Card.concept_id == request.concept_id,
+                        Card.language_code == target_language_code,
+                        func.lower(func.trim(Card.term)) == term.lower()
+                    )
+                ).all()
+                
+                # Delete all matching cards to avoid unique constraint issues
+                card_updated = len(existing_cards) > 0
+                for existing_card in existing_cards:
+                    session.delete(existing_card)
+                if existing_cards:
+                    session.flush()
+            else:
+                # If no term, check by concept_id and language_code only
+                existing_card = session.exec(
+                    select(Card).where(
+                        Card.concept_id == request.concept_id,
+                        Card.language_code == target_language_code
+                    )
+                ).first()
+                
+                if existing_card:
+                    session.delete(existing_card)
+                    session.flush()
+                    card_updated = True
             
             # Create new card (or recreate if we just deleted one)
             card = Card(
                 concept_id=request.concept_id,
                 language_code=target_language_code,
-                term=llm_data.get('term'),
+                term=term,
                 ipa=llm_data.get('ipa'),
                 description=llm_data.get('description'),
                 gender=llm_data.get('gender'),
@@ -305,24 +328,45 @@ async def generate_lemmas_batch(
             # If concept_id is provided, create/update the card in the database
             if request.concept_id is not None:
                 try:
-                    # Check if card already exists
-                    existing_card = session.exec(
-                        select(Card).where(
-                            Card.concept_id == request.concept_id,
-                            Card.language_code == target_language_code
-                        )
-                    ).first()
+                    # Normalize term (trim whitespace)
+                    term = llm_data.get('term')
+                    if term:
+                        term = term.strip()
                     
-                    if existing_card:
-                        # Delete existing card to avoid unique constraint issues when term changes
-                        session.delete(existing_card)
-                        session.flush()
+                    # Check for existing cards with same concept_id, language_code, and term (case-insensitive)
+                    # This prevents duplicates and ensures the unique constraint is respected
+                    if term:
+                        existing_cards = session.exec(
+                            select(Card).where(
+                                Card.concept_id == request.concept_id,
+                                Card.language_code == target_language_code,
+                                func.lower(func.trim(Card.term)) == term.lower()
+                            )
+                        ).all()
+                        
+                        # Delete all matching cards to avoid unique constraint issues
+                        for existing_card in existing_cards:
+                            session.delete(existing_card)
+                        if existing_cards:
+                            session.flush()
+                    else:
+                        # If no term, check by concept_id and language_code only
+                        existing_card = session.exec(
+                            select(Card).where(
+                                Card.concept_id == request.concept_id,
+                                Card.language_code == target_language_code
+                            )
+                        ).first()
+                        
+                        if existing_card:
+                            session.delete(existing_card)
+                            session.flush()
                     
                     # Create new card (or recreate if we just deleted one)
                     card = Card(
                         concept_id=request.concept_id,
                         language_code=target_language_code,
-                        term=llm_data.get('term'),
+                        term=term,
                         ipa=llm_data.get('ipa'),
                         description=llm_data.get('description'),
                         gender=llm_data.get('gender'),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
+import 'dart:io';
 import '../../data/topic_service.dart' show Topic, TopicService;
 import '../../data/flashcard_service.dart';
 import '../../../profile/domain/user.dart';
@@ -25,6 +27,8 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
   bool _isLoadingTopics = false;
   Topic? _selectedTopic;
   int? _userId;
+  File? _selectedImage;
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -63,6 +67,42 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
     _termFocusNode.dispose();
     _descriptionFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    // If image is already selected, remove it
+    if (_selectedImage != null) {
+      _removeSelectedImage();
+      return;
+    }
+    
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      
+      if (image != null) {
+        setState(() {
+          _selectedImage = File(image.path);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _removeSelectedImage() {
+    setState(() {
+      _selectedImage = null;
+    });
   }
 
   Future<void> _loadUserId() async {
@@ -165,11 +205,32 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
         userId: _userId,
       );
       
-      setState(() {
-        _isCreatingConcept = false;
-      });
-      
       if (result['success'] == true) {
+        final conceptData = result['data'] as Map<String, dynamic>?;
+        final conceptId = conceptData?['id'] as int?;
+        
+        // If image is provided and concept was created, upload the image
+        if (_selectedImage != null && conceptId != null) {
+          final uploadResult = await FlashcardService.uploadConceptImage(
+            conceptId: conceptId,
+            imageFile: _selectedImage!,
+          );
+          
+          if (uploadResult['success'] != true) {
+            // Concept was created but image upload failed
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Concept created but image upload failed: ${uploadResult['message']}'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+        
+        setState(() {
+          _isCreatingConcept = false;
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Concept created successfully!'),
@@ -179,8 +240,14 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
         // Clear form after successful creation
         _termController.clear();
         _descriptionController.clear();
+        setState(() {
+          _selectedImage = null;
+        });
         // Keep the selected topic (don't reset it)
       } else {
+        setState(() {
+          _isCreatingConcept = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result['message'] as String),
@@ -313,9 +380,44 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
               ),
               const SizedBox(height: 12),
 
-              // Topic selector and Create button on same line
+              // Image selector and Topic selector on same line
               Row(
                 children: [
+                  // Image selector button
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickImageFromGallery,
+                      icon: Icon(
+                        _selectedImage != null ? Icons.check_circle : Icons.image_outlined,
+                        color: _selectedImage != null 
+                            ? Theme.of(context).colorScheme.primary 
+                            : null,
+                      ),
+                      label: Text(
+                        _selectedImage != null ? 'Image Selected' : 'Select Image',
+                        style: TextStyle(
+                          color: _selectedImage != null 
+                              ? Theme.of(context).colorScheme.primary 
+                              : null,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: _selectedImage != null
+                                ? Theme.of(context).colorScheme.primary
+                                : (Theme.of(context).brightness == Brightness.light
+                                    ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  
                   // Topic selector button
                   Expanded(
                     child: _isLoadingTopics
@@ -364,32 +466,35 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
                             ),
                           ),
                   ),
-                  const SizedBox(width: 12),
-                  
-                  // Create Concept button
-                  ElevatedButton(
-                    onPressed: _isCreatingConcept ? null : _handleCreateConcept,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: _isCreatingConcept
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text(
-                            'Create Concept',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                          ),
-                  ),
                 ],
+              ),
+              const SizedBox(height: 12),
+
+              // Create Concept button - full width
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isCreatingConcept ? null : _handleCreateConcept,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: _isCreatingConcept
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Create Concept',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                ),
               ),
             ],
           ),

@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     google_custom_search_api_key: str = ""
     google_custom_search_engine_id: str = ""
     
+    # Assets storage path (for Railway volumes, set ASSETS_PATH env var)
+    assets_path: str = ""
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -73,6 +76,8 @@ class Settings(BaseSettings):
             kwargs["google_custom_search_api_key"] = os.getenv("GOOGLE_CUSTOM_SEARCH_API_KEY", "")
         if not kwargs.get("google_custom_search_engine_id"):
             kwargs["google_custom_search_engine_id"] = os.getenv("GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "")
+        if not kwargs.get("assets_path"):
+            kwargs["assets_path"] = os.getenv("ASSETS_PATH", "")
         super().__init__(**kwargs)
 
 
@@ -104,3 +109,7 @@ if not settings.google_custom_search_api_key:
 # Fallback: if google_custom_search_engine_id is still empty, try reading directly from environment
 if not settings.google_custom_search_engine_id:
     settings.google_custom_search_engine_id = os.getenv("GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "")
+
+# Fallback: if assets_path is still empty, try reading directly from environment
+if not settings.assets_path:
+    settings.assets_path = os.getenv("ASSETS_PATH", "")

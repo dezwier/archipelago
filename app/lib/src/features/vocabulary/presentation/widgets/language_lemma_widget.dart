@@ -145,84 +145,93 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Row 1: Term, Topic tag, and Play button
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                    Flexible(
-                    child: widget.isEditing && widget.translationController != null
-                        ? TextField(
-                            controller: widget.translationController,
-                            onChanged: (_) => widget.onTranslationChanged?.call(),
-                            style: _getTitleTextStyle(context),
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              isDense: true,
-                            ),
-                          )
-                        : Text(
-                            HtmlEntityDecoder.decode(widget.card.translation),
+              // Row 1: Term with inline topic tag and audio symbol
+              widget.isEditing && widget.translationController != null
+                  ? TextField(
+                      controller: widget.translationController,
+                      onChanged: (_) => widget.onTranslationChanged?.call(),
+                      style: _getTitleTextStyle(context),
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        isDense: true,
+                      ),
+                    )
+                  : Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: HtmlEntityDecoder.decode(widget.card.translation),
                             style: _getTitleTextStyle(context),
                           ),
-                  ),
-                  // Topic tag
-                  if (!widget.isEditing && widget.topicName != null && widget.topicName!.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    _buildTopicTag(context),
-                  ],
-                  // Play audio button - always show
-                  if (!widget.isEditing) ...[
-                    const SizedBox(width: 6),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: _isPlayingAudio 
-                            ? null 
-                            : () {
-                                if (widget.card.audioPath == null || 
-                                    widget.card.audioPath!.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('No audio available')),
-                                  );
-                                } else {
-                                  _playAudio();
-                                }
-                              },
-                        borderRadius: BorderRadius.circular(4),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: _isPlayingAudio
-                              ? SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                                    ),
+                          // Add space before tag/audio
+                          const TextSpan(text: ' '),
+                          // Topic tag - inline after text
+                          if (widget.topicName != null && widget.topicName!.isNotEmpty)
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: _buildTopicTag(context),
+                              ),
+                            ),
+                          // Add space before audio
+                          const TextSpan(text: ' '),
+                          // Play audio button - inline after text/tag
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 0),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: _isPlayingAudio 
+                                      ? null 
+                                      : () {
+                                          if (widget.card.audioPath == null || 
+                                              widget.card.audioPath!.isEmpty) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('No audio available')),
+                                            );
+                                          } else {
+                                            _playAudio();
+                                          }
+                                        },
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: _isPlayingAudio
+                                        ? SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(
+                                                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                              ),
+                                            ),
+                                          )
+                                        : Icon(
+                                            Icons.volume_up,
+                                            size: 16,
+                                            color: (widget.card.audioPath == null || 
+                                                    widget.card.audioPath!.isEmpty)
+                                                ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
+                                                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                          ),
                                   ),
-                                )
-                              : Icon(
-                                  Icons.volume_up,
-                                  size: 16,
-                                  color: (widget.card.audioPath == null || 
-                                          widget.card.audioPath!.isEmpty)
-                                      ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
-                                      : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                                 ),
-                        ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ],
-              ),
               // Row 2: IPA and Tags
               if (!widget.isEditing && widget.showExtraInfo) ...[
                 const SizedBox(height: 6),
