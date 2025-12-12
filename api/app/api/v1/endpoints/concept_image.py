@@ -12,7 +12,7 @@ import logging
 import base64
 from pathlib import Path
 from datetime import datetime, timezone
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageOps
 import io
 
 from app.core.database import get_session
@@ -408,6 +408,8 @@ async def upload_concept_image(
         # Validate it's an image
         try:
             img = PILImage.open(io.BytesIO(file_content))
+            # Apply EXIF orientation correction to preserve original orientation
+            img = ImageOps.exif_transpose(img)
             # Convert to RGB if necessary (handles RGBA, P, etc.)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
@@ -562,6 +564,8 @@ async def upload_concept_image_with_id(
     # Validate it's an image
     try:
         img = PILImage.open(io.BytesIO(file_content))
+        # Apply EXIF orientation correction to preserve original orientation
+        img = ImageOps.exif_transpose(img)
         # Convert to RGB if necessary
         if img.mode != 'RGB':
             img = img.convert('RGB')
@@ -1030,6 +1034,8 @@ async def sync_images_from_local(
                 try:
                     # Open image with explicit size limit to prevent memory issues
                     img = PILImage.open(image_file)
+                    # Apply EXIF orientation correction to preserve original orientation
+                    img = ImageOps.exif_transpose(img)
                     
                     # Check image size and warn if very large
                     width, height = img.size

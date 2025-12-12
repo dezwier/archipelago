@@ -60,6 +60,40 @@ class ConceptInfoWidget extends StatelessWidget {
             ),
             const SizedBox(height: 6),
           ],
+          if (item.topicName != null) ...[
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.start,
+              children: [
+                Text(
+                  'Topic: ',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  item.topicName!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                  softWrap: true,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
+          if (item.topicDescription != null) ...[
+            Text(
+              item.topicDescription!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              softWrap: true,
+            ),
+            const SizedBox(height: 6),
+          ],
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.start,
             children: [

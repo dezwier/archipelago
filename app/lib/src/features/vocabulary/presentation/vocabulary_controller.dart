@@ -267,12 +267,14 @@ class VocabularyController extends ChangeNotifier {
         return 'alphabetical';
       case SortOption.timeCreatedRecentFirst:
         return 'recent';
+      case SortOption.random:
+        return 'random';
     }
   }
 
   void _applySorting() {
     // Only apply client-side sorting for alphabetical sorts
-    // Recent sort is handled server-side
+    // Recent and random sorts are handled server-side
     switch (_sortOption) {
       case SortOption.alphabetical:
         if (_alphabeticalSortLanguageCode != null) {
@@ -290,6 +292,9 @@ class VocabularyController extends ChangeNotifier {
         }
         break;
       case SortOption.timeCreatedRecentFirst:
+        // Server-side sorting - no client-side sorting needed
+        break;
+      case SortOption.random:
         // Server-side sorting - no client-side sorting needed
         break;
     }

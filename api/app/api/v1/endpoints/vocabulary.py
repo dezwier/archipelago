@@ -27,7 +27,7 @@ async def get_vocabulary(
     user_id: Optional[int] = None,
     page: int = 1,
     page_size: int = 20,
-    sort_by: str = "alphabetical",  # Options: "alphabetical", "recent"
+    sort_by: str = "alphabetical",  # Options: "alphabetical", "recent", "random"
     search: Optional[str] = None,  # Optional search query for concept.term and card.term
     visible_languages: Optional[str] = None,  # Comma-separated list of visible language codes - cards are filtered to these languages
     own_user_id: Optional[int] = None,  # Filter for concepts created by this user (concept.user_id == own_user_id)
@@ -47,7 +47,7 @@ async def get_vocabulary(
         user_id: The user ID (optional - for future use)
         page: Page number (1-indexed, default: 1)
         page_size: Number of items per page (default: 20)
-        sort_by: Sort order - "alphabetical" (default) or "recent" (by created_at, newest first)
+        sort_by: Sort order - "alphabetical" (default), "recent" (by created_at, newest first), or "random"
         search: Optional search query to filter by concept.term and card.term (for visible languages)
         visible_languages: Comma-separated list of visible language codes - only cards for these languages are returned
         own_user_id: Filter for concepts created by this user (concept.user_id == own_user_id) - deprecated, use include_public/include_private instead
@@ -59,10 +59,10 @@ async def get_vocabulary(
         part_of_speech: Comma-separated list of part of speech values to filter by
     """
     # Validate parameters
-    if sort_by not in ["alphabetical", "recent"]:
+    if sort_by not in ["alphabetical", "recent", "random"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="sort_by must be 'alphabetical' or 'recent'"
+            detail="sort_by must be 'alphabetical', 'recent', or 'random'"
         )
     
     if page < 1:
@@ -218,7 +218,11 @@ async def get_vocabulary(
             )
     
     # Get total count before pagination (for concepts matching search)
-    total_count_query = select(func.count(Concept.id)).select_from(concept_query.subquery())
+    # Count distinct concepts to avoid any potential duplicates
+    # At this point, concept_query has all filters applied but no joins yet
+    # So we can safely count distinct concept IDs
+    concept_subquery = concept_query.subquery()
+    total_count_query = select(func.count(func.distinct(concept_subquery.c.id)))
     total = session.exec(total_count_query).one()
     
     # Apply sorting at database level
@@ -252,6 +256,11 @@ async def get_vocabulary(
             )
         else:
             concept_query = concept_query.order_by(Concept.created_at.desc())
+    elif sort_by == "random":
+        # Random sorting - use database random function
+        # PostgreSQL uses random(), SQLite uses random(), MySQL uses RAND()
+        # SQLAlchemy's func.random() should work for most databases
+        concept_query = concept_query.order_by(func.random())
     else:
         # Alphabetical sorting - use first visible language card term, fallback to concept.term
         if visible_language_codes and len(visible_language_codes) > 0:

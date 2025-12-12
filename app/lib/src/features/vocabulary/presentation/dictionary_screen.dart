@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'vocabulary_controller.dart';
 import '../domain/paired_vocabulary_item.dart';
-import 'widgets/vocabulary_header_widget.dart';
 import 'widgets/vocabulary_item_widget.dart';
 import 'widgets/vocabulary_empty_state.dart';
 import 'widgets/vocabulary_error_state.dart';
@@ -29,7 +28,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  final GlobalKey _sortButtonKey = GlobalKey();
   final GlobalKey _filterButtonKey = GlobalKey();
   final GlobalKey _filteringButtonKey = GlobalKey();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -345,24 +343,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                   tooltip: 'Show/Hide',
                 ),
               ),
-              // Sort button positioned above filter button
+              // Filtering button positioned above filter button
               Positioned(
                 right: 16,
                 bottom: MediaQuery.of(context).padding.bottom + 120,
-                child: FloatingActionButton.small(
-                  key: _sortButtonKey,
-                  heroTag: 'sort_fab',
-                  onPressed: () => _showSortMenu(context),
-                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  foregroundColor: Theme.of(context).colorScheme.onSurface,
-                  child: const Icon(Icons.sort),
-                  tooltip: 'Sort',
-                ),
-              ),
-              // Filtering button positioned above sort button
-              Positioned(
-                right: 16,
-                bottom: MediaQuery.of(context).padding.bottom + 170,
                 child: FloatingActionButton.small(
                   key: _filteringButtonKey,
                   heroTag: 'filtering_fab',
@@ -391,7 +375,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     // Get filtered count (number of concepts with filters applied)
     final filteredLemmas = _controller.totalItems;
     
-    return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $conceptsWithAllCards complete lemmas • $filteredLemmas filtered lemmas';
+    return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $conceptsWithAllCards completed • $filteredLemmas filtered';
   }
 
   List<String> _getVisibleLanguageCodes() {
@@ -470,79 +454,17 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
   }
 
-  void _showSortMenu(BuildContext context) {
-    final RenderBox? button = _sortButtonKey.currentContext?.findRenderObject() as RenderBox?;
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    
-    if (button != null) {
-      final RelativeRect position = RelativeRect.fromRect(
-        Rect.fromPoints(
-          button.localToGlobal(Offset.zero, ancestor: overlay),
-          button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
-        ),
-        Offset.zero & overlay.size,
-      );
-
-      showMenu<SortOption>(
-        context: context,
-        position: position,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        items: [
-          PopupMenuItem<SortOption>(
-            value: SortOption.alphabetical,
-            child: Row(
-              children: [
-                if (_controller.sortOption == SortOption.alphabetical)
-                  Icon(
-                    Icons.check,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.primary,
-                  )
-                else
-                  const SizedBox(width: 20),
-                const SizedBox(width: 8),
-                const Text('Alphabetically'),
-              ],
-            ),
-          ),
-          PopupMenuItem<SortOption>(
-            value: SortOption.timeCreatedRecentFirst,
-            child: Row(
-              children: [
-                if (_controller.sortOption == SortOption.timeCreatedRecentFirst)
-                  Icon(
-                    Icons.check,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.primary,
-                  )
-                else
-                  const SizedBox(width: 20),
-                const SizedBox(width: 8),
-                const Text('Recent First'),
-              ],
-            ),
-          ),
-        ],
-      ).then((value) {
-        if (value != null) {
-          // Get the first visible language for alphabetical sorting
-          final firstVisibleLanguage = _languagesToShow.isNotEmpty 
-              ? _languagesToShow.first 
-              : null;
-          _controller.setSortOption(value, firstVisibleLanguage: firstVisibleLanguage);
-        }
-      });
-    }
-  }
-
   void _showFilteringMenu(BuildContext context) {
+    // Get the first visible language for alphabetical sorting
+    final firstVisibleLanguage = _languagesToShow.isNotEmpty 
+        ? _languagesToShow.first 
+        : null;
     showVocabularyFilterSheet(
       context: context,
       controller: _controller,
       topics: _allTopics,
       isLoadingTopics: _isLoadingTopics,
+      firstVisibleLanguage: firstVisibleLanguage,
     );
   }
 

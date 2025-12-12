@@ -30,6 +30,7 @@ class ConceptImageWidget extends StatefulWidget {
 class _ConceptImageWidgetState extends State<ConceptImageWidget> {
   bool _isGenerating = false;
   bool _isReloading = false;
+  bool _showButtons = false;
   final ImagePicker _imagePicker = ImagePicker();
 
   /// Get the primary image URL from the images array
@@ -145,7 +146,11 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
         // Image generated successfully - refresh the item
         widget.onItemUpdated?.call(widget.item);
         // Hide edit buttons after successful generation
-        widget.onEditButtonsChanged?.call();
+        if (mounted) {
+          setState(() {
+            _showButtons = false;
+          });
+        }
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -219,7 +224,11 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
         // Image uploaded successfully - refresh the item
         widget.onItemUpdated?.call(widget.item);
         // Hide edit buttons after successful upload
-        widget.onEditButtonsChanged?.call();
+        if (mounted) {
+          setState(() {
+            _showButtons = false;
+          });
+        }
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -258,6 +267,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
   Widget build(BuildContext context) {
     final size = widget.size ?? 185.0;
     final imageUrl = _primaryImageUrl;
+    final shouldShowButtons = imageUrl == null || imageUrl.isEmpty || _showButtons;
 
     if (imageUrl != null && imageUrl.isNotEmpty) {
       // Show the image
@@ -266,101 +276,122 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
         height: size,
         child: Stack(
           children: [
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
-                  width: 1,
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _showButtons = !_showButtons;
+                });
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+                    width: 1,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Icon(
+                        Icons.broken_image,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                        size: 24,
+                      ),
+                    );
+                  },
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: Icon(
-                      Icons.broken_image,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                      size: 24,
-                    ),
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
-                        strokeWidth: 2,
-                      ),
-                    ),
-                  );
-                },
-              ),
             ),
-            // Edit buttons overlay (shown when showEditButtons is true)
-            if (widget.showEditButtons)
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Regenerate button
-                      ElevatedButton.icon(
-                        onPressed: _isGenerating ? null : _generateImage,
-                        icon: _isGenerating
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            // Edit buttons overlay at top right (shown when tapped or no image)
+            if (shouldShowButtons)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Generate button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: _isGenerating ? null : _generateImage,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: _isGenerating
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.auto_awesome,
+                                  color: Colors.white,
+                                  size: 18,
                                 ),
-                              )
-                            : const Icon(Icons.auto_awesome),
-                        label: const Text('Generate'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      // Reload from library button
-                      ElevatedButton.icon(
-                        onPressed: _isReloading ? null : _reloadFromLibrary,
-                        icon: _isReloading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                    const SizedBox(width: 4),
+                    // Gallery button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: _isReloading ? null : _reloadFromLibrary,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: _isReloading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.photo_library,
+                                  color: Colors.white,
+                                  size: 18,
                                 ),
-                              )
-                            : const Icon(Icons.refresh),
-                        label: const Text('Open Gallery'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.secondary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
           ],
@@ -368,56 +399,102 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       );
     }
 
-    // Show placeholder with both buttons (generate and gallery)
+    // Show placeholder with buttons at top right
     return SizedBox(
       width: size,
       height: size,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
-            width: 1,
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+                width: 1,
+              ),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            ),
+            child: (_isGenerating || _isReloading)
+                ? Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  )
+                : null,
           ),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        ),
-        child: (_isGenerating || _isReloading)
-            ? Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context).colorScheme.primary,
+          // Buttons at top right
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Generate button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _isGenerating ? null : _generateImage,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: _isGenerating
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.auto_awesome,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                    ),
                   ),
                 ),
-              )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Regenerate button
-                  ElevatedButton.icon(
-                    onPressed: _generateImage,
-                    icon: const Icon(Icons.auto_awesome),
-                    label: const Text('Generate'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                const SizedBox(width: 4),
+                // Gallery button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _isReloading ? null : _reloadFromLibrary,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: _isReloading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.photo_library,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  // Open Gallery button
-                  ElevatedButton.icon(
-                    onPressed: _reloadFromLibrary,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Open Gallery'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.secondary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -43,7 +43,7 @@ import io
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageOps
 from sqlmodel import Session, select
 
 # Add the api directory to the path so we can import app modules
@@ -234,6 +234,8 @@ def sync_images_from_local(
                 # Read and process the image
                 try:
                     img = PILImage.open(image_file)
+                    # Apply EXIF orientation correction to preserve original orientation
+                    img = ImageOps.exif_transpose(img)
                     
                     # Check image size and warn if very large
                     width, height = img.size

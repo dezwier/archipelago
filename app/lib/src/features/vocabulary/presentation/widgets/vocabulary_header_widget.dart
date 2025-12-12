@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 enum SortOption {
   alphabetical,
   timeCreatedRecentFirst,
+  random,
 }
 
 class VocabularyHeaderWidget extends StatelessWidget {

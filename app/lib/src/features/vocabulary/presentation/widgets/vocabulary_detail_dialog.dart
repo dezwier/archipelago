@@ -37,7 +37,6 @@ class VocabularyDetailDrawer extends StatefulWidget {
 
 class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
   bool _isEditing = false;
-  bool _showImageEditButtons = false;
   final Set<String> _retrievingLanguages = {}; // Track which languages are being retrieved
 
 
@@ -46,14 +45,12 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
     // Image changes are handled directly by VocabularyImageSection
     setState(() {
       _isEditing = false;
-      _showImageEditButtons = false;
     });
   }
 
   void _handleCancel() {
     setState(() {
       _isEditing = false;
-      _showImageEditButtons = false;
     });
   }
 
@@ -102,22 +99,15 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                       ConceptImageWidget(
                         item: widget.item,
                         onItemUpdated: widget.onItemUpdated,
-                        showEditButtons: _showImageEditButtons,
-                        onEditButtonsChanged: () {
-                          setState(() {
-                            _showImageEditButtons = false;
-                          });
-                        },
+                        showEditButtons: false,
+                        onEditButtonsChanged: () {},
                       ),
                       const SizedBox(height: 12),
                       // Action buttons horizontally below
                       VocabularyActionButtons(
                         isEditing: _isEditing,
                         onEdit: () {
-                          // Toggle image edit buttons
-                          setState(() {
-                            _showImageEditButtons = !_showImageEditButtons;
-                          });
+                          // Edit button functionality removed - buttons now appear on image tap
                         },
                         onSave: _handleSave,
                         onCancel: _handleCancel,
@@ -137,12 +127,8 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                         child: ConceptImageWidget(
                           item: widget.item,
                           onItemUpdated: widget.onItemUpdated,
-                          showEditButtons: _showImageEditButtons,
-                          onEditButtonsChanged: () {
-                            setState(() {
-                              _showImageEditButtons = false;
-                            });
-                          },
+                          showEditButtons: false,
+                          onEditButtonsChanged: () {},
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -154,19 +140,20 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                           children: [
                             // Concept info on top
                             if (widget.item.conceptTerm != null || 
-                                widget.item.conceptDescription != null)
+                                widget.item.conceptDescription != null ||
+                                widget.item.topicName != null ||
+                                widget.item.topicDescription != null)
                               ConceptInfoWidget(item: widget.item),
                             if (widget.item.conceptTerm != null || 
-                                widget.item.conceptDescription != null)
+                                widget.item.conceptDescription != null ||
+                                widget.item.topicName != null ||
+                                widget.item.topicDescription != null)
                               const SizedBox(height: 12),
                             // Action buttons below
                             VocabularyActionButtons(
                               isEditing: _isEditing,
                               onEdit: () {
-                                // Toggle image edit buttons
-                                setState(() {
-                                  _showImageEditButtons = !_showImageEditButtons;
-                                });
+                                // Edit button functionality removed - buttons now appear on image tap
                               },
                               onSave: _handleSave,
                               onCancel: _handleCancel,
