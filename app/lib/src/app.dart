@@ -222,7 +222,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
           final surfaceColor = Theme.of(context).colorScheme.surface;
           
           // Determine title based on current screen
-          final List<String> screenTitles = ['Generate', 'Dictionary', 'Practice', 'Profile'];
+          final List<String> screenTitles = ['Create', 'Dictionary', 'Practice', 'Profile'];
           final currentTitle = screenTitles[_currentIndex];
           
           return Scaffold(
@@ -526,7 +526,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                 NavigationDestination(
                   icon: Icon(Icons.add_circle_outline),
                   selectedIcon: Icon(Icons.add_circle),
-                  label: 'Generate',
+                  label: 'Create',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.menu_book_outlined),

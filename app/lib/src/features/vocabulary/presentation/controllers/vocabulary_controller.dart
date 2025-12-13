@@ -5,8 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../profile/domain/user.dart';
 import '../../data/vocabulary_service.dart';
 import '../../domain/paired_vocabulary_item.dart';
-import '../widgets/vocabulary_header_widget.dart';
 
+enum SortOption {
+  alphabetical,
+  timeCreatedRecentFirst,
+  random,
+}
 class VocabularyController extends ChangeNotifier {
   User? _currentUser;
   List<PairedVocabularyItem> _pairedItems = [];
