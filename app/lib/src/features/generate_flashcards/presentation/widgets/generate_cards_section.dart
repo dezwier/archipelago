@@ -390,6 +390,7 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
             errors: _errors,
             sessionCostUsd: _sessionCostUsd,
             isGenerating: _isGeneratingCards,
+            isCancelled: _isCancelled,
             onCancel: _isGeneratingCards ? _handleCancel : null,
           ),
           const SizedBox(height: 12),

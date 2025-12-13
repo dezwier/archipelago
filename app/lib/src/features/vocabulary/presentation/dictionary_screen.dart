@@ -12,6 +12,10 @@ import '../../../utils/language_emoji.dart';
 import '../../profile/data/language_service.dart';
 import '../../profile/domain/language.dart';
 import '../../generate_flashcards/data/topic_service.dart';
+import '../../generate_flashcards/data/flashcard_service.dart';
+import '../../generate_flashcards/data/card_generation_background_service.dart';
+import '../../generate_flashcards/presentation/widgets/card_generation_progress_widget.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../profile/domain/user.dart';
@@ -41,6 +45,20 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   List<Topic> _allTopics = [];
   bool _isLoadingTopics = false;
   
+  // Progress tracking for card generation
+  int? _totalConcepts;
+  int _currentConceptIndex = 0;
+  String? _currentConceptTerm;
+  List<String> _currentConceptMissingLanguages = [];
+  int _conceptsProcessed = 0;
+  int _cardsCreated = 0;
+  List<String> _errors = [];
+  bool _isCancelled = false;
+  bool _isGeneratingCards = false;
+  double _sessionCostUsd = 0.0;
+  bool _isLoadingConcepts = false; // Loading state for the button
+  
+  Timer? _progressPollTimer;
 
   @override
   void initState() {
@@ -53,6 +71,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     
     // Listen to controller changes to update language visibility when user loads
     _controller.addListener(_onControllerChanged);
+    
+    // Load existing task state and start polling
+    _loadExistingTaskState().then((_) {
+      _startProgressPolling();
+    });
     
     // Prevent search field from requesting focus automatically
     // It can only get focus when user explicitly taps it
@@ -186,12 +209,143 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
 
   @override
   void dispose() {
+    _progressPollTimer?.cancel();
     _controller.removeListener(_onControllerChanged);
     _scrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _controller.dispose();
     super.dispose();
+  }
+  
+  Future<void> _loadExistingTaskState() async {
+    final state = await CardGenerationBackgroundService.getTaskState();
+    if (state != null && state['isRunning'] == true) {
+      // Get missing languages for current concept
+      final conceptIds = state['conceptIds'] as List<int>? ?? [];
+      final conceptMissingLanguagesMap = state['conceptMissingLanguages'] as Map<int, List<String>>? ?? {};
+      final currentIndex = state['currentIndex'] as int? ?? 0;
+      final currentConceptMissingLanguages = <String>[];
+      
+      if (currentIndex < conceptIds.length) {
+        final currentConceptId = conceptIds[currentIndex];
+        currentConceptMissingLanguages.addAll(conceptMissingLanguagesMap[currentConceptId] ?? []);
+      }
+      
+      setState(() {
+        _isGeneratingCards = true;
+        _totalConcepts = state['totalConcepts'] as int?;
+        _currentConceptIndex = currentIndex;
+        _currentConceptTerm = state['currentTerm'] as String?;
+        _currentConceptMissingLanguages = currentConceptMissingLanguages;
+        _conceptsProcessed = state['conceptsProcessed'] as int? ?? 0;
+        _cardsCreated = state['cardsCreated'] as int? ?? 0;
+        _sessionCostUsd = state['sessionCostUsd'] as double? ?? 0.0;
+        _errors = List<String>.from(state['errors'] as List? ?? []);
+        _isCancelled = state['isCancelled'] as bool? ?? false;
+      });
+    }
+  }
+
+  void _startProgressPolling() {
+    _progressPollTimer?.cancel();
+    _progressPollTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (!_isGeneratingCards) {
+        timer.cancel();
+        return;
+      }
+
+      final state = await CardGenerationBackgroundService.getTaskState();
+      
+      // Check if cancelled first
+      final isCancelled = state?['isCancelled'] as bool? ?? false;
+      if (isCancelled) {
+        timer.cancel();
+        setState(() {
+          _isCancelled = true;
+          _isGeneratingCards = false;
+        });
+        _showCompletionMessage();
+        return;
+      }
+      
+      if (state == null || state['isRunning'] != true) {
+        // Task completed (not cancelled)
+        timer.cancel();
+        setState(() {
+          _isGeneratingCards = false;
+        });
+        _showCompletionMessage();
+        return;
+      }
+
+      // Get missing languages for current concept
+      final conceptIds = state['conceptIds'] as List<int>? ?? [];
+      final conceptMissingLanguagesMap = state['conceptMissingLanguages'] as Map<int, List<String>>? ?? {};
+      final currentIndex = state['currentIndex'] as int? ?? 0;
+      final currentConceptMissingLanguages = <String>[];
+      
+      if (currentIndex < conceptIds.length) {
+        final currentConceptId = conceptIds[currentIndex];
+        currentConceptMissingLanguages.addAll(conceptMissingLanguagesMap[currentConceptId] ?? []);
+      }
+
+      setState(() {
+        _currentConceptIndex = currentIndex;
+        _currentConceptTerm = state['currentTerm'] as String?;
+        _currentConceptMissingLanguages = currentConceptMissingLanguages;
+        _conceptsProcessed = state['conceptsProcessed'] as int? ?? 0;
+        _cardsCreated = state['cardsCreated'] as int? ?? 0;
+        _sessionCostUsd = state['sessionCostUsd'] as double? ?? 0.0;
+        _errors = List<String>.from(state['errors'] as List? ?? []);
+        _isCancelled = false; // Only set to false if we're still running and not cancelled
+      });
+    });
+  }
+  
+  void _showCompletionMessage() {
+    if (!_isCancelled) {
+      String message = 'Generated $_cardsCreated card(s) for $_conceptsProcessed of $_totalConcepts concept(s)';
+      if (_errors.isNotEmpty) {
+        message += '\n\nErrors: ${_errors.length}';
+      }
+      
+      // Refresh vocabulary to show new cards
+      _controller.refresh();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cancelled. Processed $_conceptsProcessed of $_totalConcepts concept(s)'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+    
+    setState(() {
+      _currentConceptTerm = null;
+      _currentConceptMissingLanguages = [];
+    });
+  }
+  
+  Future<void> _handleCancel() async {
+    // Stop polling immediately
+    _progressPollTimer?.cancel();
+    await CardGenerationBackgroundService.cancelTask();
+    setState(() {
+      _isCancelled = true;
+      _isGeneratingCards = false;
+    });
+    // Show cancellation message immediately
+    _showCompletionMessage();
   }
 
   void _onScroll() {
@@ -251,6 +405,26 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                     ),
                   ),
                 ),
+                // Progress display for card generation
+                if (_totalConcepts != null)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
+                      child: CardGenerationProgressWidget(
+                        totalConcepts: _totalConcepts,
+                        currentConceptIndex: _currentConceptIndex,
+                        currentConceptTerm: _currentConceptTerm,
+                        currentConceptMissingLanguages: _currentConceptMissingLanguages,
+                        conceptsProcessed: _conceptsProcessed,
+                        cardsCreated: _cardsCreated,
+                        errors: _errors,
+                        sessionCostUsd: _sessionCostUsd,
+                        isGenerating: _isGeneratingCards,
+                        isCancelled: _isCancelled,
+                        onCancel: _isGeneratingCards ? _handleCancel : null,
+                      ),
+                    ),
+                  ),
                 // Paired vocabulary items
                 if (_controller.filteredItems.isNotEmpty)
                   SliverList(
@@ -355,6 +529,28 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                   foregroundColor: Theme.of(context).colorScheme.onSurface,
                   child: const Icon(Icons.filter_list),
                   tooltip: 'Filter',
+                ),
+              ),
+              // Generate lemmas button positioned above filtering button
+              Positioned(
+                right: 16,
+                bottom: MediaQuery.of(context).padding.bottom + 170,
+                child: FloatingActionButton.small(
+                  heroTag: 'generate_lemmas_fab',
+                  onPressed: _isLoadingConcepts ? null : () => _handleGenerateLemmas(context),
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  child: _isLoadingConcepts
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.auto_awesome),
+                  tooltip: 'Generate Lemmas',
                 ),
               ),
             ],
@@ -719,6 +915,241 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       Navigator.of(context).pop(); // Close current drawer
       _handleItemTap(updatedItem); // Reopen with updated item
     }
+  }
+
+  Future<void> _handleGenerateLemmas(BuildContext context) async {
+    // Get visible languages
+    final visibleLanguages = _getVisibleLanguageCodes();
+    
+    if (visibleLanguages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one visible language'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    // Set loading state
+    setState(() {
+      _isLoadingConcepts = true;
+    });
+    
+    try {
+      // Get concepts with missing languages for visible languages
+      final missingResult = await FlashcardService.getConceptsWithMissingLanguages(
+        languages: visibleLanguages,
+      );
+      
+      if (missingResult['success'] != true) {
+        setState(() {
+          _isLoadingConcepts = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(missingResult['message'] as String),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      final missingData = missingResult['data'] as Map<String, dynamic>?;
+      final concepts = missingData?['concepts'] as List<dynamic>?;
+      
+      if (concepts == null || concepts.isEmpty) {
+        setState(() {
+          _isLoadingConcepts = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No concepts found that need cards for the visible languages'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Filter concepts based on current filters
+      final filteredConcepts = _filterConceptsByCurrentFilters(concepts);
+      
+      if (filteredConcepts.isEmpty) {
+        setState(() {
+          _isLoadingConcepts = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No concepts match the current filters'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Extract concept IDs, terms, and missing languages
+      final conceptIds = <int>[];
+      final conceptTerms = <int, String>{};
+      final conceptMissingLanguages = <int, List<String>>{};
+      
+      for (final c in filteredConcepts) {
+        final conceptData = c as Map<String, dynamic>;
+        final concept = conceptData['concept'] as Map<String, dynamic>;
+        final conceptId = concept['id'] as int;
+        final conceptTerm = concept['term'] as String? ?? 'Unknown';
+        final missingLanguages = (conceptData['missing_languages'] as List<dynamic>?)
+            ?.map((lang) => lang.toString().toUpperCase())
+            .toList() ?? [];
+        conceptIds.add(conceptId);
+        conceptTerms[conceptId] = conceptTerm;
+        conceptMissingLanguages[conceptId] = missingLanguages;
+      }
+      
+      // Set initial progress state
+      setState(() {
+        _isLoadingConcepts = false;
+        _isGeneratingCards = true;
+        _isCancelled = false;
+        _totalConcepts = conceptIds.length;
+        _currentConceptIndex = 0;
+        _currentConceptTerm = null;
+        _currentConceptMissingLanguages = [];
+        _conceptsProcessed = 0;
+        _cardsCreated = 0;
+        _errors = [];
+        _sessionCostUsd = 0.0;
+      });
+      
+      // Start the background task
+      await CardGenerationBackgroundService.startTask(
+        conceptIds: conceptIds,
+        conceptTerms: conceptTerms,
+        conceptMissingLanguages: conceptMissingLanguages,
+        selectedLanguages: visibleLanguages,
+      );
+      
+      // Run the task asynchronously
+      CardGenerationBackgroundService.executeTask().catchError((error) {
+        print('Error in background task: $error');
+        return <String, dynamic>{
+          'success': false,
+          'message': 'Task failed: $error',
+        };
+      });
+      
+      // Start polling for progress updates
+      _startProgressPolling();
+    } catch (e) {
+      setState(() {
+        _isLoadingConcepts = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  
+  List<dynamic> _filterConceptsByCurrentFilters(List<dynamic> concepts) {
+    return concepts.where((c) {
+      final conceptData = c as Map<String, dynamic>;
+      final concept = conceptData['concept'] as Map<String, dynamic>;
+      
+      // Filter by topic - use same logic as _getEffectiveTopicIds
+      final selectedTopicIds = _controller.selectedTopicIds;
+      final allAvailableTopicIds = _controller.allAvailableTopicIds;
+      final conceptTopicId = concept['topic_id'] as int?;
+      
+      // Check if all topics are selected (same logic as _getEffectiveTopicIds)
+      final allTopicsSelected = allAvailableTopicIds != null &&
+          allAvailableTopicIds.isNotEmpty &&
+          selectedTopicIds.length == allAvailableTopicIds.length &&
+          selectedTopicIds.containsAll(allAvailableTopicIds) &&
+          allAvailableTopicIds.containsAll(selectedTopicIds);
+      
+      if (!allTopicsSelected && selectedTopicIds.isNotEmpty) {
+        // Not all topics selected - need to filter
+        if (!_controller.showLemmasWithoutTopic) {
+          // Exclude concepts without topic
+          if (conceptTopicId == null) {
+            return false;
+          }
+          // Include only if topic is selected
+          if (!selectedTopicIds.contains(conceptTopicId)) {
+            return false;
+          }
+        } else {
+          // Include concepts without topic OR with selected topic
+          if (conceptTopicId != null && !selectedTopicIds.contains(conceptTopicId)) {
+            return false;
+          }
+        }
+      } else if (!_controller.showLemmasWithoutTopic) {
+        // All topics selected or no topics selected, but exclude concepts without topic
+        if (conceptTopicId == null) {
+          return false;
+        }
+      }
+      
+      // Filter by part of speech - use same logic as _getEffectivePartOfSpeech
+      final selectedPOS = _controller.selectedPartOfSpeech;
+      const allPOS = {
+        'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
+        'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence'
+      };
+      final allPOSSelected = selectedPOS.length == allPOS.length && 
+          selectedPOS.containsAll(allPOS);
+      
+      if (!allPOSSelected && selectedPOS.isNotEmpty) {
+        final conceptPOS = concept['part_of_speech'] as String?;
+        if (conceptPOS != null && !selectedPOS.contains(conceptPOS)) {
+          return false;
+        }
+      }
+      
+      // Filter by public/private
+      final conceptUserId = concept['user_id'] as int?;
+      final currentUserId = _controller.currentUser?.id;
+      
+      if (!_controller.includePublic && !_controller.includePrivate) {
+        return false; // Both filters are false - show nothing
+      } else if (!_controller.includePublic && _controller.includePrivate) {
+        // Only private - must have user_id matching current user
+        if (conceptUserId == null || conceptUserId != currentUserId) {
+          return false;
+        }
+      } else if (_controller.includePublic && !_controller.includePrivate) {
+        // Only public - must have user_id == null
+        if (conceptUserId != null) {
+          return false;
+        }
+      }
+      // If both are true, include all (no filter)
+      
+      // Filter by search query (if any)
+      final searchQuery = _controller.searchQuery.trim().toLowerCase();
+      if (searchQuery.isNotEmpty) {
+        final conceptTerm = (concept['term'] as String? ?? '').toLowerCase();
+        if (!conceptTerm.contains(searchQuery)) {
+          return false;
+        }
+      }
+      
+      // Note: Level filtering is not available in ConceptResponse, so we skip it
+      // This is a limitation - we could enhance the API endpoint later to include level
+      
+      return true;
+    }).toList();
   }
 
 }

@@ -97,6 +97,7 @@ class VocabularyController extends ChangeNotifier {
   
   // Topic, level, and POS filter getters
   Set<int> get selectedTopicIds => _selectedTopicIds;
+  Set<int>? get allAvailableTopicIds => _allAvailableTopicIds;
   bool get showLemmasWithoutTopic => _showLemmasWithoutTopic;
   Set<String> get selectedLevels => _selectedLevels;
   Set<String> get selectedPartOfSpeech => _selectedPartOfSpeech;

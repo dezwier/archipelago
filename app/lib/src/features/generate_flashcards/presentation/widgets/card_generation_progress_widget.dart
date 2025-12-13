@@ -11,6 +11,7 @@ class CardGenerationProgressWidget extends StatelessWidget {
   final List<String> errors;
   final double sessionCostUsd;
   final bool isGenerating;
+  final bool isCancelled;
   final VoidCallback? onCancel;
 
   const CardGenerationProgressWidget({
@@ -24,6 +25,7 @@ class CardGenerationProgressWidget extends StatelessWidget {
     required this.errors,
     required this.sessionCostUsd,
     required this.isGenerating,
+    this.isCancelled = false,
     this.onCancel,
   });
 
@@ -58,7 +60,9 @@ class CardGenerationProgressWidget extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  isGenerating ? 'Generating Cards' : 'Generation Complete',
+                  isGenerating 
+                      ? 'Generating Cards' 
+                      : (isCancelled ? 'Generation Cancelled' : 'Generation Complete'),
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -170,19 +174,27 @@ class CardGenerationProgressWidget extends StatelessWidget {
             Text(
               isGenerating 
                   ? 'Concept ${currentConceptIndex + 1} of $totalConcepts'
-                  : 'Completed $totalConcepts of $totalConcepts concepts',
+                  : (isCancelled 
+                      ? 'Processed $conceptsProcessed of $totalConcepts concepts'
+                      : 'Completed $totalConcepts of $totalConcepts concepts'),
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
               value: totalConcepts! > 0 
-                  ? (isGenerating ? (currentConceptIndex + 1) / totalConcepts! : 1.0)
+                  ? (isGenerating 
+                      ? (currentConceptIndex + 1) / totalConcepts!
+                      : (isCancelled 
+                          ? conceptsProcessed / totalConcepts!
+                          : 1.0))
                   : 0,
               backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
               valueColor: AlwaysStoppedAnimation<Color>(
                 isGenerating 
                     ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.primary,
+                    : (isCancelled
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.primary),
               ),
             ),
             const SizedBox(height: 12),

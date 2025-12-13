@@ -156,7 +156,7 @@ class CardGenerationBackgroundService {
 
     final conceptIds = state['conceptIds'] as List<int>;
     final conceptTerms = state['conceptTerms'] as Map<int, String>;
-    final selectedLanguages = state['selectedLanguages'] as List<String>;
+    final conceptMissingLanguages = state['conceptMissingLanguages'] as Map<int, List<String>>;
     final currentIndex = state['currentIndex'] as int;
     int conceptsProcessed = state['conceptsProcessed'] as int;
     int cardsCreated = state['cardsCreated'] as int;
@@ -184,15 +184,27 @@ class CardGenerationBackgroundService {
         errors: errors,
       );
 
-      // Generate cards for this concept
+      // Get missing languages for this concept (only generate for languages that are actually missing)
+      final missingLanguagesForConcept = conceptMissingLanguages[conceptId] ?? [];
+      
+      // Only generate cards for languages that are actually missing
+      if (missingLanguagesForConcept.isEmpty) {
+        // No missing languages - skip this concept
+        conceptsProcessed++;
+        continue;
+      }
+      
+      // Generate cards for this concept (only for missing languages)
       final generateResult = await FlashcardService.generateCardsForConcept(
         conceptId: conceptId,
-        languages: selectedLanguages,
+        languages: missingLanguagesForConcept,
       );
 
       if (generateResult['success'] == true) {
         final data = generateResult['data'] as Map<String, dynamic>?;
-        final cardsCreatedForConcept = data?['cards_created'] as int? ?? 0;
+        // Count only the cards created for missing languages (which should be all of them)
+        // The API returns all lemmas, but we only requested missing languages, so count those
+        final cardsCreatedForConcept = missingLanguagesForConcept.length;
         final costUsd = (data?['session_cost_usd'] as num?)?.toDouble() ?? 0.0;
 
         conceptsProcessed++;
