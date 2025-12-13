@@ -183,59 +183,6 @@ async def get_concepts_by_term(
     
     return result
 
-
-@router.get("/without-cards", response_model=List[ConceptResponse])
-async def get_concepts_without_cards(
-    skip: int = 0,
-    limit: int = 100,
-    session: Session = Depends(get_session)
-):
-    """
-    Get all concepts that don't have any cards in the card table.
-    
-    This endpoint returns concepts that have no associated cards, which can be useful
-    for identifying concepts that need card generation.
-    
-    Args:
-        skip: Number of concepts to skip
-        limit: Maximum number of concepts to return
-    
-    Returns:
-        List of concepts without any cards
-    """
-    # Use NOT EXISTS subquery to find concepts without any cards
-    subquery = select(Card.id).where(Card.concept_id == Concept.id)
-    query = (
-        select(Concept)
-        .where(~exists(subquery))
-        .order_by(Concept.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-    
-    concepts = session.exec(query).all()
-    
-    # Load images for each concept
-    concept_ids = [c.id for c in concepts]
-    images = session.exec(
-        select(Image).where(Image.concept_id.in_(concept_ids))
-    ).all()
-    
-    image_map = {}
-    for img in images:
-        if img.concept_id not in image_map:
-            image_map[img.concept_id] = []
-        image_map[img.concept_id].append(img)
-    
-    result = []
-    for concept in concepts:
-        concept_dict = ConceptResponse.model_validate(concept).model_dump()
-        concept_dict['images'] = [ImageResponse.model_validate(img) for img in image_map.get(concept.id, [])]
-        result.append(ConceptResponse(**concept_dict))
-    
-    return result
-
-
 @router.get("/{concept_id}", response_model=ConceptResponse)
 async def get_concept(
     concept_id: int,
@@ -444,57 +391,6 @@ async def get_total_concept_count(
     return ConceptCountResponse(count=count)
 
 
-@router.get("/count/with-term", response_model=ConceptCountResponse)
-async def get_concept_count_with_term(
-    session: Session = Depends(get_session)
-):
-    """
-    Get the count of concepts that have a term present.
-    
-    A concept is considered to have a term if:
-    - The concept.term field is not None and not empty, OR
-    - At least one card associated with the concept has a non-empty term
-    
-    Returns:
-        Count of concepts with at least one term
-    """
-    # Get all concepts
-    all_concepts = session.exec(select(Concept)).all()
-    
-    # Get all cards with terms
-    all_cards = session.exec(
-        select(Card).where(
-            Card.term.isnot(None),
-            Card.term != ""
-        )
-    ).all()
-    
-    # Group cards by concept_id
-    concept_cards_map = {}
-    for card in all_cards:
-        if card.concept_id not in concept_cards_map:
-            concept_cards_map[card.concept_id] = []
-        concept_cards_map[card.concept_id].append(card)
-    
-    # Count concepts with terms
-    count = 0
-    for concept in all_concepts:
-        has_term = False
-        if concept.term and concept.term.strip():
-            has_term = True
-        else:
-            # Check if concept has at least one card with a term
-            concept_cards = concept_cards_map.get(concept.id, [])
-            for card in concept_cards:
-                if card.term and card.term.strip():
-                    has_term = True
-                    break
-        if has_term:
-            count += 1
-    
-    return ConceptCountResponse(count=count)
-
-
 @router.get("/count/with-cards-for-languages", response_model=ConceptCountResponse)
 async def get_concept_count_with_cards_for_languages(
     languages: str,
@@ -654,4 +550,3 @@ async def get_concepts_with_missing_languages(
             ))
     
     return ConceptsWithMissingLanguagesResponse(concepts=result_concepts)
-

@@ -360,7 +360,7 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Generate Cards',
+              'Generate Lemmas',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -416,7 +416,7 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
                     ),
                   )
                 : const Text(
-                    'Generate Cards',
+                    'Generate Lemmas',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
           ),

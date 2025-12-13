@@ -753,4 +753,3 @@ async def delete_card(
     session.commit()
     
     return None
-

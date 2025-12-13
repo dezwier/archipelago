@@ -8,6 +8,13 @@ import json
 import logging
 import time
 from typing import List, Dict
+from pathlib import Path
+
+# Add the api directory to Python path so we can import from app
+script_dir = Path(__file__).parent
+api_dir = script_dir.parent
+sys.path.insert(0, str(api_dir))
+
 from sqlmodel import Session, select
 from app.core.database import engine
 from app.models.models import Concept

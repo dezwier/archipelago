@@ -21,26 +21,37 @@ class ConceptInfoWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (item.conceptTerm != null) ...[
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.start,
-              children: [
-                Text(
-                  'Concept: ',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  item.conceptLevel != null
-                      ? '${item.conceptTerm!}, ${item.conceptLevel!.toUpperCase()}'
-                      : item.conceptTerm!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                  softWrap: true,
-                ),
-              ],
+            Builder(
+              builder: (context) {
+                final parts = <String>[item.conceptTerm!];
+                if (item.partOfSpeech != null) {
+                  parts.add(item.partOfSpeech!);
+                }
+                if (item.conceptLevel != null) {
+                  parts.add(item.conceptLevel!.toUpperCase());
+                }
+                final conceptText = parts.join(', ');
+                
+                return Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.start,
+                  children: [
+                    Text(
+                      'Concept: ',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      conceptText,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                      softWrap: true,
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 6),
           ],

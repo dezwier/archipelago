@@ -131,6 +131,10 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final titleText = HtmlEntityDecoder.decode(widget.card.translation);
+    final titleLength = titleText.length;
+    final shouldShowInline = titleLength < 12 && !widget.isEditing && widget.showExtraInfo;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -145,7 +149,7 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Row 1: Term with inline topic tag and audio symbol
+              // Row 1: Term with inline topic tag, audio symbol, and optionally IPA/tags
               widget.isEditing && widget.translationController != null
                   ? TextField(
                       controller: widget.translationController,
@@ -166,7 +170,7 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                       TextSpan(
                         children: [
                           TextSpan(
-                            text: HtmlEntityDecoder.decode(widget.card.translation),
+                            text: titleText,
                             style: _getTitleTextStyle(context),
                           ),
                           // Add space before tag/audio
@@ -229,11 +233,74 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                               ),
                             ),
                           ),
+                          // If title is short, add IPA and tags inline
+                          if (shouldShowInline) ...[
+                            const TextSpan(text: ' '),
+                            if (widget.card.ipa != null && widget.card.ipa!.isNotEmpty)
+                              TextSpan(
+                                text: '/${widget.card.ipa}/',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontFamily: 'monospace',
+                                  fontSize: 13,
+                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            if (widget.partOfSpeech != null && widget.partOfSpeech!.isNotEmpty) ...[
+                              const TextSpan(text: ' '),
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: _buildDictionaryTag(
+                                  context,
+                                  widget.partOfSpeech!,
+                                  const Color(0xFFE0E0E0),
+                                  const Color(0xFF424242),
+                                ),
+                              ),
+                            ],
+                            if (widget.card.article != null && widget.card.article!.isNotEmpty) ...[
+                              const TextSpan(text: ' '),
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: _buildDictionaryTag(
+                                  context,
+                                  widget.card.article!,
+                                  const Color(0xFFE0E0E0),
+                                  const Color(0xFF424242),
+                                ),
+                              ),
+                            ],
+                            if (widget.card.pluralForm != null && widget.card.pluralForm!.isNotEmpty) ...[
+                              const TextSpan(text: ' '),
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: _buildDictionaryTag(
+                                  context,
+                                  'pl. ${widget.card.pluralForm}',
+                                  const Color(0xFFE0E0E0),
+                                  const Color(0xFF424242),
+                                ),
+                              ),
+                            ],
+                            if (widget.card.formalityRegister != null && 
+                                widget.card.formalityRegister!.isNotEmpty && 
+                                widget.card.formalityRegister!.toLowerCase() != 'neutral') ...[
+                              const TextSpan(text: ' '),
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: _buildDictionaryTag(
+                                  context,
+                                  widget.card.formalityRegister!,
+                                  const Color(0xFFE0E0E0),
+                                  const Color(0xFF424242),
+                                ),
+                              ),
+                            ],
+                          ],
                         ],
                       ),
                     ),
-              // Row 2: IPA and Tags
-              if (!widget.isEditing && widget.showExtraInfo) ...[
+              // Row 2: IPA and Tags (only if title is 12+ characters)
+              if (!widget.isEditing && widget.showExtraInfo && !shouldShowInline) ...[
                 const SizedBox(height: 6),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,6 +310,7 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                         '/${widget.card.ipa}/',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontFamily: 'monospace',
+                          fontSize: 13,
                           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                         ),
                         softWrap: true,

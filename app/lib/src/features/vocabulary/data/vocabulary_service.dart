@@ -496,5 +496,70 @@ class VocabularyService {
     }
   }
 
+  /// Update a concept's term, description, and/or topic.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'concept': Map<String, dynamic> (if successful) - updated concept data
+  /// - 'message': String (if error)
+  static Future<Map<String, dynamic>> updateConcept({
+    required int conceptId,
+    String? term,
+    String? description,
+    int? topicId,
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/$conceptId');
+    
+    try {
+      final body = <String, dynamic>{};
+      // Always send term if provided (it's required for the update)
+      // The term should already be trimmed by the caller, but we trim again for safety
+      if (term != null) {
+        body['term'] = term.trim();
+      }
+      if (description != null) {
+        body['description'] = description;
+      }
+      // Send topic_id if provided (null means don't change, explicit null would clear it)
+      if (topicId != null) {
+        body['topic_id'] = topicId;
+      }
+
+      final response = await http.put(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> concept = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'concept': concept,
+        };
+      } else {
+        // Try to parse error response as JSON, but handle non-JSON responses
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to update concept',
+          };
+        } catch (_) {
+          // Response is not JSON (might be HTML error page)
+          return {
+            'success': false,
+            'message': 'Failed to update concept: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+          };
+        }
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error updating concept: ${e.toString()}',
+      };
+    }
+  }
+
 }
 

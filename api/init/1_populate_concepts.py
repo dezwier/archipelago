@@ -1,12 +1,19 @@
 """
 Script to populate the concept table from words.txt file.
-Wipes the concept table and creates a record for each word/part-of-speech/level combination.
+Creates a record for each word/part-of-speech/level combination that doesn't already exist.
+Does not modify existing data.
 """
 import sys
 import re
 import logging
 from pathlib import Path
-from sqlmodel import Session, text
+
+# Add the api directory to Python path so we can import from app
+script_dir = Path(__file__).parent
+api_dir = script_dir.parent
+sys.path.insert(0, str(api_dir))
+
+from sqlmodel import Session, text, select
 from app.core.database import engine
 from app.models.models import Concept, CEFRLevel
 
@@ -111,18 +118,15 @@ def parse_word_line(line: str) -> list[tuple[str, str, str]]:
     return results
 
 
-def clear_concept_table():
-    """Clear all data from concept table."""
-    with Session(engine) as session:
-        try:
-            logger.info("Deleting all concepts...")
-            session.exec(text("DELETE FROM concept"))
-            session.commit()
-            logger.info("Successfully cleared concept table")
-        except Exception as e:
-            session.rollback()
-            logger.error("Error clearing concept table: %s", e, exc_info=True)
-            raise
+def concept_exists(session: Session, term: str, part_of_speech: str, level: CEFRLevel) -> bool:
+    """Check if a concept with the given term, part_of_speech, and level already exists."""
+    query = select(Concept).where(
+        Concept.term == term,
+        Concept.part_of_speech == part_of_speech,
+        Concept.level == level
+    )
+    result = session.exec(query).first()
+    return result is not None
 
 
 def populate_concepts(words_file_path: str = None):
@@ -157,24 +161,40 @@ def populate_concepts(words_file_path: str = None):
     
     logger.info("Parsed %d concept records from %d lines", len(concepts_to_create), len(lines))
     
-    # Clear existing concepts
-    clear_concept_table()
-    
-    # Insert all concepts
+    # Insert only concepts that don't already exist
     with Session(engine) as session:
         try:
-            logger.info("Inserting %d concepts...", len(concepts_to_create))
+            inserted_count = 0
+            skipped_count = 0
+            
+            logger.info("Checking and inserting concepts...")
             for i, concept_data in enumerate(concepts_to_create, 1):
+                term = concept_data['term']
+                pos = concept_data['part_of_speech']
+                level = concept_data['level']
+                
+                # Check if concept already exists
+                if concept_exists(session, term, pos, level):
+                    skipped_count += 1
+                    if i % 1000 == 0:
+                        logger.info("Processed %d/%d concepts (inserted: %d, skipped: %d)...", 
+                                   i, len(concepts_to_create), inserted_count, skipped_count)
+                    continue
+                
+                # Concept doesn't exist, create it
                 concept = Concept(**concept_data)
                 session.add(concept)
+                inserted_count += 1
                 
                 # Commit in batches to avoid memory issues
                 if i % 1000 == 0:
                     session.commit()
-                    logger.info("Inserted %d/%d concepts...", i, len(concepts_to_create))
+                    logger.info("Processed %d/%d concepts (inserted: %d, skipped: %d)...", 
+                               i, len(concepts_to_create), inserted_count, skipped_count)
             
             session.commit()
-            logger.info("Successfully inserted %d concepts", len(concepts_to_create))
+            logger.info("Successfully completed! Inserted %d new concepts, skipped %d existing concepts", 
+                       inserted_count, skipped_count)
             
         except Exception as e:
             session.rollback()

@@ -298,7 +298,7 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
                   _termFocusNode.requestFocus();
                 },
                 decoration: InputDecoration(
-                  labelText: 'Term',
+                  labelText: 'Word or Phrase',
                   hintText: 'Enter the word or phrase',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),

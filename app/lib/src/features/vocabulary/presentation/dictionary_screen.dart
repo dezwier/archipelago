@@ -4,10 +4,10 @@ import '../domain/paired_vocabulary_item.dart';
 import 'widgets/vocabulary_item_widget.dart';
 import 'widgets/vocabulary_empty_state.dart';
 import 'widgets/vocabulary_error_state.dart';
-import 'widgets/edit_vocabulary_dialog.dart';
 import 'widgets/delete_vocabulary_dialog.dart';
 import 'widgets/vocabulary_detail_dialog.dart';
 import 'widgets/vocabulary_filter_sheet.dart';
+import 'edit_concept_screen.dart';
 import '../../../utils/language_emoji.dart';
 import '../../profile/data/language_service.dart';
 import '../../profile/domain/language.dart';
@@ -626,38 +626,30 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     }
   }
 
-
   Future<void> _handleEdit(PairedVocabularyItem item) async {
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) => EditVocabularyDialog(
-        item: item,
-        sourceLanguageCode: _controller.sourceLanguageCode,
-        targetLanguageCode: _controller.targetLanguageCode,
+    // Navigate to edit concept screen
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => EditConceptScreen(item: item),
       ),
     );
 
-    if (result != null && mounted) {
-      final success = await _controller.updateItem(
-        item,
-        result['source'],
-        result['target'],
-        result['image_url'],
+    if (result == true && mounted) {
+      // Refresh the vocabulary list to show updated concept
+      await _controller.refresh();
+      
+      // Refresh the detail drawer if it's still open
+      // Find the updated item in the list
+      final updatedItems = _controller.filteredItems;
+      final updatedItem = updatedItems.firstWhere(
+        (i) => i.conceptId == item.conceptId,
+        orElse: () => item,
       );
-
+      
+      // Close current drawer and reopen with updated item
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success
-                  ? 'Translation and image updated successfully'
-                  : _controller.errorMessage ?? 'Failed to update translation',
-            ),
-            backgroundColor: success
-                ? null
-                : Theme.of(context).colorScheme.error,
-          ),
-        );
+        Navigator.of(context).pop(); // Close current drawer
+        _handleItemTap(updatedItem); // Reopen with updated item
       }
     }
   }

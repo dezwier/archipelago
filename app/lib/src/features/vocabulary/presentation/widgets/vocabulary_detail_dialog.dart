@@ -107,7 +107,7 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                       VocabularyActionButtons(
                         isEditing: _isEditing,
                         onEdit: () {
-                          // Edit button functionality removed - buttons now appear on image tap
+                          widget.onEdit?.call();
                         },
                         onSave: _handleSave,
                         onCancel: _handleCancel,
@@ -153,7 +153,7 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                             VocabularyActionButtons(
                               isEditing: _isEditing,
                               onEdit: () {
-                                // Edit button functionality removed - buttons now appear on image tap
+                                widget.onEdit?.call();
                               },
                               onSave: _handleSave,
                               onCancel: _handleCancel,
