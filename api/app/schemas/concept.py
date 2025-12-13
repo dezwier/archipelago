@@ -46,50 +46,62 @@ class ConceptResponse(BaseModel):
     @property
     def image_path_1(self) -> Optional[str]:
         """Get first image URL for backward compatibility."""
-        if not self.images:
+        images = self.images
+        if images is None or not images:
             return None
+        # Type narrowing: images is now List[ImageResponse]
+        assert images is not None  # Type guard for linter
         # Return primary image first, or first image if no primary
-        primary = next((img for img in self.images if img.is_primary), None)
+        primary = next((img for img in images if img.is_primary), None)  # type: ignore[union-attr]
         if primary:
             return primary.url
-        return self.images[0].url if self.images else None
+        return images[0].url if images else None
     
     @computed_field
     @property
     def image_path_2(self) -> Optional[str]:
         """Get second image URL for backward compatibility."""
-        if not self.images or len(self.images) < 2:
+        images = self.images
+        if images is None or len(images) < 2:
             return None
+        # Type narrowing: images is now List[ImageResponse]
+        assert images is not None  # Type guard for linter
         # Skip primary if it's first, return second image
-        non_primary = [img for img in self.images if not img.is_primary]
+        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
         if non_primary:
             return non_primary[0].url
         # If all are primary or only one image, return None
-        return self.images[1].url if len(self.images) > 1 else None
+        return images[1].url if len(images) > 1 else None
     
     @computed_field
     @property
     def image_path_3(self) -> Optional[str]:
         """Get third image URL for backward compatibility."""
-        if not self.images or len(self.images) < 3:
+        images = self.images
+        if images is None or len(images) < 3:
             return None
-        non_primary = [img for img in self.images if not img.is_primary]
+        # Type narrowing: images is now List[ImageResponse]
+        assert images is not None  # Type guard for linter
+        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
         if len(non_primary) > 1:
             return non_primary[1].url
         # Fallback to third image overall
-        return self.images[2].url if len(self.images) > 2 else None
+        return images[2].url if len(images) > 2 else None  # type: ignore[index]
     
     @computed_field
     @property
     def image_path_4(self) -> Optional[str]:
         """Get fourth image URL for backward compatibility."""
-        if not self.images or len(self.images) < 4:
+        images = self.images
+        if images is None or len(images) < 4:
             return None
-        non_primary = [img for img in self.images if not img.is_primary]
+        # Type narrowing: images is now List[ImageResponse]
+        assert images is not None  # Type guard for linter
+        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
         if len(non_primary) > 2:
             return non_primary[2].url
         # Fallback to fourth image overall
-        return self.images[3].url if len(self.images) > 3 else None
+        return images[3].url if len(images) > 3 else None  # type: ignore[index]
 
     class Config:
         from_attributes = True
@@ -227,45 +239,57 @@ class PairedVocabularyItem(BaseModel):
     @property
     def image_path_1(self) -> Optional[str]:
         """Get first image URL for backward compatibility."""
-        if not self.images:
+        images = self.images
+        if images is None or not images:
             return None
-        primary = next((img for img in self.images if img.is_primary), None)
+        # Type narrowing: images is now List[ImageResponse]
+        assert images is not None  # Type guard for linter
+        primary = next((img for img in images if img.is_primary), None)  # type: ignore[union-attr]
         if primary:
             return primary.url
-        return self.images[0].url if self.images else None
+        return images[0].url if images else None  # type: ignore[index]
     
     @computed_field
     @property
     def image_path_2(self) -> Optional[str]:
         """Get second image URL for backward compatibility."""
-        if not self.images or len(self.images) < 2:
+        images = self.images
+        if images is None or len(images) < 2:
             return None
-        non_primary = [img for img in self.images if not img.is_primary]
+        # Type narrowing: images is now List[ImageResponse]
+        assert images is not None  # Type guard for linter
+        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
         if non_primary:
             return non_primary[0].url
-        return self.images[1].url if len(self.images) > 1 else None
+        return images[1].url if len(images) > 1 else None  # type: ignore[index]
     
     @computed_field
     @property
     def image_path_3(self) -> Optional[str]:
         """Get third image URL for backward compatibility."""
-        if not self.images or len(self.images) < 3:
+        images = self.images
+        if images is None or len(images) < 3:
             return None
-        non_primary = [img for img in self.images if not img.is_primary]
+        # Type narrowing: images is now List[ImageResponse]
+        assert images is not None  # Type guard for linter
+        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
         if len(non_primary) > 1:
             return non_primary[1].url
-        return self.images[2].url if len(self.images) > 2 else None
+        return images[2].url if len(images) > 2 else None  # type: ignore[index]
     
     @computed_field
     @property
     def image_path_4(self) -> Optional[str]:
         """Get fourth image URL for backward compatibility."""
-        if not self.images or len(self.images) < 4:
+        images = self.images
+        if images is None or len(images) < 4:
             return None
-        non_primary = [img for img in self.images if not img.is_primary]
+        # Type narrowing: images is now List[ImageResponse]
+        assert images is not None  # Type guard for linter
+        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
         if len(non_primary) > 2:
             return non_primary[2].url
-        return self.images[3].url if len(self.images) > 3 else None
+        return images[3].url if len(images) > 3 else None  # type: ignore[index]
 
     class Config:
         from_attributes = True

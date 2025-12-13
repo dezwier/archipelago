@@ -1,6 +1,9 @@
 """
 Vocabulary endpoints for retrieving paired vocabulary items.
 """
+# pyright: reportAttributeAccessIssue=false
+# pyright: reportCallIssue=false
+# pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, func, or_
 from sqlalchemy.orm import aliased

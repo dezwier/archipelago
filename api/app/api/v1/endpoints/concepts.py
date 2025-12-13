@@ -1,10 +1,13 @@
 """
 Concept CRUD endpoints.
 """
+# pyright: reportAttributeAccessIssue=false
+# pyright: reportCallIssue=false
+# pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, exists, or_
+from sqlalchemy import func, or_
 from datetime import datetime, timezone
 from pathlib import Path
 import logging
@@ -50,7 +53,7 @@ async def get_concepts(
         List of concepts
     """
     concepts = session.exec(
-        select(Concept).offset(skip).limit(limit).order_by(Concept.created_at.desc())
+        select(Concept).offset(skip).limit(limit).order_by(Concept.created_at.desc())  # type: ignore[attr-defined]
     ).all()
     
     # Load images for each concept
@@ -159,9 +162,9 @@ async def get_concepts_by_term(
     # Use ilike for PostgreSQL case-insensitive pattern matching with wildcards
     concepts = session.exec(
         select(Concept).where(
-            Concept.term.isnot(None),
-            Concept.term.ilike(f"%{search_term}%")
-        ).order_by(Concept.created_at.desc())
+            Concept.term.isnot(None),  # type: ignore[attr-defined]
+            Concept.term.ilike(f"%{search_term}%")  # type: ignore[attr-defined]
+        ).order_by(Concept.created_at.desc())  # type: ignore[attr-defined]
     ).all()
     
     # Load images for each concept

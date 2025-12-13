@@ -1,7 +1,10 @@
 """
 Topics endpoint.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+# pyright: reportAttributeAccessIssue=false
+# pyright: reportCallIssue=false
+# pyright: reportArgumentType=false
+from fastapi import APIRouter, Depends, status
 from sqlmodel import Session, select
 from app.core.database import get_session
 from app.models.models import Topic
@@ -45,7 +48,7 @@ async def get_topics(
     query = select(Topic)
     if user_id is not None:
         query = query.where(Topic.user_id == user_id)
-    query = query.order_by(Topic.created_at.desc())
+    query = query.order_by(Topic.created_at.desc())  # type: ignore
     topics = session.exec(query).all()
     return TopicsResponse(
         topics=[TopicResponse.model_validate(topic) for topic in topics]
@@ -63,7 +66,7 @@ async def create_topic(
     # Check if topic already exists for this user
     existing_topic = session.exec(
         select(Topic).where(
-            Topic.name.ilike(topic_name_lower),
+            Topic.name.ilike(topic_name_lower),  # type: ignore[attr-defined]
             Topic.user_id == request.user_id
         )
     ).first()

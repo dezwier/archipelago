@@ -59,3 +59,7 @@ def downgrade() -> None:
     op.drop_column('topic', 'user_id')
     op.drop_column('topic', 'description')
 
+
+
+
+

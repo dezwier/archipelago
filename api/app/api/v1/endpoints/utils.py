@@ -17,4 +17,3 @@ def ensure_capitalized(text: str) -> str:
     if not text:
         return text
     return text[0].upper() + text[1:] if len(text) > 0 else text
-

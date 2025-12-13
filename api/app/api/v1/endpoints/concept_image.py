@@ -7,7 +7,6 @@ from sqlmodel import Session, select
 from typing import Optional
 from pydantic import BaseModel, Field
 import requests
-import os
 import logging
 import base64
 from pathlib import Path

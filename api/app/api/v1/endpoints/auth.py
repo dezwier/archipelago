@@ -3,7 +3,6 @@ from sqlmodel import Session, select
 from app.core.database import get_session
 from app.models.models import User, Language
 from app.schemas.auth import LoginRequest, RegisterRequest, AuthResponse, UserResponse, UpdateUserLanguagesRequest
-from datetime import datetime
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

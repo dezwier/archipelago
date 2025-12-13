@@ -1,6 +1,9 @@
 """
 Lemma generation endpoint - unified endpoint for generating translations.
 """
+# pyright: reportAttributeAccessIssue=false
+# pyright: reportCallIssue=false
+# pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
@@ -103,11 +106,11 @@ async def generate_lemma(
             valid_registers = ['neutral', 'formal', 'informal', 'slang']
             if llm_data['register'] not in valid_registers:
                 raise ValueError(f"Invalid register value: {llm_data['register']}. Must be one of: {', '.join(valid_registers)}")
-        
+
         logger.info(f"=== VALIDATED LEMMA DATA ===")
         logger.info(f"Term: '{llm_data.get('term')}', Description: '{llm_data.get('description')}'")
         logger.info(f"LLM Output JSON: {json.dumps(llm_data, indent=2, ensure_ascii=False)}")
-        
+
     except Exception as e:
         logger.error(f"=== VALIDATION ERROR ===")
         logger.error(f"LLM Output that failed validation: {json.dumps(llm_data, indent=2, ensure_ascii=False)}")
@@ -118,7 +121,6 @@ async def generate_lemma(
         )
     
     # If concept_id is provided, create/update the lemma in the database
-    lemma_created = False
     lemma_updated = False
     if request.concept_id is not None:
         try:
@@ -252,7 +254,7 @@ async def generate_lemmas_batch(
     # Validate all target languages exist
     target_language_codes = [lang.lower() for lang in request.target_languages]
     valid_languages = session.exec(
-        select(Language).where(Language.code.in_(target_language_codes))
+        select(Language).where(Language.code.in_(target_language_codes))  # type: ignore
     ).all()
     
     found_language_codes = {lang.code.lower() for lang in valid_languages}

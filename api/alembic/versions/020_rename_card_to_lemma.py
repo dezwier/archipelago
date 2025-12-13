@@ -97,3 +97,7 @@ def downgrade() -> None:
         ondelete='CASCADE'
     )
 
+
+
+
+

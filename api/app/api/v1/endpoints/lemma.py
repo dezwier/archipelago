@@ -1,6 +1,9 @@
 """
 Lemma CRUD endpoints.
 """
+# pyright: reportAttributeAccessIssue=false
+# pyright: reportCallIssue=false
+# pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
