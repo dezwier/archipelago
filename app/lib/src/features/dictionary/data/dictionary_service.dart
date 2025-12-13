@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../constants/api_config.dart';
 
-class VocabularyService {
-  /// Get vocabulary cards for a user's source and target languages, paired by concept_id.
-  /// If userId is null, returns English-only vocabulary for logged-out users.
+class DictionaryService {
+  /// Get dictionary cards for a user's source and target languages, paired by concept_id.
+  /// If userId is null, returns English-only dictionary for logged-out users.
   /// 
   /// Returns a map with:
   /// - 'success': bool
-  /// - 'items': List<Map<String, dynamic>> (if successful) - paired vocabulary items
+  /// - 'items': List<Map<String, dynamic>> (if successful) - paired dictionary items
   /// - 'total': int (if successful) - total number of items
   /// - 'page': int (if successful) - current page number
   /// - 'page_size': int (if successful) - items per page
@@ -16,7 +16,7 @@ class VocabularyService {
   /// - 'has_previous': bool (if successful) - whether there are previous pages
   /// - 'concepts_with_all_visible_languages': int? (if successful) - count of concepts with cards for all visible languages
   /// - 'message': String (if error)
-  static Future<Map<String, dynamic>> getVocabulary({
+  static Future<Map<String, dynamic>> getDictionary({
     int? userId,
     int page = 1,
     int pageSize = 20,
@@ -87,7 +87,7 @@ class VocabularyService {
       queryParams['part_of_speech'] = partOfSpeech.join(',');
     }
     
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/vocabulary').replace(
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/dictionary').replace(
       queryParameters: queryParams,
     );
     
@@ -117,20 +117,20 @@ class VocabularyService {
           final error = jsonDecode(response.body) as Map<String, dynamic>;
           return {
             'success': false,
-            'message': error['detail'] as String? ?? 'Failed to fetch vocabulary',
+            'message': error['detail'] as String? ?? 'Failed to fetch dictionary',
           };
         } catch (_) {
           // Response is not JSON (might be HTML error page)
           return {
             'success': false,
-            'message': 'Failed to fetch vocabulary: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+            'message': 'Failed to fetch dictionary: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
           };
         }
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Error fetching vocabulary: ${e.toString()}',
+        'message': 'Error fetching dictionary: ${e.toString()}',
       };
     }
   }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-class VocabularyErrorState extends StatelessWidget {
+class DictionaryErrorState extends StatelessWidget {
   final String errorMessage;
   final VoidCallback onRetry;
 
-  const VocabularyErrorState({
+  const DictionaryErrorState({
     super.key,
     required this.errorMessage,
     required this.onRetry,

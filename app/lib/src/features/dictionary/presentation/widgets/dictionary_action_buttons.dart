@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class VocabularyActionButtons extends StatelessWidget {
+class DictionaryActionButtons extends StatelessWidget {
   final bool isEditing;
   final VoidCallback onEdit;
   final VoidCallback onSave;
@@ -8,7 +8,7 @@ class VocabularyActionButtons extends StatelessWidget {
   final VoidCallback? onRegenerate;
   final VoidCallback? onDelete;
 
-  const VocabularyActionButtons({
+  const DictionaryActionButtons({
     super.key,
     required this.isEditing,
     required this.onEdit,

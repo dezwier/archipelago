@@ -1,4 +1,4 @@
-class VocabularyCard {
+class DictionaryCard {
   final int id;
   final int conceptId;
   final String languageCode;
@@ -14,7 +14,7 @@ class VocabularyCard {
   final String? formalityRegister;
   final String? notes;
 
-  VocabularyCard({
+  DictionaryCard({
     required this.id,
     required this.conceptId,
     required this.languageCode,
@@ -31,8 +31,8 @@ class VocabularyCard {
     this.notes,
   });
 
-  factory VocabularyCard.fromJson(Map<String, dynamic> json) {
-    return VocabularyCard(
+  factory DictionaryCard.fromJson(Map<String, dynamic> json) {
+    return DictionaryCard(
       id: json['id'] as int,
       conceptId: json['concept_id'] as int,
       languageCode: json['language_code'] as String,

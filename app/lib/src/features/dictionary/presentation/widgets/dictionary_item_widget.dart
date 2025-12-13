@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
-import '../../domain/paired_vocabulary_item.dart';
-import '../../domain/vocabulary_card.dart';
+import '../../domain/paired_dictionary_item.dart';
+import '../../domain/dictionary_card.dart';
 import '../../../../utils/html_entity_decoder.dart';
 import '../../../../utils/language_emoji.dart';
 import 'language_lemma_widget.dart';
 
-class VocabularyItemWidget extends StatelessWidget {
-  final PairedVocabularyItem item;
+class DictionaryItemWidget extends StatelessWidget {
+  final PairedDictionaryItem item;
   final String? sourceLanguageCode;
   final String? targetLanguageCode;
   final Map<String, bool> languageVisibility;
   final List<String> languagesToShow;
   final bool showDescription;
   final bool showExtraInfo;
-  final List<PairedVocabularyItem> allItems;
+  final List<PairedDictionaryItem> allItems;
   final VoidCallback onTap;
 
-  const VocabularyItemWidget({
+  const DictionaryItemWidget({
     super.key,
     required this.item,
     this.sourceLanguageCode,
@@ -119,7 +119,7 @@ class VocabularyItemWidget extends StatelessWidget {
 
   Widget _buildLanguageSection(
     BuildContext context, {
-    required VocabularyCard card,
+    required DictionaryCard card,
     required String languageCode,
   }) {
     return Column(

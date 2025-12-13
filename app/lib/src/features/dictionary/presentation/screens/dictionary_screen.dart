@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../controllers/vocabulary_controller.dart';
-import '../../domain/paired_vocabulary_item.dart';
-import '../widgets/vocabulary_item_widget.dart';
-import '../widgets/vocabulary_empty_state.dart';
-import '../widgets/vocabulary_error_state.dart';
-import '../widgets/delete_vocabulary_dialog.dart';
-import '../widgets/vocabulary_detail_dialog.dart';
-import '../widgets/vocabulary_filter_sheet.dart';
+import '../controllers/dictionary_controller.dart';
+import '../../domain/paired_dictionary_item.dart';
+import '../widgets/dictionary_item_widget.dart';
+import '../widgets/dictionary_empty_state.dart';
+import '../widgets/dictionary_error_state.dart';
+import '../widgets/delete_dictionary_dialog.dart';
+import '../widgets/dictionary_detail_dialog.dart';
+import '../widgets/dictionary_filter_sheet.dart';
 import '../widgets/dictionary_search_bar.dart';
 import '../widgets/dictionary_filter_menu.dart';
 import '../widgets/dictionary_fab_buttons.dart';
@@ -32,7 +32,7 @@ class DictionaryScreen extends StatefulWidget {
 }
 
 class _DictionaryScreenState extends State<DictionaryScreen> {
-  late final VocabularyController _controller;
+  late final DictionaryController _controller;
   late final CardGenerationState _cardGenerationState;
   late final LanguageVisibilityManager _languageVisibilityManager;
   final ScrollController _scrollController = ScrollController();
@@ -52,7 +52,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = VocabularyController();
+    _controller = DictionaryController();
     _cardGenerationState = CardGenerationState();
     _languageVisibilityManager = LanguageVisibilityManager();
     _controller.initialize();
@@ -193,7 +193,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
   
   void _onCardGenerationComplete() {
-    // Refresh vocabulary to show new cards
+    // Refresh dictionary to show new cards
     _controller.refresh();
     _cardGenerationState.clearCurrentConcept();
   }
@@ -202,7 +202,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     if (_scrollController.position.pixels >= 
         _scrollController.position.maxScrollExtent * 0.8) {
       // Load more when 80% scrolled
-      _controller.loadMoreVocabulary();
+      _controller.loadMoreDictionary();
     }
   }
 
@@ -222,7 +222,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
 
         if (_controller.errorMessage != null) {
           return Scaffold(
-            body: VocabularyErrorState(
+            body: DictionaryErrorState(
               errorMessage: _controller.errorMessage!,
               onRetry: _controller.refresh,
             ),
@@ -280,13 +280,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                       ),
                     ),
                   ),
-                // Paired vocabulary items
+                // Paired dictionary items
                 if (_controller.filteredItems.isNotEmpty)
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final item = _controller.filteredItems[index];
-                        return VocabularyItemWidget(
+                        return DictionaryItemWidget(
                           item: item,
                           sourceLanguageCode: _controller.sourceLanguageCode,
                           targetLanguageCode: _controller.targetLanguageCode,
@@ -307,7 +307,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                     hasScrollBody: false,
                     child: _controller.searchQuery.isNotEmpty
                         ? const DictionaryEmptySearchState()
-                        : const VocabularyEmptyState(),
+                        : const DictionaryEmptyState(),
                   ),
                 // Loading more indicator
                 if (_controller.isLoadingMore)
@@ -381,7 +381,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     final firstVisibleLanguage = _languageVisibilityManager.languagesToShow.isNotEmpty 
         ? _languageVisibilityManager.languagesToShow.first 
         : null;
-    showVocabularyFilterSheet(
+    showDictionaryFilterSheet(
       context: context,
       controller: _controller,
       topics: _allTopics,
@@ -432,7 +432,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
             _languageVisibilityManager.toggleLanguageVisibility(languageCode);
             // Update language filter for search (concepts are no longer filtered by visibility)
             _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-            // Update visible languages - this will refresh vocabulary and counts
+            // Update visible languages - this will refresh dictionary and counts
             _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
           });
         },
@@ -450,7 +450,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
   }
 
-  Future<void> _handleEdit(PairedVocabularyItem item) async {
+  Future<void> _handleEdit(PairedDictionaryItem item) async {
     // Navigate to edit concept screen
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -459,7 +459,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
 
     if (result == true && mounted) {
-      // Refresh the vocabulary list to show updated concept
+      // Refresh the dictionary list to show updated concept
       await _controller.refresh();
       
       // Refresh the detail drawer if it's still open
@@ -478,10 +478,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     }
   }
 
-  Future<void> _handleDelete(PairedVocabularyItem item) async {
+  Future<void> _handleDelete(PairedDictionaryItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => const DeleteVocabularyDialog(),
+      builder: (context) => const DeleteDictionaryDialog(),
     );
 
     if (confirmed == true && mounted) {
@@ -509,12 +509,12 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     }
   }
 
-  void _handleItemTap(PairedVocabularyItem item) {
+  void _handleItemTap(PairedDictionaryItem item) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => VocabularyDetailDrawer(
+      builder: (context) => DictionaryDetailDrawer(
         item: item,
         sourceLanguageCode: _controller.sourceLanguageCode,
         targetLanguageCode: _controller.targetLanguageCode,
@@ -527,8 +527,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
   }
 
-  Future<void> _handleItemUpdated(BuildContext context, PairedVocabularyItem item) async {
-    // Refresh the vocabulary list to get updated item
+  Future<void> _handleItemUpdated(BuildContext context, PairedDictionaryItem item) async {
+    // Refresh the dictionary list to get updated item
     await _controller.refresh();
     
     // Find the updated item in the list

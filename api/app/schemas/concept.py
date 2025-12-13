@@ -219,8 +219,8 @@ class CreateConceptResponse(BaseModel):
     lemmas: List[LemmaResponse]
 
 
-class PairedVocabularyItem(BaseModel):
-    """Paired vocabulary item - groups lemmas by concept."""
+class PairedDictionaryItem(BaseModel):
+    """Paired dictionary item - groups lemmas by concept."""
     concept_id: int
     lemmas: List[LemmaResponse] = Field(default=[], description="All lemmas for this concept")
     source_lemma: Optional[LemmaResponse] = None
@@ -295,9 +295,9 @@ class PairedVocabularyItem(BaseModel):
         from_attributes = True
 
 
-class VocabularyResponse(BaseModel):
-    """Response schema for vocabulary endpoint."""
-    items: List[PairedVocabularyItem]
+class DictionaryResponse(BaseModel):
+    """Response schema for dictionary endpoint."""
+    items: List[PairedDictionaryItem]
     total: int = Field(..., description="Total number of items")
     page: int = Field(..., description="Current page number (1-indexed)")
     page_size: int = Field(..., description="Number of items per page")

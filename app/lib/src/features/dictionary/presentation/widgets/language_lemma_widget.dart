@@ -3,10 +3,10 @@ import 'package:audioplayers/audioplayers.dart';
 import '../../../../utils/html_entity_decoder.dart';
 import '../../../../utils/language_emoji.dart';
 import '../../../../constants/api_config.dart';
-import '../../domain/vocabulary_card.dart';
+import '../../domain/dictionary_card.dart';
 
 class LanguageLemmaWidget extends StatefulWidget {
-  final VocabularyCard card;
+  final DictionaryCard card;
   final String languageCode;
   final bool showDescription;
   final bool showExtraInfo;

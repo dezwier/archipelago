@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import '../../domain/paired_vocabulary_item.dart';
+import '../../domain/paired_dictionary_item.dart';
 import '../../../../constants/api_config.dart';
 import '../../../generate_flashcards/data/flashcard_service.dart';
 
 class ConceptImageWidget extends StatefulWidget {
-  final PairedVocabularyItem item;
-  final Function(PairedVocabularyItem)? onItemUpdated;
+  final PairedDictionaryItem item;
+  final Function(PairedDictionaryItem)? onItemUpdated;
   final double? size;
   final bool showEditButtons;
   final VoidCallback? onEditButtonsChanged;

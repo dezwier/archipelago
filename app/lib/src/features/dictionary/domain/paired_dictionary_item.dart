@@ -1,10 +1,10 @@
-import 'vocabulary_card.dart';
+import 'dictionary_card.dart';
 
-class PairedVocabularyItem {
+class PairedDictionaryItem {
   final int conceptId;
-  final List<VocabularyCard> cards;
-  final VocabularyCard? sourceCard;
-  final VocabularyCard? targetCard;
+  final List<DictionaryCard> cards;
+  final DictionaryCard? sourceCard;
+  final DictionaryCard? targetCard;
   final String? imagePath1;
   final String? imagePath2;
   final String? imagePath3;
@@ -18,9 +18,9 @@ class PairedVocabularyItem {
   final int? topicId; // Topic ID for image generation
   final String? topicDescription; // Topic description for image generation
 
-  PairedVocabularyItem({
+  PairedDictionaryItem({
     required this.conceptId,
-    List<VocabularyCard>? cards,
+    List<DictionaryCard>? cards,
     this.sourceCard,
     this.targetCard,
     this.imagePath1,
@@ -43,7 +43,7 @@ class PairedVocabularyItem {
   }
 
   /// Get a lemma by language code
-  VocabularyCard? getCardByLanguage(String languageCode) {
+  DictionaryCard? getCardByLanguage(String languageCode) {
     try {
       return cards.firstWhere(
         (card) => card.languageCode == languageCode,
@@ -53,20 +53,20 @@ class PairedVocabularyItem {
     }
   }
 
-  factory PairedVocabularyItem.fromJson(Map<String, dynamic> json) {
+  factory PairedDictionaryItem.fromJson(Map<String, dynamic> json) {
     // Parse lemmas list if available
-    List<VocabularyCard> cardsList = [];
+    List<DictionaryCard> cardsList = [];
     if (json['lemmas'] != null) {
       final lemmasData = json['lemmas'] as List<dynamic>;
       cardsList = lemmasData
-          .map((lemmaJson) => VocabularyCard.fromJson(lemmaJson as Map<String, dynamic>))
+          .map((lemmaJson) => DictionaryCard.fromJson(lemmaJson as Map<String, dynamic>))
           .toList();
     }
     // Fallback to 'cards' for backward compatibility
     else if (json['cards'] != null) {
       final cardsData = json['cards'] as List<dynamic>;
       cardsList = cardsData
-          .map((cardJson) => VocabularyCard.fromJson(cardJson as Map<String, dynamic>))
+          .map((cardJson) => DictionaryCard.fromJson(cardJson as Map<String, dynamic>))
           .toList();
     }
     
@@ -79,18 +79,18 @@ class PairedVocabularyItem {
           .toList();
     }
     
-    return PairedVocabularyItem(
+    return PairedDictionaryItem(
       conceptId: json['concept_id'] as int,
       cards: cardsList,
       sourceCard: json['source_lemma'] != null
-          ? VocabularyCard.fromJson(json['source_lemma'] as Map<String, dynamic>)
+          ? DictionaryCard.fromJson(json['source_lemma'] as Map<String, dynamic>)
           : json['source_card'] != null
-              ? VocabularyCard.fromJson(json['source_card'] as Map<String, dynamic>)
+              ? DictionaryCard.fromJson(json['source_card'] as Map<String, dynamic>)
               : null,
       targetCard: json['target_lemma'] != null
-          ? VocabularyCard.fromJson(json['target_lemma'] as Map<String, dynamic>)
+          ? DictionaryCard.fromJson(json['target_lemma'] as Map<String, dynamic>)
           : json['target_card'] != null
-              ? VocabularyCard.fromJson(json['target_card'] as Map<String, dynamic>)
+              ? DictionaryCard.fromJson(json['target_card'] as Map<String, dynamic>)
               : null,
       imagePath1: json['image_path_1'] as String?,
       imagePath2: json['image_path_2'] as String?,

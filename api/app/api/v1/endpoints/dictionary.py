@@ -1,5 +1,5 @@
 """
-Vocabulary endpoints for retrieving paired vocabulary items.
+Dictionary endpoints for retrieving paired dictionary items.
 """
 # pyright: reportAttributeAccessIssue=false
 # pyright: reportCallIssue=false
@@ -12,8 +12,8 @@ from app.core.database import get_session
 from app.models.models import Concept, Lemma, Image, CEFRLevel
 from app.schemas.lemma import LemmaResponse
 from app.schemas.concept import (
-    PairedVocabularyItem,
-    VocabularyResponse,
+    PairedDictionaryItem,
+    DictionaryResponse,
     ImageResponse,
 )
 from app.schemas.utils import normalize_part_of_speech
@@ -22,11 +22,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/vocabulary", tags=["vocabulary"])
+router = APIRouter(prefix="/dictionary", tags=["dictionary"])
 
 
-@router.get("", response_model=VocabularyResponse)
-async def get_vocabulary(
+@router.get("", response_model=DictionaryResponse)
+async def get_dictionary(
     user_id: Optional[int] = None,
     page: int = 1,
     page_size: int = 20,
@@ -452,7 +452,7 @@ async def get_vocabulary(
                 pass
         
         paired_items.append(
-            PairedVocabularyItem(
+            PairedDictionaryItem(
                 concept_id=concept.id,
                 lemmas=visible_lemmas_list,
                 source_lemma=source_lemma_response,
@@ -570,7 +570,7 @@ async def get_vocabulary(
             select(func.count()).select_from(lemma_count_subquery)
         ).one()
     
-    return VocabularyResponse(
+    return DictionaryResponse(
         items=paired_items,
         total=total,
         page=page,
@@ -580,3 +580,4 @@ async def get_vocabulary(
         concepts_with_all_visible_languages=concepts_with_all_visible_languages,
         total_concepts_with_term=total_concepts_with_term
     )
+

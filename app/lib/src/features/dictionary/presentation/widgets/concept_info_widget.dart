@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../domain/paired_vocabulary_item.dart';
+import '../../domain/paired_dictionary_item.dart';
 
 class ConceptInfoWidget extends StatelessWidget {
-  final PairedVocabularyItem item;
+  final PairedDictionaryItem item;
 
   const ConceptInfoWidget({
     super.key,

@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../data/vocabulary_service.dart';
-import '../../domain/paired_vocabulary_item.dart';
+import '../../data/dictionary_service.dart';
+import '../../domain/paired_dictionary_item.dart';
 import '../../../generate_flashcards/data/topic_service.dart';
 import '../../../profile/domain/user.dart';
 
 class EditConceptController extends ChangeNotifier {
-  final PairedVocabularyItem item;
+  final PairedDictionaryItem item;
   final TextEditingController termController;
   final TextEditingController descriptionController;
   int? selectedTopicId;
@@ -67,7 +67,7 @@ class EditConceptController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await VocabularyService.updateConcept(
+      final result = await DictionaryService.updateConcept(
         conceptId: item.conceptId,
         term: termController.text.trim(),
         description: descriptionController.text.trim().isEmpty 

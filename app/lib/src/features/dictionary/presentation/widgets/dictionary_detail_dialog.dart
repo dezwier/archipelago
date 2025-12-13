@@ -1,25 +1,25 @@
 import 'package:flutter/material.dart';
 import '../../../../utils/html_entity_decoder.dart';
 import '../../../../utils/language_emoji.dart';
-import '../../domain/paired_vocabulary_item.dart';
-import '../../domain/vocabulary_card.dart';
+import '../../domain/paired_dictionary_item.dart';
+import '../../domain/dictionary_card.dart';
 import '../../../generate_flashcards/data/flashcard_service.dart';
 import 'language_lemma_widget.dart';
 import 'concept_image_widget.dart';
-import 'vocabulary_action_buttons.dart';
+import 'dictionary_action_buttons.dart';
 import 'concept_info_widget.dart';
 
-class VocabularyDetailDrawer extends StatefulWidget {
-  final PairedVocabularyItem item;
+class DictionaryDetailDrawer extends StatefulWidget {
+  final PairedDictionaryItem item;
   final String? sourceLanguageCode;
   final String? targetLanguageCode;
   final Map<String, bool> languageVisibility;
   final List<String> languagesToShow;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
-  final Function(PairedVocabularyItem)? onItemUpdated;
+  final Function(PairedDictionaryItem)? onItemUpdated;
 
-  const VocabularyDetailDrawer({
+  const DictionaryDetailDrawer({
     super.key,
     required this.item,
     this.sourceLanguageCode,
@@ -32,10 +32,10 @@ class VocabularyDetailDrawer extends StatefulWidget {
   });
 
   @override
-  State<VocabularyDetailDrawer> createState() => _VocabularyDetailDrawerState();
+  State<DictionaryDetailDrawer> createState() => _DictionaryDetailDrawerState();
 }
 
-class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
+class _DictionaryDetailDrawerState extends State<DictionaryDetailDrawer> {
   bool _isEditing = false;
   final Set<String> _retrievingLanguages = {}; // Track which languages are being retrieved
 
@@ -102,7 +102,7 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                       ),
                       const SizedBox(height: 12),
                       // Action buttons horizontally below
-                      VocabularyActionButtons(
+                      DictionaryActionButtons(
                         isEditing: _isEditing,
                         onEdit: () {
                           widget.onEdit?.call();
@@ -148,7 +148,7 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
                                 widget.item.topicDescription != null)
                               const SizedBox(height: 12),
                             // Action buttons below
-                            VocabularyActionButtons(
+                            DictionaryActionButtons(
                               isEditing: _isEditing,
                               onEdit: () {
                                 widget.onEdit?.call();
@@ -239,7 +239,7 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
 
   Widget _buildLanguageSection(
     BuildContext context, {
-    required VocabularyCard card,
+    required DictionaryCard card,
     required String languageCode,
   }) {
     // Edit mode is only for images, not for terms
@@ -442,7 +442,7 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
 
       if (result['success'] == true) {
         // Refresh the item by calling onItemUpdated
-        // This will refresh the vocabulary list and reopen the dialog with updated data
+        // This will refresh the dictionary list and reopen the dialog with updated data
         widget.onItemUpdated?.call(widget.item);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

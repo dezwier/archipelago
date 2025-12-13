@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../generate_flashcards/data/topic_service.dart';
-import '../controllers/vocabulary_controller.dart';
+import '../controllers/dictionary_controller.dart';
 
 /// Constants for filter options
 class FilterConstants {
@@ -23,15 +23,15 @@ class FilterConstants {
   ];
 }
 
-/// Bottom sheet widget for vocabulary filtering
-class VocabularyFilterSheet extends StatefulWidget {
-  final VocabularyController controller;
+/// Bottom sheet widget for dictionary filtering
+class DictionaryFilterSheet extends StatefulWidget {
+  final DictionaryController controller;
   final List<Topic> topics;
   final bool isLoadingTopics;
   final VoidCallback? onApplyFilters;
   final String? firstVisibleLanguage;
 
-  const VocabularyFilterSheet({
+  const DictionaryFilterSheet({
     super.key,
     required this.controller,
     required this.topics,
@@ -41,10 +41,10 @@ class VocabularyFilterSheet extends StatefulWidget {
   });
 
   @override
-  State<VocabularyFilterSheet> createState() => _VocabularyFilterSheetState();
+  State<DictionaryFilterSheet> createState() => _DictionaryFilterSheetState();
 }
 
-class _VocabularyFilterSheetState extends State<VocabularyFilterSheet> {
+class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
   // Pending filter changes - only applied when drawer is closed
   SortOption? _pendingSortOption;
   Set<int>? _pendingTopicIds;
@@ -826,9 +826,9 @@ class _VocabularyFilterSheetState extends State<VocabularyFilterSheet> {
 }
 
 /// Helper function to show the filter bottom sheet
-void showVocabularyFilterSheet({
+void showDictionaryFilterSheet({
   required BuildContext context,
-  required VocabularyController controller,
+  required DictionaryController controller,
   required List<Topic> topics,
   bool isLoadingTopics = false,
   String? firstVisibleLanguage,
@@ -839,7 +839,7 @@ void showVocabularyFilterSheet({
     backgroundColor: Colors.transparent,
     isDismissible: true,
     enableDrag: true,
-    builder: (context) => VocabularyFilterSheet(
+    builder: (context) => DictionaryFilterSheet(
       controller: controller,
       topics: topics,
       isLoadingTopics: isLoadingTopics,

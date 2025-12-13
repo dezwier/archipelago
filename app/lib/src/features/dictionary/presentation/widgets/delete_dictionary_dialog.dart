@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class DeleteVocabularyDialog extends StatelessWidget {
-  const DeleteVocabularyDialog({super.key});
+class DeleteDictionaryDialog extends StatelessWidget {
+  const DeleteDictionaryDialog({super.key});
 
   @override
   Widget build(BuildContext context) {

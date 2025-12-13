@@ -532,7 +532,7 @@ async def get_concepts_with_missing_languages(
     base_query_with_user_id = select(Concept).where(Concept.user_id.isnot(None))
     base_query_without_user_id = select(Concept).where(Concept.user_id.is_(None))
     
-    # Apply public/private filters (same logic as vocabulary endpoint)
+    # Apply public/private filters (same logic as dictionary endpoint)
     if not request.include_public and not request.include_private:
         # Both filters are False - return empty result
         base_query_with_user_id = base_query_with_user_id.where(False)
@@ -549,7 +549,7 @@ async def get_concepts_with_missing_languages(
             base_query_with_user_id = base_query_with_user_id.where(False)
         base_query_without_user_id = base_query_without_user_id.where(False)  # No concepts without user_id
     
-    # Apply topic_ids filter if provided (same logic as vocabulary endpoint)
+    # Apply topic_ids filter if provided (same logic as dictionary endpoint)
     if request.topic_ids is not None and len(request.topic_ids) > 0:
         if request.include_without_topic:
             # Include concepts with these topic IDs OR concepts without a topic
@@ -593,7 +593,7 @@ async def get_concepts_with_missing_languages(
             func.lower(Concept.part_of_speech).in_(pos_list_lower)
         )
     
-    # Apply search filter if provided (same logic as vocabulary endpoint)
+    # Apply search filter if provided (same logic as dictionary endpoint)
     if request.search and request.search.strip():
         search_term = f"%{request.search.strip().lower()}%"
         

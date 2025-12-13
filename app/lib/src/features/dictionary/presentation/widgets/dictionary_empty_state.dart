@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class VocabularyEmptyState extends StatelessWidget {
-  const VocabularyEmptyState({super.key});
+class DictionaryEmptyState extends StatelessWidget {
+  const DictionaryEmptyState({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -16,12 +16,12 @@ class VocabularyEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No vocabulary yet',
+            'No dictionary yet',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'Generate flashcards to build your vocabulary',
+            'Generate flashcards to build your dictionary',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
             ),

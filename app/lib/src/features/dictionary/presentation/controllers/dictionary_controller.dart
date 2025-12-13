@@ -3,17 +3,17 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../profile/domain/user.dart';
-import '../../data/vocabulary_service.dart';
-import '../../domain/paired_vocabulary_item.dart';
+import '../../data/dictionary_service.dart';
+import '../../domain/paired_dictionary_item.dart';
 
 enum SortOption {
   alphabetical,
   timeCreatedRecentFirst,
   random,
 }
-class VocabularyController extends ChangeNotifier {
+class DictionaryController extends ChangeNotifier {
   User? _currentUser;
-  List<PairedVocabularyItem> _pairedItems = [];
+  List<PairedDictionaryItem> _pairedItems = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
   String? _errorMessage;
@@ -68,7 +68,7 @@ class VocabularyController extends ChangeNotifier {
   
   // Getters
   User? get currentUser => _currentUser;
-  List<PairedVocabularyItem> get pairedItems => _pairedItems;
+  List<PairedDictionaryItem> get pairedItems => _pairedItems;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   String? get errorMessage => _errorMessage;
@@ -112,7 +112,7 @@ class VocabularyController extends ChangeNotifier {
       _languageCodes = languageCodes;
       // Only reload if there's a search query, otherwise just update the filter for future searches
       if (_searchQuery.trim().isNotEmpty) {
-        _loadUserAndVocabulary(reset: true, showLoading: false);
+        _loadUserAndDictionary(reset: true, showLoading: false);
       }
     }
   }
@@ -121,9 +121,9 @@ class VocabularyController extends ChangeNotifier {
   void setVisibleLanguageCodes(List<String> visibleLanguageCodes) {
     if (_visibleLanguageCodes != visibleLanguageCodes) {
       _visibleLanguageCodes = visibleLanguageCodes;
-      // Always reload vocabulary when visible languages change
+      // Always reload dictionary when visible languages change
       // This updates the cards shown and recalculates the completed count with filters
-      _loadUserAndVocabulary(reset: true, showLoading: false);
+      _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
   
@@ -132,8 +132,8 @@ class VocabularyController extends ChangeNotifier {
     if (_includePublic != include) {
       _includePublic = include;
       notifyListeners(); // Notify listeners immediately for UI update
-      // Reload vocabulary when filter changes
-      _loadUserAndVocabulary(reset: true, showLoading: false);
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
   
@@ -142,8 +142,8 @@ class VocabularyController extends ChangeNotifier {
     if (_includePrivate != include) {
       _includePrivate = include;
       notifyListeners(); // Notify listeners immediately for UI update
-      // Reload vocabulary when filter changes
-      _loadUserAndVocabulary(reset: true, showLoading: false);
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
   
@@ -152,8 +152,8 @@ class VocabularyController extends ChangeNotifier {
     if (_selectedTopicIds != topicIds) {
       _selectedTopicIds = topicIds;
       notifyListeners(); // Notify listeners immediately for UI update
-      // Reload vocabulary when filter changes
-      _loadUserAndVocabulary(reset: true, showLoading: false);
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
   
@@ -162,8 +162,8 @@ class VocabularyController extends ChangeNotifier {
     if (_selectedLevels != levels) {
       _selectedLevels = levels;
       notifyListeners(); // Notify listeners immediately for UI update
-      // Reload vocabulary when filter changes
-      _loadUserAndVocabulary(reset: true, showLoading: false);
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
   
@@ -172,8 +172,8 @@ class VocabularyController extends ChangeNotifier {
     if (_selectedPartOfSpeech != partOfSpeech) {
       _selectedPartOfSpeech = partOfSpeech;
       notifyListeners(); // Notify listeners immediately for UI update
-      // Reload vocabulary when filter changes
-      _loadUserAndVocabulary(reset: true, showLoading: false);
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
   
@@ -182,8 +182,8 @@ class VocabularyController extends ChangeNotifier {
     if (_showLemmasWithoutTopic != show) {
       _showLemmasWithoutTopic = show;
       notifyListeners(); // Notify listeners immediately for UI update
-      // Reload vocabulary when filter changes
-      _loadUserAndVocabulary(reset: true, showLoading: false);
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
   
@@ -250,7 +250,7 @@ class VocabularyController extends ChangeNotifier {
   }
   
   // Filtered items - when searching, items are already filtered by API
-  List<PairedVocabularyItem> get filteredItems {
+  List<PairedDictionaryItem> get filteredItems {
     return _pairedItems;
   }
 
@@ -303,11 +303,11 @@ class VocabularyController extends ChangeNotifier {
       } else {
         _alphabeticalSortLanguageCode = null;
       }
-      _loadUserAndVocabulary(reset: true);
+      _loadUserAndDictionary(reset: true);
     }
   }
 
-  Future<void> _loadUserAndVocabulary({bool reset = false, bool showLoading = true}) async {
+  Future<void> _loadUserAndDictionary({bool reset = false, bool showLoading = true}) async {
     if (reset) {
       if (showLoading) {
         _isLoading = true;
@@ -342,8 +342,8 @@ class VocabularyController extends ChangeNotifier {
         _targetLanguageCode = null;
       }
 
-      // Load vocabulary - pass visible languages to get cards for those languages only
-      // The vocabulary endpoint will return the filtered completed count (with all filters applied)
+      // Load dictionary - pass visible languages to get cards for those languages only
+      // The dictionary endpoint will return the filtered completed count (with all filters applied)
       // Pass own_user_id when include_private is true (needed for filtering private concepts)
       // or when legacy _ownLemmasFilter is true
       final ownUserIdForApi = (_includePrivate && _currentUser != null) || 
@@ -351,7 +351,7 @@ class VocabularyController extends ChangeNotifier {
                               ? _currentUser!.id 
                               : null;
       
-      final result = await VocabularyService.getVocabulary(
+      final result = await DictionaryService.getDictionary(
         userId: _currentUser?.id,
         page: 1,
         pageSize: _pageSize,
@@ -370,7 +370,7 @@ class VocabularyController extends ChangeNotifier {
       if (result['success'] == true) {
         final List<dynamic> itemsData = result['items'] as List<dynamic>;
         final items = itemsData
-            .map((json) => PairedVocabularyItem.fromJson(json as Map<String, dynamic>))
+            .map((json) => PairedDictionaryItem.fromJson(json as Map<String, dynamic>))
             .toList();
         
         _pairedItems = items;
@@ -378,7 +378,7 @@ class VocabularyController extends ChangeNotifier {
         _currentPage = result['page'] as int;
         _totalItems = result['total'] as int;
         _hasNextPage = result['has_next'] as bool;
-        // Update filtered completed count from vocabulary endpoint (includes all filters)
+        // Update filtered completed count from dictionary endpoint (includes all filters)
         if (result['concepts_with_all_visible_languages'] != null) {
           _conceptsWithAllVisibleLanguages = result['concepts_with_all_visible_languages'] as int;
         }
@@ -387,13 +387,13 @@ class VocabularyController extends ChangeNotifier {
         }
         _errorMessage = null;
       } else {
-        _errorMessage = result['message'] as String? ?? 'Failed to load vocabulary';
+        _errorMessage = result['message'] as String? ?? 'Failed to load dictionary';
         if (showLoading) {
           _isLoading = false;
         }
       }
     } catch (e) {
-      _errorMessage = 'Error loading vocabulary: ${e.toString()}';
+      _errorMessage = 'Error loading dictionary: ${e.toString()}';
       if (showLoading) {
         _isLoading = false;
       }
@@ -401,7 +401,7 @@ class VocabularyController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadMoreVocabulary() async {
+  Future<void> loadMoreDictionary() async {
     if (_isLoadingMore || !_hasNextPage) {
       return;
     }
@@ -418,7 +418,7 @@ class VocabularyController extends ChangeNotifier {
                               ? _currentUser!.id 
                               : null;
       
-      final result = await VocabularyService.getVocabulary(
+      final result = await DictionaryService.getDictionary(
         userId: _currentUser?.id,
         page: nextPage,
         pageSize: _pageSize,
@@ -437,7 +437,7 @@ class VocabularyController extends ChangeNotifier {
       if (result['success'] == true) {
         final List<dynamic> itemsData = result['items'] as List<dynamic>;
         final newItems = itemsData
-            .map((json) => PairedVocabularyItem.fromJson(json as Map<String, dynamic>))
+            .map((json) => PairedDictionaryItem.fromJson(json as Map<String, dynamic>))
             .toList();
         
         _pairedItems.addAll(newItems);
@@ -445,31 +445,31 @@ class VocabularyController extends ChangeNotifier {
         _currentPage = result['page'] as int;
         _totalItems = result['total'] as int;
         _hasNextPage = result['has_next'] as bool;
-        // Update filtered completed count from vocabulary endpoint (includes all filters)
+        // Update filtered completed count from dictionary endpoint (includes all filters)
         if (result['concepts_with_all_visible_languages'] != null) {
           _conceptsWithAllVisibleLanguages = result['concepts_with_all_visible_languages'] as int;
         }
         _isLoadingMore = false;
       } else {
         _isLoadingMore = false;
-        _errorMessage = result['message'] as String? ?? 'Failed to load more vocabulary';
+        _errorMessage = result['message'] as String? ?? 'Failed to load more dictionary';
       }
     } catch (e) {
       _isLoadingMore = false;
-      _errorMessage = 'Error loading more vocabulary: ${e.toString()}';
+      _errorMessage = 'Error loading more dictionary: ${e.toString()}';
     }
     notifyListeners();
   }
 
-  Future<bool> deleteItem(PairedVocabularyItem item) async {
+  Future<bool> deleteItem(PairedDictionaryItem item) async {
     try {
-      final result = await VocabularyService.deleteConcept(
+      final result = await DictionaryService.deleteConcept(
         conceptId: item.conceptId,
       );
 
       if (result['success'] == true) {
-        // Reload vocabulary to reflect deletion
-        await _loadUserAndVocabulary(reset: true);
+        // Reload dictionary to reflect deletion
+        await _loadUserAndDictionary(reset: true);
         return true;
       } else {
         _errorMessage = result['message'] as String? ?? 'Failed to delete translation';
@@ -486,21 +486,21 @@ class VocabularyController extends ChangeNotifier {
   Future<void> refresh() {
     // Reload concept counts when refreshing
     _loadConceptCountTotal();
-    // Filtered completed count will be loaded from vocabulary endpoint
-    return _loadUserAndVocabulary(reset: true);
+    // Filtered completed count will be loaded from dictionary endpoint
+    return _loadUserAndDictionary(reset: true);
   }
 
   void initialize() {
     // Load concept counts separately (not affected by search)
     _loadConceptCountTotal();
-    // Load vocabulary
-    _loadUserAndVocabulary();
+    // Load dictionary
+    _loadUserAndDictionary();
   }
   
   /// Load total concept count (doesn't change during search)
   Future<void> _loadConceptCountTotal() async {
     try {
-      final result = await VocabularyService.getConceptCountTotal();
+      final result = await DictionaryService.getConceptCountTotal();
       if (result['success'] == true) {
         _totalConceptCount = result['count'] as int;
         notifyListeners();
@@ -524,7 +524,7 @@ class VocabularyController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await VocabularyService.startGenerateDescriptions(
+      final result = await DictionaryService.startGenerateDescriptions(
         userId: _currentUser!.id,
       );
 
@@ -565,7 +565,7 @@ class VocabularyController extends ChangeNotifier {
       }
 
       try {
-        final result = await VocabularyService.getDescriptionGenerationStatus(
+        final result = await DictionaryService.getDescriptionGenerationStatus(
           taskId: _descriptionTaskId!,
         );
 
@@ -580,9 +580,9 @@ class VocabularyController extends ChangeNotifier {
             timer.cancel();
             _isGeneratingDescriptions = false;
             
-            // Reload vocabulary to show updated descriptions
+            // Reload dictionary to show updated descriptions
             if (_descriptionStatus == 'completed') {
-              await _loadUserAndVocabulary(reset: true);
+              await _loadUserAndDictionary(reset: true);
             }
           }
           notifyListeners();
@@ -611,8 +611,8 @@ class VocabularyController extends ChangeNotifier {
       
       // Debounce search API calls (wait 300ms after user stops typing)
       if (query.trim().isEmpty) {
-        // If search is cleared, reload all vocabulary without showing loader
-        _loadUserAndVocabulary(reset: true, showLoading: false);
+        // If search is cleared, reload all dictionary without showing loader
+        _loadUserAndDictionary(reset: true, showLoading: false);
       } else {
         _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
           _performSearch();
@@ -636,7 +636,7 @@ class VocabularyController extends ChangeNotifier {
                               ? _currentUser!.id 
                               : null;
       
-      final result = await VocabularyService.getVocabulary(
+      final result = await DictionaryService.getDictionary(
         userId: _currentUser?.id,
         page: 1,
         pageSize: _pageSize,
@@ -655,7 +655,7 @@ class VocabularyController extends ChangeNotifier {
       if (result['success'] == true) {
         final List<dynamic> itemsData = result['items'] as List<dynamic>;
         final items = itemsData
-            .map((json) => PairedVocabularyItem.fromJson(json as Map<String, dynamic>))
+            .map((json) => PairedDictionaryItem.fromJson(json as Map<String, dynamic>))
             .toList();
         
         _pairedItems = items;
@@ -663,18 +663,18 @@ class VocabularyController extends ChangeNotifier {
         _currentPage = result['page'] as int;
         _totalItems = result['total'] as int;
         _hasNextPage = result['has_next'] as bool;
-        // Update filtered completed count from vocabulary endpoint (includes all filters)
+        // Update filtered completed count from dictionary endpoint (includes all filters)
         if (result['concepts_with_all_visible_languages'] != null) {
           _conceptsWithAllVisibleLanguages = result['concepts_with_all_visible_languages'] as int;
         }
         _errorMessage = null;
       } else {
         // On error, keep previous items visible
-        _errorMessage = result['message'] as String? ?? 'Failed to search vocabulary';
+        _errorMessage = result['message'] as String? ?? 'Failed to search dictionary';
       }
     } catch (e) {
       // On error, keep previous items visible
-      _errorMessage = 'Error searching vocabulary: ${e.toString()}';
+      _errorMessage = 'Error searching dictionary: ${e.toString()}';
     }
     notifyListeners();
   }
