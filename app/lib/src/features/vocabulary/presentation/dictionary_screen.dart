@@ -925,9 +925,28 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     });
     
     try {
+      // Get effective filters (same logic as controller)
+      final effectiveLevels = _controller.getEffectiveLevels();
+      final effectivePOS = _controller.getEffectivePartOfSpeech();
+      final effectiveTopicIds = _controller.getEffectiveTopicIds();
+      
+      // Get own user ID for private filtering
+      final ownUserId = (_controller.includePrivate && _controller.currentUser != null) 
+          ? _controller.currentUser!.id 
+          : null;
+      
       // Get concepts with missing languages for visible languages
+      // All filtering is now done API-side
       final missingResult = await FlashcardService.getConceptsWithMissingLanguages(
         languages: visibleLanguages,
+        levels: effectiveLevels,
+        partOfSpeech: effectivePOS,
+        topicIds: effectiveTopicIds,
+        includeWithoutTopic: _controller.showLemmasWithoutTopic,
+        includePublic: _controller.includePublic,
+        includePrivate: _controller.includePrivate,
+        ownUserId: ownUserId,
+        search: _controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null,
       );
       
       if (missingResult['success'] != true) {
@@ -963,30 +982,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         return;
       }
       
-      // Filter concepts based on current filters
-      final filteredConcepts = _filterConceptsByCurrentFilters(concepts);
-      
-      if (filteredConcepts.isEmpty) {
-        setState(() {
-          _isLoadingConcepts = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No concepts match the current filters'),
-              backgroundColor: Colors.blue,
-            ),
-          );
-        }
-        return;
-      }
-      
+      // All filtering is done API-side, so use concepts directly
       // Extract concept IDs, terms, and missing languages
       final conceptIds = <int>[];
       final conceptTerms = <int, String>{};
       final conceptMissingLanguages = <int, List<String>>{};
       
-      for (final c in filteredConcepts) {
+      for (final c in concepts) {
         final conceptData = c as Map<String, dynamic>;
         final concept = conceptData['concept'] as Map<String, dynamic>;
         final conceptId = concept['id'] as int;
@@ -1046,98 +1048,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         );
       }
     }
-  }
-  
-  List<dynamic> _filterConceptsByCurrentFilters(List<dynamic> concepts) {
-    return concepts.where((c) {
-      final conceptData = c as Map<String, dynamic>;
-      final concept = conceptData['concept'] as Map<String, dynamic>;
-      
-      // Filter by topic - use same logic as _getEffectiveTopicIds
-      final selectedTopicIds = _controller.selectedTopicIds;
-      final allAvailableTopicIds = _controller.allAvailableTopicIds;
-      final conceptTopicId = concept['topic_id'] as int?;
-      
-      // Check if all topics are selected (same logic as _getEffectiveTopicIds)
-      final allTopicsSelected = allAvailableTopicIds != null &&
-          allAvailableTopicIds.isNotEmpty &&
-          selectedTopicIds.length == allAvailableTopicIds.length &&
-          selectedTopicIds.containsAll(allAvailableTopicIds) &&
-          allAvailableTopicIds.containsAll(selectedTopicIds);
-      
-      if (!allTopicsSelected && selectedTopicIds.isNotEmpty) {
-        // Not all topics selected - need to filter
-        if (!_controller.showLemmasWithoutTopic) {
-          // Exclude concepts without topic
-          if (conceptTopicId == null) {
-            return false;
-          }
-          // Include only if topic is selected
-          if (!selectedTopicIds.contains(conceptTopicId)) {
-            return false;
-          }
-        } else {
-          // Include concepts without topic OR with selected topic
-          if (conceptTopicId != null && !selectedTopicIds.contains(conceptTopicId)) {
-            return false;
-          }
-        }
-      } else if (!_controller.showLemmasWithoutTopic) {
-        // All topics selected or no topics selected, but exclude concepts without topic
-        if (conceptTopicId == null) {
-          return false;
-        }
-      }
-      
-      // Filter by part of speech - use same logic as _getEffectivePartOfSpeech
-      final selectedPOS = _controller.selectedPartOfSpeech;
-      const allPOS = {
-        'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
-        'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence'
-      };
-      final allPOSSelected = selectedPOS.length == allPOS.length && 
-          selectedPOS.containsAll(allPOS);
-      
-      if (!allPOSSelected && selectedPOS.isNotEmpty) {
-        final conceptPOS = concept['part_of_speech'] as String?;
-        if (conceptPOS != null && !selectedPOS.contains(conceptPOS)) {
-          return false;
-        }
-      }
-      
-      // Filter by public/private
-      final conceptUserId = concept['user_id'] as int?;
-      final currentUserId = _controller.currentUser?.id;
-      
-      if (!_controller.includePublic && !_controller.includePrivate) {
-        return false; // Both filters are false - show nothing
-      } else if (!_controller.includePublic && _controller.includePrivate) {
-        // Only private - must have user_id matching current user
-        if (conceptUserId == null || conceptUserId != currentUserId) {
-          return false;
-        }
-      } else if (_controller.includePublic && !_controller.includePrivate) {
-        // Only public - must have user_id == null
-        if (conceptUserId != null) {
-          return false;
-        }
-      }
-      // If both are true, include all (no filter)
-      
-      // Filter by search query (if any)
-      final searchQuery = _controller.searchQuery.trim().toLowerCase();
-      if (searchQuery.isNotEmpty) {
-        final conceptTerm = (concept['term'] as String? ?? '').toLowerCase();
-        if (!conceptTerm.contains(searchQuery)) {
-          return false;
-        }
-      }
-      
-      // Note: Level filtering is not available in ConceptResponse, so we skip it
-      // This is a limitation - we could enhance the API endpoint later to include level
-      
-      return true;
-    }).toList();
   }
 
 }

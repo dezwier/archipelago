@@ -199,7 +199,7 @@ class VocabularyController extends ChangeNotifier {
   
   // Get effective topic IDs to pass to API
   // Returns null if all topics are selected (no filter needed)
-  List<int>? _getEffectiveTopicIds() {
+  List<int>? getEffectiveTopicIds() {
     // If no topics selected, return null (show all)
     if (_selectedTopicIds.isEmpty) {
       return null;
@@ -219,7 +219,7 @@ class VocabularyController extends ChangeNotifier {
   
   // Get effective levels to pass to API
   // Returns null if all levels are selected (no filter needed)
-  List<String>? _getEffectiveLevels() {
+  List<String>? getEffectiveLevels() {
     const allLevels = {'A1', 'A2', 'B1', 'B2', 'C1', 'C2'};
     // If all levels are selected, return null (show all)
     if (_selectedLevels.length == allLevels.length && 
@@ -236,7 +236,7 @@ class VocabularyController extends ChangeNotifier {
   
   // Get effective part of speech values to pass to API
   // Returns null if all POS are selected (no filter needed)
-  List<String>? _getEffectivePartOfSpeech() {
+  List<String>? getEffectivePartOfSpeech() {
     const allPOS = {
       'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
       'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence'
@@ -366,10 +366,10 @@ class VocabularyController extends ChangeNotifier {
         ownUserId: ownUserIdForApi, // Pass own user id filter (for private concepts or legacy filter)
         includePublic: _includePublic, // Pass public filter
         includePrivate: _includePrivate, // Pass private filter
-        topicIds: _getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
+        topicIds: getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
         includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
-        levels: _getEffectiveLevels(), // Pass level filter (null if all levels selected)
-        partOfSpeech: _getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
+        levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
+        partOfSpeech: getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
       );
 
       if (result['success'] == true) {
@@ -433,10 +433,10 @@ class VocabularyController extends ChangeNotifier {
         ownUserId: ownUserIdForApi, // Pass own user id filter (for private concepts or legacy filter)
         includePublic: _includePublic, // Pass public filter
         includePrivate: _includePrivate, // Pass private filter
-        topicIds: _getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
+        topicIds: getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
         includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
-        levels: _getEffectiveLevels(), // Pass level filter (null if all levels selected)
-        partOfSpeech: _getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
+        levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
+        partOfSpeech: getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
       );
 
       if (result['success'] == true) {
@@ -703,10 +703,10 @@ class VocabularyController extends ChangeNotifier {
         ownUserId: ownUserIdForApi, // Pass own user id filter (for private concepts or legacy filter)
         includePublic: _includePublic, // Pass public filter
         includePrivate: _includePrivate, // Pass private filter
-        topicIds: _getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
+        topicIds: getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
         includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
-        levels: _getEffectiveLevels(), // Pass level filter (null if all levels selected)
-        partOfSpeech: _getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
+        levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
+        partOfSpeech: getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
       );
       
       if (result['success'] == true) {

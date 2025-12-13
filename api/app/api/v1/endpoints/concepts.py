@@ -4,17 +4,17 @@ Concept CRUD endpoints.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, exists
+from sqlalchemy import func, exists, or_
 from datetime import datetime, timezone
 from pathlib import Path
 import logging
 from app.core.database import get_session
 from app.core.config import settings
-from app.models.models import Concept, Image, Card, Language
+from app.models.models import Concept, Image, Card, Language, CEFRLevel
 from app.schemas.flashcard import (
     ConceptResponse, ImageResponse, ConceptCountResponse, CreateConceptOnlyRequest,
     GetConceptsWithMissingLanguagesRequest, ConceptsWithMissingLanguagesResponse,
-    ConceptWithMissingLanguages
+    ConceptWithMissingLanguages, normalize_part_of_speech
 )
 from typing import List, Optional
 from pydantic import BaseModel, Field
@@ -494,16 +494,137 @@ async def get_concepts_with_missing_languages(
             detail=f"Invalid language codes: {', '.join(sorted(missing_codes))}"
         )
     
-    # Get all concepts
+    # Parse and validate levels filter if provided
+    level_list = None
+    if request.levels is not None and len(request.levels) > 0:
+        level_strs = [level.strip().upper() for level in request.levels if level.strip()]
+        level_list = []
+        for level_str in level_strs:
+            try:
+                level_list.append(CEFRLevel(level_str))
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid CEFR level: {level_str}. Must be one of: A1, A2, B1, B2, C1, C2"
+                )
+    
+    # Parse and validate part of speech filter if provided
+    pos_list = None
+    if request.part_of_speech is not None and len(request.part_of_speech) > 0:
+        pos_list = []
+        for pos in request.part_of_speech:
+            pos_stripped = pos.strip()
+            if pos_stripped:
+                # Normalize POS value to proper case for comparison
+                try:
+                    normalized_pos = normalize_part_of_speech(pos_stripped)
+                    pos_list.append(normalized_pos)
+                except ValueError:
+                    # If normalization fails, try lowercase comparison as fallback
+                    pos_list.append(pos_stripped)
+    
+    # Build base query for concepts with filters
+    # Start with all concepts
+    base_query_with_user_id = select(Concept).where(Concept.user_id.isnot(None))
+    base_query_without_user_id = select(Concept).where(Concept.user_id.is_(None))
+    
+    # Apply public/private filters (same logic as vocabulary endpoint)
+    if not request.include_public and not request.include_private:
+        # Both filters are False - return empty result
+        base_query_with_user_id = base_query_with_user_id.where(False)
+        base_query_without_user_id = base_query_without_user_id.where(False)
+    elif request.include_public and not request.include_private:
+        # Only public - concepts where user_id is null
+        base_query_with_user_id = base_query_with_user_id.where(False)  # No concepts with user_id
+        # base_query_without_user_id already filters for user_id is None
+    elif not request.include_public and request.include_private:
+        # Only private - concepts where user_id matches logged in user
+        if request.own_user_id is not None:
+            base_query_with_user_id = base_query_with_user_id.where(Concept.user_id == request.own_user_id)
+        else:
+            base_query_with_user_id = base_query_with_user_id.where(False)
+        base_query_without_user_id = base_query_without_user_id.where(False)  # No concepts without user_id
+    
+    # Apply topic_ids filter if provided (same logic as vocabulary endpoint)
+    if request.topic_ids is not None and len(request.topic_ids) > 0:
+        if request.include_without_topic:
+            # Include concepts with these topic IDs OR concepts without a topic
+            base_query_with_user_id = base_query_with_user_id.where(
+                or_(
+                    Concept.topic_id.in_(request.topic_ids),
+                    Concept.topic_id.is_(None)
+                )
+            )
+            base_query_without_user_id = base_query_without_user_id.where(
+                or_(
+                    Concept.topic_id.in_(request.topic_ids),
+                    Concept.topic_id.is_(None)
+                )
+            )
+        else:
+            # Only include concepts with these topic IDs
+            base_query_with_user_id = base_query_with_user_id.where(Concept.topic_id.in_(request.topic_ids))
+            base_query_without_user_id = base_query_without_user_id.where(Concept.topic_id.in_(request.topic_ids))
+    else:
+        # topic_ids is None/empty (all topics selected in frontend)
+        if not request.include_without_topic:
+            # Exclude concepts without a topic (only show concepts with a topic)
+            base_query_with_user_id = base_query_with_user_id.where(Concept.topic_id.isnot(None))
+            base_query_without_user_id = base_query_without_user_id.where(Concept.topic_id.isnot(None))
+        # If include_without_topic is True, show ALL concepts (no topic filter)
+    
+    # Apply levels filter if provided
+    if level_list is not None and len(level_list) > 0:
+        base_query_with_user_id = base_query_with_user_id.where(Concept.level.in_(level_list))
+        base_query_without_user_id = base_query_without_user_id.where(Concept.level.in_(level_list))
+    
+    # Apply part_of_speech filter if provided
+    if pos_list is not None and len(pos_list) > 0:
+        # Convert all POS values to lowercase for case-insensitive comparison
+        pos_list_lower = [pos.lower() for pos in pos_list]
+        base_query_with_user_id = base_query_with_user_id.where(
+            func.lower(Concept.part_of_speech).in_(pos_list_lower)
+        )
+        base_query_without_user_id = base_query_without_user_id.where(
+            func.lower(Concept.part_of_speech).in_(pos_list_lower)
+        )
+    
+    # Apply search filter if provided (same logic as vocabulary endpoint)
+    if request.search and request.search.strip():
+        search_term = f"%{request.search.strip().lower()}%"
+        
+        # Search in concept.term or card.term for visible languages
+        card_search_subquery = (
+            select(Card.concept_id)
+            .where(
+                Card.language_code.in_(language_codes),
+                func.lower(Card.term).like(search_term)
+            )
+            .distinct()
+        )
+        
+        # Filter concepts where term matches OR has matching cards
+        base_query_with_user_id = base_query_with_user_id.where(
+            or_(
+                func.lower(Concept.term).like(search_term),
+                Concept.id.in_(card_search_subquery)
+            )
+        )
+        base_query_without_user_id = base_query_without_user_id.where(
+            or_(
+                func.lower(Concept.term).like(search_term),
+                Concept.id.in_(card_search_subquery)
+            )
+        )
+    
+    # Get all concepts with filters applied
     # Prioritize concepts with filled user_id, then sort alphabetically (case-insensitive)
     concepts_with_user_id = session.exec(
-        select(Concept).where(Concept.user_id.isnot(None))
-        .order_by(func.lower(Concept.term).asc())
+        base_query_with_user_id.order_by(func.lower(Concept.term).asc())
     ).all()
     
     concepts_without_user_id = session.exec(
-        select(Concept).where(Concept.user_id.is_(None))
-        .order_by(func.lower(Concept.term).asc())
+        base_query_without_user_id.order_by(func.lower(Concept.term).asc())
     ).all()
     
     # Combine: concepts with user_id first, then those without, both alphabetically sorted
@@ -540,7 +661,11 @@ async def get_concepts_with_missing_languages(
                 select(Image).where(Image.concept_id == concept.id)
             ).all()
             
+            # Convert concept to dict and ensure level is serialized as string
             concept_dict = ConceptResponse.model_validate(concept).model_dump()
+            # Ensure level is a string value (CEFRLevel enum value)
+            if concept.level is not None:
+                concept_dict['level'] = concept.level.value
             concept_dict['images'] = [ImageResponse.model_validate(img) for img in images]
             concept_response = ConceptResponse(**concept_dict)
             

@@ -493,6 +493,14 @@ class FlashcardService {
   /// - 'data': Map<String, dynamic> (if successful)
   static Future<Map<String, dynamic>> getConceptsWithMissingLanguages({
     required List<String> languages,
+    List<String>? levels,
+    List<String>? partOfSpeech,
+    List<int>? topicIds,
+    bool includeWithoutTopic = false,
+    bool includePublic = true,
+    bool includePrivate = true,
+    int? ownUserId,
+    String? search,
   }) async {
     if (languages.isEmpty) {
       return {
@@ -525,6 +533,46 @@ class FlashcardService {
       // Only include user_id if available
       if (userId != null) {
         body['user_id'] = userId;
+      }
+      
+      // Add levels filter if provided
+      if (levels != null && levels.isNotEmpty) {
+        body['levels'] = levels;
+      }
+      
+      // Add part_of_speech filter if provided
+      if (partOfSpeech != null && partOfSpeech.isNotEmpty) {
+        body['part_of_speech'] = partOfSpeech;
+      }
+      
+      // Add topic_ids filter if provided
+      if (topicIds != null && topicIds.isNotEmpty) {
+        body['topic_ids'] = topicIds;
+      }
+      
+      // Add include_without_topic filter
+      if (includeWithoutTopic) {
+        body['include_without_topic'] = true;
+      }
+      
+      // Add include_public filter (only if false, true is default)
+      if (!includePublic) {
+        body['include_public'] = false;
+      }
+      
+      // Add include_private filter (only if false, true is default)
+      if (!includePrivate) {
+        body['include_private'] = false;
+      }
+      
+      // Add own_user_id for private filtering
+      if (ownUserId != null) {
+        body['own_user_id'] = ownUserId;
+      }
+      
+      // Add search filter if provided
+      if (search != null && search.trim().isNotEmpty) {
+        body['search'] = search.trim();
       }
       
       final response = await http.post(

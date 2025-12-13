@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, computed_field, field_validator
 from typing import Optional, List
 from datetime import datetime
+from app.models.models import CEFRLevel
 
 
 def normalize_part_of_speech(v: Optional[str]) -> Optional[str]:
@@ -98,6 +99,7 @@ class ConceptResponse(BaseModel):
     term: Optional[str] = None
     description: Optional[str] = None
     part_of_speech: Optional[str] = None
+    level: Optional[str] = None  # CEFR level (A1, A2, B1, B2, C1, C2)
     frequency_bucket: Optional[str] = None
     status: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -413,6 +415,14 @@ class GetConceptsWithMissingLanguagesRequest(BaseModel):
     """Request schema for getting concepts with missing languages."""
     languages: List[str] = Field(..., min_items=1, description="List of language codes to check for missing cards")
     user_id: Optional[int] = Field(None, description="Optional user ID for prioritizing user's concepts in sorting")
+    levels: Optional[List[str]] = Field(None, description="Optional list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by")
+    part_of_speech: Optional[List[str]] = Field(None, description="Optional list of part of speech values to filter by")
+    topic_ids: Optional[List[int]] = Field(None, description="Optional list of topic IDs to filter by")
+    include_without_topic: bool = Field(False, description="Include concepts without a topic (topic_id is null)")
+    include_public: bool = Field(True, description="Include public concepts (user_id is null)")
+    include_private: bool = Field(True, description="Include private concepts (user_id == logged in user)")
+    own_user_id: Optional[int] = Field(None, description="User ID for filtering private concepts (required if include_private is True)")
+    search: Optional[str] = Field(None, description="Optional search query to filter by concept.term and card.term")
 
 
 class GenerateCardsForConceptsRequest(BaseModel):
