@@ -187,7 +187,7 @@ async def get_vocabulary(
     if search and search.strip():
         search_term = f"%{search.strip().lower()}%"
         
-        # Search in concept.term or card.term for visible languages
+        # Search in concept.term or lemma.term for visible languages
         if visible_language_codes:
             # Subquery to find concept_ids that match search in lemmas for visible languages
             lemma_search_subquery = (
@@ -284,7 +284,7 @@ async def get_vocabulary(
                 .subquery()
             )
             
-            # Join with the subquery to get the card ID, then join with Lemma to get the term
+            # Join with the subquery to get the lemma ID, then join with Lemma to get the term
             lemma_alias = aliased(Lemma)
             concept_query = (
                 concept_query
@@ -433,8 +433,8 @@ async def get_vocabulary(
                         )
                     )
         
-        source_card_response = visible_lemmas_list[0] if len(visible_lemmas_list) > 0 else None
-        target_card_response = visible_lemmas_list[1] if len(visible_lemmas_list) > 1 else None
+        source_lemma_response = visible_lemmas_list[0] if len(visible_lemmas_list) > 0 else None
+        target_lemma_response = visible_lemmas_list[1] if len(visible_lemmas_list) > 1 else None
         
         # Get topic information safely
         topic_name = None
@@ -454,9 +454,9 @@ async def get_vocabulary(
         paired_items.append(
             PairedVocabularyItem(
                 concept_id=concept.id,
-                cards=visible_lemmas_list,
-                source_card=source_card_response,
-                target_card=target_card_response,
+                lemmas=visible_lemmas_list,
+                source_lemma=source_lemma_response,
+                target_lemma=target_lemma_response,
                 images=concept_images,
                 part_of_speech=concept.part_of_speech,
                 concept_term=concept.term if concept.term and concept.term.strip() else None,

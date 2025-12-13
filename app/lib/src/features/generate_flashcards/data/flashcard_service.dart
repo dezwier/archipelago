@@ -328,7 +328,7 @@ class FlashcardService {
       };
     }
     
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/cards/generate');
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/generate');
     
     try {
       final body = {
@@ -400,7 +400,7 @@ class FlashcardService {
   }
 
   /// Create a concept record with term, description, and topic (if given).
-  /// This does NOT create any cards - use generateCardsForConcepts to create cards.
+  /// This does NOT create any lemmas - use generateCardsForConcepts to create lemmas.
   /// 
   /// Returns a map with:
   /// - 'success': bool
@@ -618,7 +618,7 @@ class FlashcardService {
   }
 
   /// Generate a lemma for a term and target language using LLM.
-  /// If conceptId is provided, the lemma will be saved as a card in the database.
+  /// If conceptId is provided, the lemma will be saved as a lemma in the database.
   /// 
   /// Returns a map with:
   /// - 'success': bool
@@ -649,7 +649,7 @@ class FlashcardService {
         body['part_of_speech'] = partOfSpeech.trim();
       }
       
-      // Only include concept_id if provided (will save card to database)
+      // Only include concept_id if provided (will save lemma to database)
       if (conceptId != null) {
         body['concept_id'] = conceptId;
       }
@@ -780,7 +780,7 @@ class FlashcardService {
           'data': {
             'lemmas': lemmas,
             'total_token_usage': totalTokenUsage,
-            'cards_created': lemmas.length,
+            'lemmas_created': lemmas.length,
             'session_cost_usd': (totalTokenUsage?['cost_usd'] as num?)?.toDouble() ?? 0.0,
           },
         };
@@ -899,7 +899,7 @@ class FlashcardService {
       };
     }
     
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/cards/generate');
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/generate');
     
     try {
       final body = {
@@ -930,7 +930,7 @@ class FlashcardService {
         
         return {
           'success': true,
-          'message': 'Cards generated successfully',
+          'message': 'Lemmas generated successfully',
           'data': data,
         };
       } else {

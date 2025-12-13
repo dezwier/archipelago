@@ -135,18 +135,18 @@ class VocabularyService {
     }
   }
 
-  /// Update a card's translation and/or description.
+  /// Update a lemma's translation and/or description.
   /// 
   /// Returns a map with:
   /// - 'success': bool
-  /// - 'card': Map<String, dynamic> (if successful) - updated card data
+  /// - 'card': Map<String, dynamic> (if successful) - updated lemma data
   /// - 'message': String (if error)
   static Future<Map<String, dynamic>> updateCard({
     required int cardId,
     String? translation,
     String? description,
   }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/cards/$cardId');
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/$cardId');
     
     try {
       final body = <String, dynamic>{};
@@ -175,25 +175,25 @@ class VocabularyService {
           final error = jsonDecode(response.body) as Map<String, dynamic>;
           return {
             'success': false,
-            'message': error['detail'] as String? ?? 'Failed to update card',
+            'message': error['detail'] as String? ?? 'Failed to update lemma',
           };
         } catch (_) {
           // Response is not JSON (might be HTML error page)
           return {
             'success': false,
-            'message': 'Failed to update card: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
+            'message': 'Failed to update lemma: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
           };
         }
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Error updating card: ${e.toString()}',
+        'message': 'Error updating lemma: ${e.toString()}',
       };
     }
   }
 
-  /// Delete a concept and all its associated cards.
+  /// Delete a concept and all its associated lemmas.
   /// 
   /// Returns a map with:
   /// - 'success': bool

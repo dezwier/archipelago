@@ -35,7 +35,7 @@ def generate_lemma_system_instruction(
     else:
         description_text = "\nIMPORTANT: No description was provided. You must infer ONE specific semantic meaning for this term. For single words, choose the most common or primary meaning. For phrases or sentences, understand the action or concept being expressed."
     
-    system_instruction = f"""You are a language learning assistant. Your task is to generate lemmas (translations and card data) for language learning flashcards.
+    system_instruction = f"""You are a language learning assistant. Your task is to generate lemmas (translations and lemma data) for language learning flashcards.
 
 Context for the current term:
 Term: {term}{part_of_speech_text}{description_text}

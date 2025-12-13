@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'flashcard_service.dart';
 
-/// Service to manage background card generation tasks.
+/// Service to manage background lemma generation tasks.
 /// Persists state to SharedPreferences so it can survive app backgrounding.
 class CardGenerationBackgroundService {
   static const String _keyPrefix = 'card_generation_';
@@ -20,7 +20,7 @@ class CardGenerationBackgroundService {
   static const String _keyConceptMissingLanguages = '${_keyPrefix}concept_missing_languages';
   static const String _keyIsCancelled = '${_keyPrefix}is_cancelled';
 
-  /// Start a background card generation task
+  /// Start a background lemma generation task
   static Future<void> startTask({
     required List<int> conceptIds,
     required Map<int, String> conceptTerms,
@@ -134,7 +134,7 @@ class CardGenerationBackgroundService {
     await prefs.remove(_keyIsCancelled);
   }
 
-  /// Execute the card generation task
+  /// Execute the lemma generation task
   /// This should be called from a background isolate or service
   static Future<Map<String, dynamic>> executeTask() async {
     final state = await getTaskState();
@@ -202,7 +202,7 @@ class CardGenerationBackgroundService {
 
       if (generateResult['success'] == true) {
         final data = generateResult['data'] as Map<String, dynamic>?;
-        // Count only the cards created for missing languages (which should be all of them)
+        // Count only the lemmas created for missing languages (which should be all of them)
         // The API returns all lemmas, but we only requested missing languages, so count those
         final cardsCreatedForConcept = missingLanguagesForConcept.length;
         final costUsd = (data?['session_cost_usd'] as num?)?.toDouble() ?? 0.0;

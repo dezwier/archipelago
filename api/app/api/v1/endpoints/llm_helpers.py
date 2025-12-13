@@ -46,7 +46,7 @@ def calculate_gemini_cost(prompt_tokens: int, output_tokens: int, model_name: st
 
 def call_gemini_api(prompt: str, system_instruction: Optional[str] = None) -> tuple[dict, dict]:
     """
-    Call Gemini API to generate concept and card data.
+    Call Gemini API to generate concept and lemma data.
     
     Args:
         prompt: The prompt to send to the LLM

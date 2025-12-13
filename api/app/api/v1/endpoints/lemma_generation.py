@@ -39,7 +39,7 @@ async def generate_lemma(
     Generate a lemma (translation) for a term in a target language.
     
     This is a unified endpoint that merges functionality from concept generation
-    and card translation endpoints. It generates a single lemma/translation for
+    and lemma translation endpoints. It generates a single lemma/translation for
     a given term, handling both single words and phrases.
     
     Args:
@@ -327,7 +327,7 @@ async def generate_lemmas_batch(
                 if llm_data['register'] not in valid_registers:
                     raise ValueError(f"Invalid register value: {llm_data['register']}")
             
-            # If concept_id is provided, create/update the card in the database
+            # If concept_id is provided, create/update the lemma in the database
             if request.concept_id is not None:
                 try:
                     # Normalize term (trim whitespace)

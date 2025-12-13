@@ -91,11 +91,11 @@ class VocabularyItemWidget extends StatelessWidget {
         );
       }
       
-      // Check if card exists for this language
+      // Check if lemma exists for this language
       final card = item.getCardByLanguage(languageCode);
       
       if (card != null) {
-        // Show card normally
+        // Show lemma normally
         widgets.add(
           _buildLanguageSection(
             context,
@@ -104,7 +104,7 @@ class VocabularyItemWidget extends StatelessWidget {
           ),
         );
       } else {
-        // Show placeholder for missing card
+        // Show placeholder for missing lemma
         widgets.add(
           _buildPlaceholderSection(
             context,

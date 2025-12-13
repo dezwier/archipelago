@@ -42,7 +42,7 @@ class PairedVocabularyItem {
     return imagePath1 ?? imagePath2 ?? imagePath3 ?? imagePath4;
   }
 
-  /// Get a card by language code
+  /// Get a lemma by language code
   VocabularyCard? getCardByLanguage(String languageCode) {
     try {
       return cards.firstWhere(
@@ -54,9 +54,16 @@ class PairedVocabularyItem {
   }
 
   factory PairedVocabularyItem.fromJson(Map<String, dynamic> json) {
-    // Parse cards list if available
+    // Parse lemmas list if available
     List<VocabularyCard> cardsList = [];
-    if (json['cards'] != null) {
+    if (json['lemmas'] != null) {
+      final lemmasData = json['lemmas'] as List<dynamic>;
+      cardsList = lemmasData
+          .map((lemmaJson) => VocabularyCard.fromJson(lemmaJson as Map<String, dynamic>))
+          .toList();
+    }
+    // Fallback to 'cards' for backward compatibility
+    else if (json['cards'] != null) {
       final cardsData = json['cards'] as List<dynamic>;
       cardsList = cardsData
           .map((cardJson) => VocabularyCard.fromJson(cardJson as Map<String, dynamic>))
@@ -75,12 +82,16 @@ class PairedVocabularyItem {
     return PairedVocabularyItem(
       conceptId: json['concept_id'] as int,
       cards: cardsList,
-      sourceCard: json['source_card'] != null
-          ? VocabularyCard.fromJson(json['source_card'] as Map<String, dynamic>)
-          : null,
-      targetCard: json['target_card'] != null
-          ? VocabularyCard.fromJson(json['target_card'] as Map<String, dynamic>)
-          : null,
+      sourceCard: json['source_lemma'] != null
+          ? VocabularyCard.fromJson(json['source_lemma'] as Map<String, dynamic>)
+          : json['source_card'] != null
+              ? VocabularyCard.fromJson(json['source_card'] as Map<String, dynamic>)
+              : null,
+      targetCard: json['target_lemma'] != null
+          ? VocabularyCard.fromJson(json['target_lemma'] as Map<String, dynamic>)
+          : json['target_card'] != null
+              ? VocabularyCard.fromJson(json['target_card'] as Map<String, dynamic>)
+              : null,
       imagePath1: json['image_path_1'] as String?,
       imagePath2: json['image_path_2'] as String?,
       imagePath3: json['image_path_3'] as String?,

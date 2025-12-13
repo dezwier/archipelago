@@ -157,7 +157,7 @@ class LLMConceptData(BaseModel):
 
 
 class CreateConceptOnlyRequest(BaseModel):
-    """Request schema for creating only a concept (without cards)."""
+    """Request schema for creating only a concept (without lemmas)."""
     term: str = Field(..., min_length=1, description="The term")
     description: Optional[str] = Field(None, description="Description of the concept")
     topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
@@ -177,7 +177,7 @@ class ConceptsWithMissingLanguagesResponse(BaseModel):
 
 class GetConceptsWithMissingLanguagesRequest(BaseModel):
     """Request schema for getting concepts with missing languages."""
-    languages: List[str] = Field(..., min_items=1, description="List of language codes to check for missing cards")
+    languages: List[str] = Field(..., min_items=1, description="List of language codes to check for missing lemmas")
     user_id: Optional[int] = Field(None, description="Optional user ID for prioritizing user's concepts in sorting")
     levels: Optional[List[str]] = Field(None, description="Optional list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by")
     part_of_speech: Optional[List[str]] = Field(None, description="Optional list of part of speech values to filter by")
@@ -189,17 +189,17 @@ class GetConceptsWithMissingLanguagesRequest(BaseModel):
     search: Optional[str] = Field(None, description="Optional search query to filter by concept.term and lemma.term")
 
 
-class GenerateCardsForConceptsRequest(BaseModel):
+class GenerateLemmasForConceptsRequest(BaseModel):
     """Request schema for generating lemmas for concepts."""
     concept_ids: List[int] = Field(..., min_items=1, description="List of concept IDs to generate lemmas for")
     languages: List[str] = Field(..., min_items=1, description="List of language codes to generate lemmas for")
     user_id: Optional[int] = Field(None, description="Optional user ID for prioritizing user's concepts in sorting")
 
 
-class GenerateCardsForConceptsResponse(BaseModel):
+class GenerateLemmasForConceptsResponse(BaseModel):
     """Response schema for generating lemmas for concepts."""
     concepts_processed: int = Field(..., description="Number of concepts processed")
-    cards_created: int = Field(..., description="Total number of lemmas created")
+    lemmas_created: int = Field(..., description="Total number of lemmas created")
     errors: List[str] = Field(default=[], description="List of error messages for concepts that failed")
     total_concepts: int = Field(..., description="Total number of concepts to process")
     session_cost_usd: float = Field(default=0.0, description="Total cost in USD for this generation session")
@@ -216,15 +216,15 @@ class ConceptCountResponse(BaseModel):
 class CreateConceptResponse(BaseModel):
     """Response schema for concept creation."""
     concept: ConceptResponse
-    cards: List[LemmaResponse]
+    lemmas: List[LemmaResponse]
 
 
 class PairedVocabularyItem(BaseModel):
     """Paired vocabulary item - groups lemmas by concept."""
     concept_id: int
-    cards: List[LemmaResponse] = Field(default=[], description="All lemmas for this concept")
-    source_card: Optional[LemmaResponse] = None
-    target_card: Optional[LemmaResponse] = None
+    lemmas: List[LemmaResponse] = Field(default=[], description="All lemmas for this concept")
+    source_lemma: Optional[LemmaResponse] = None
+    target_lemma: Optional[LemmaResponse] = None
     images: Optional[List[ImageResponse]] = None
     part_of_speech: Optional[str] = None
     concept_term: Optional[str] = None

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../generate_flashcards/data/card_generation_background_service.dart';
 
 class CardGenerationState extends ChangeNotifier {
-  // Progress tracking for card generation
+  // Progress tracking for lemma generation
   int? _totalConcepts;
   int _currentConceptIndex = 0;
   String? _currentConceptTerm;

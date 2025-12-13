@@ -63,7 +63,7 @@ class CardGenerationProgressWidget extends StatelessWidget {
               Expanded(
                 child: Text(
                   isGenerating 
-                      ? 'Generating Cards' 
+                      ? 'Generating Lemmas' 
                       : (isCancelled ? 'Generation Cancelled' : 'Generation Complete'),
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -239,7 +239,7 @@ class CardGenerationProgressWidget extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Cards Created',
+                    'Lemmas Created',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],

@@ -63,7 +63,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     // Listen to controller changes to update language visibility when user loads
     _controller.addListener(_onControllerChanged);
     
-    // Listen to card generation state changes
+    // Listen to lemma generation state changes
     _cardGenerationState.addListener(() {
       if (mounted) setState(() {});
     });
@@ -255,7 +255,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                     ),
                   ),
                 ),
-                // Progress display for card generation
+                // Progress display for lemma generation
                 if (_cardGenerationState.totalConcepts != null)
                   SliverToBoxAdapter(
                     child: Padding(

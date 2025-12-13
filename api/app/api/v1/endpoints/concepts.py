@@ -83,10 +83,10 @@ async def create_concept_only(
     session: Session = Depends(get_session)
 ):
     """
-    Create a concept without generating cards.
+    Create a concept without generating lemmas.
     
     This endpoint creates a concept with just the term, description, topic_id, and user_id.
-    No cards are generated - this is useful for creating concepts that will have cards
+    No lemmas are generated - this is useful for creating concepts that will have lemmas
     generated later.
     
     Args:
@@ -312,10 +312,10 @@ async def delete_concept(
     session: Session = Depends(get_session)
 ):
     """
-    Delete a concept and all its associated cards, user_cards, images, and image files.
+    Delete a concept and all its associated lemmas, user_cards, images, and image files.
     This will delete:
-    - All UserCards that reference cards for this concept
-    - All Cards for this concept
+    - All UserCards that reference lemmas for this concept
+    - All Lemmas for this concept
     - All Images for this concept (database records and files)
     - The Concept itself
     """
@@ -395,8 +395,8 @@ async def get_total_concept_count(
     return ConceptCountResponse(count=count)
 
 
-@router.get("/count/with-cards-for-languages", response_model=ConceptCountResponse)
-async def get_concept_count_with_cards_for_languages(
+@router.get("/count/with-lemmas-for-languages", response_model=ConceptCountResponse)
+async def get_concept_count_with_lemmas_for_languages(
     languages: str,
     session: Session = Depends(get_session)
 ):
@@ -465,10 +465,10 @@ async def get_concepts_with_missing_languages(
     session: Session = Depends(get_session)
 ):
     """
-    Get concepts that are missing cards for the specified languages.
+    Get concepts that are missing lemmas for the specified languages.
     
-    This endpoint returns concepts that don't have cards for one or more of the
-    specified languages. It's useful for identifying concepts that need card
+    This endpoint returns concepts that don't have lemmas for one or more of the
+    specified languages. It's useful for identifying concepts that need lemma
     generation for specific languages.
     
     Args:

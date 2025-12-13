@@ -26,7 +26,7 @@ class GenerateCardsSection extends StatefulWidget {
 class _GenerateCardsSectionState extends State<GenerateCardsSection> {
   List<String> _selectedLanguages = [];
   
-  // Progress tracking for card generation
+  // Progress tracking for lemma generation
   int? _totalConcepts;
   int _currentConceptIndex = 0;
   String? _currentConceptTerm;

@@ -211,11 +211,11 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
         );
       }
       
-      // Check if card exists for this language
+      // Check if lemma exists for this language
       final card = widget.item.getCardByLanguage(languageCode);
       
       if (card != null) {
-        // Show card normally
+        // Show lemma normally
         widgets.add(
           _buildLanguageSection(
             context,
@@ -224,7 +224,7 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
           ),
         );
       } else {
-        // Show placeholder for missing card
+        // Show placeholder for missing lemma
         widgets.add(
           _buildPlaceholderSection(
             context,

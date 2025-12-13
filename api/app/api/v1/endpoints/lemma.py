@@ -19,8 +19,8 @@ from app.schemas.concept import (
     CreateConceptResponse,
     ConceptResponse,
     ImageResponse,
-    GenerateCardsForConceptsRequest,
-    GenerateCardsForConceptsResponse
+    GenerateLemmasForConceptsRequest,
+    GenerateLemmasForConceptsResponse
 )
 from app.api.v1.endpoints.utils import ensure_capitalized
 from app.api.v1.endpoints.llm_helpers import call_gemini_api
@@ -31,11 +31,11 @@ from app.api.v1.endpoints.prompt_helpers import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/cards", tags=["cards"])
+router = APIRouter(prefix="/lemmas", tags=["lemmas"])
 
 
 @router.get("", response_model=List[LemmaResponse])
-async def get_cards(
+async def get_lemmas(
     skip: int = 0,
     limit: int = 100,
     concept_id: Optional[int] = None,
@@ -88,7 +88,7 @@ async def get_cards(
 
 
 @router.get("/concept/{concept_id}", response_model=List[LemmaResponse])
-async def get_cards_by_concept_id(
+async def get_lemmas_by_concept_id(
     concept_id: int,
     session: Session = Depends(get_session)
 ):
@@ -136,7 +136,7 @@ async def get_cards_by_concept_id(
 
 
 @router.post("/generate")
-async def generate_cards_for_concept(
+async def generate_lemmas_for_concept(
     http_request: Request,
     session: Session = Depends(get_session)
 ):
@@ -145,23 +145,23 @@ async def generate_cards_for_concept(
     
     This endpoint can handle two types of requests:
     1. CreateConceptRequest: Finds an existing concept by term and generates lemmas
-    2. GenerateCardsForConceptsRequest: Generates lemmas for specified concept IDs
+    2. GenerateLemmasForConceptsRequest: Generates lemmas for specified concept IDs
     
     Args:
         http_request: FastAPI Request object to inspect the body
         session: Database session
     
     Returns:
-        CreateConceptResponse or GenerateCardsForConceptsResponse
+        CreateConceptResponse or GenerateLemmasForConceptsResponse
     """
     # Parse the request body
     body = await http_request.json()
     
-    # Check if this is a GenerateCardsForConceptsRequest (has concept_ids)
+    # Check if this is a GenerateLemmasForConceptsRequest (has concept_ids)
     if 'concept_ids' in body:
-        # Handle GenerateCardsForConceptsRequest
-        request = GenerateCardsForConceptsRequest(**body)
-        return await _generate_cards_for_concepts_list(request, session)
+        # Handle GenerateLemmasForConceptsRequest
+        request = GenerateLemmasForConceptsRequest(**body)
+        return await _generate_lemmas_for_concepts_list(request, session)
     
     # Handle CreateConceptRequest (original behavior)
     request = CreateConceptRequest(**body)
@@ -245,7 +245,7 @@ async def generate_cards_for_concept(
     )
     
     # Generate lemmas for each language
-    created_cards = []
+    created_lemmas = []
     errors = []
     
     for lang_code in language_codes:
@@ -362,7 +362,7 @@ async def generate_cards_for_concept(
                 formality_register=lemma.formality_register,
                 notes=lemma.notes
             )
-            created_cards.append(lemma_response)
+            created_lemmas.append(lemma_response)
             
         except Exception as e:
             logger.error(f"Error generating lemma for language {lang_code}: {str(e)}")
@@ -370,7 +370,7 @@ async def generate_cards_for_concept(
             continue
     
     # If no lemmas were created, return error
-    if not created_cards:
+    if not created_lemmas:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate any lemmas. Errors: {'; '.join(errors)}"
@@ -387,23 +387,23 @@ async def generate_cards_for_concept(
     
     return CreateConceptResponse(
         concept=concept_response,
-        cards=created_cards
+        lemmas=created_lemmas
     )
 
 
-async def _generate_cards_for_concepts_list(
-    request: GenerateCardsForConceptsRequest,
+async def _generate_lemmas_for_concepts_list(
+    request: GenerateLemmasForConceptsRequest,
     session: Session
 ):
     """
     Internal function to generate lemmas for multiple concepts.
     
     Args:
-        request: GenerateCardsForConceptsRequest with concept_ids and languages
+        request: GenerateLemmasForConceptsRequest with concept_ids and languages
         session: Database session
     
     Returns:
-        GenerateCardsForConceptsResponse with statistics about the generation
+        GenerateLemmasForConceptsResponse with statistics about the generation
     """
     # Validate concept_ids
     if not request.concept_ids or len(request.concept_ids) == 0:
@@ -445,7 +445,7 @@ async def _generate_cards_for_concepts_list(
         concepts.append(concept)
     
     # Process each concept
-    total_cards_created = 0
+    total_lemmas_created = 0
     total_tokens = 0
     total_cost_usd = 0.0
     errors = []
@@ -582,7 +582,7 @@ async def _generate_cards_for_concepts_list(
                     session.commit()
                     session.refresh(lemma)
                     
-                    total_cards_created += 1
+                    total_lemmas_created += 1
                     logger.info(f"Created lemma {lemma.id} for concept {concept.id}, language {lang_code}")
                     
                 except Exception as e:
@@ -596,11 +596,11 @@ async def _generate_cards_for_concepts_list(
             errors.append(f"Concept {concept.id}: {str(e)}")
             continue
     
-    logger.info(f"Batch generation completed. Created {total_cards_created} lemmas, {len(errors)} errors")
+    logger.info(f"Batch generation completed. Created {total_lemmas_created} lemmas, {len(errors)} errors")
     
-    return GenerateCardsForConceptsResponse(
+    return GenerateLemmasForConceptsResponse(
         concepts_processed=len(concepts),
-        cards_created=total_cards_created,
+        lemmas_created=total_lemmas_created,
         errors=errors,
         total_concepts=len(concepts),
         session_cost_usd=total_cost_usd,
@@ -609,7 +609,7 @@ async def _generate_cards_for_concepts_list(
 
 
 @router.get("/{lemma_id}", response_model=LemmaResponse)
-async def get_card(
+async def get_lemma(
     lemma_id: int,
     session: Session = Depends(get_session)
 ):
@@ -648,7 +648,7 @@ async def get_card(
 
 
 @router.put("/{lemma_id}", response_model=LemmaResponse)
-async def update_card(
+async def update_lemma(
     lemma_id: int,
     request: UpdateLemmaRequest,
     session: Session = Depends(get_session)
@@ -728,7 +728,7 @@ async def update_card(
 
 
 @router.delete("/{lemma_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_card(
+async def delete_lemma(
     lemma_id: int,
     session: Session = Depends(get_session)
 ):

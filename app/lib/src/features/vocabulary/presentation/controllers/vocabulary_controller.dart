@@ -272,11 +272,11 @@ class VocabularyController extends ChangeNotifier {
       case SortOption.alphabetical:
         if (_alphabeticalSortLanguageCode != null) {
           _pairedItems.sort((a, b) {
-            // Get card for the first visible language
+            // Get lemma for the first visible language
             final aCard = a.getCardByLanguage(_alphabeticalSortLanguageCode!);
             final bCard = b.getCardByLanguage(_alphabeticalSortLanguageCode!);
             
-            // Get translation text, fallback to empty string if card not found
+            // Get translation text, fallback to empty string if lemma not found
             final aText = aCard?.translation.toLowerCase().trim() ?? '';
             final bText = bCard?.translation.toLowerCase().trim() ?? '';
             
