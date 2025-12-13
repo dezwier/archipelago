@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../generate_flashcards/data/topic_service.dart';
-import '../vocabulary_controller.dart';
+import '../controllers/vocabulary_controller.dart';
 import 'vocabulary_header_widget.dart';
 
 /// Constants for filter options

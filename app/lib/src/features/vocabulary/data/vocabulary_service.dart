@@ -339,57 +339,6 @@ class VocabularyService {
     }
   }
 
-  /// Cancel a running description generation task.
-  /// 
-  /// Returns a map with:
-  /// - 'success': bool
-  /// - 'task_id': String (if successful)
-  /// - 'status': String (if successful) - updated status
-  /// - 'progress': Map<String, dynamic> (if successful) - progress information
-  /// - 'message': String (if error)
-  static Future<Map<String, dynamic>> cancelDescriptionGeneration({
-    required String taskId,
-  }) async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcards/generate-descriptions/$taskId/cancel');
-    
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': true,
-          'task_id': data['task_id'] as String,
-          'status': data['status'] as String,
-          'progress': data['progress'] as Map<String, dynamic>,
-          'message': data['message'] as String?,
-        };
-      } else {
-        // Try to parse error response as JSON, but handle non-JSON responses
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to cancel task',
-          };
-        } catch (_) {
-          // Response is not JSON (might be HTML error page)
-          return {
-            'success': false,
-            'message': 'Failed to cancel task: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error canceling task: ${e.toString()}',
-      };
-    }
-  }
 
   /// Get the total count of all concepts.
   /// 
@@ -399,66 +348,6 @@ class VocabularyService {
   /// - 'message': String (if error)
   static Future<Map<String, dynamic>> getConceptCountTotal() async {
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/count/total');
-    
-    try {
-      final response = await http.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': true,
-          'count': data['count'] as int,
-        };
-      } else {
-        // Try to parse error response as JSON, but handle non-JSON responses
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to get concept count',
-          };
-        } catch (_) {
-          // Response is not JSON (might be HTML error page)
-          return {
-            'success': false,
-            'message': 'Failed to get concept count: ${response.statusCode} - ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}',
-          };
-        }
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error getting concept count: ${e.toString()}',
-      };
-    }
-  }
-
-  /// Get the count of concepts that have cards with terms for all of the given languages.
-  /// 
-  /// Returns a map with:
-  /// - 'success': bool
-  /// - 'count': int (if successful) - count of concepts with cards for all languages
-  /// - 'message': String (if error)
-  static Future<Map<String, dynamic>> getConceptCountWithCardsForLanguages({
-    required List<String> languageCodes,
-  }) async {
-    if (languageCodes.isEmpty) {
-      return {
-        'success': false,
-        'message': 'At least one language code must be provided',
-      };
-    }
-
-    final queryParams = <String, String>{
-      'languages': languageCodes.join(','),
-    };
-
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/count/with-cards-for-languages').replace(
-      queryParameters: queryParams,
-    );
     
     try {
       final response = await http.get(

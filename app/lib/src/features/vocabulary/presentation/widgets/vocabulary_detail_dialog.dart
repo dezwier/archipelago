@@ -41,8 +41,6 @@ class _VocabularyDetailDrawerState extends State<VocabularyDetailDrawer> {
 
 
   void _handleSave() {
-    // Edit mode is only for images, so we just exit edit mode
-    // Image changes are handled directly by VocabularyImageSection
     setState(() {
       _isEditing = false;
     });

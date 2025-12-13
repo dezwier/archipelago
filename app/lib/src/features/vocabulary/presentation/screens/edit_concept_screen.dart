@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'edit_concept_controller.dart';
-import '../domain/paired_vocabulary_item.dart';
+import '../controllers/edit_concept_controller.dart';
+import '../../domain/paired_vocabulary_item.dart';
 
 class EditConceptScreen extends StatefulWidget {
   final PairedVocabularyItem item;

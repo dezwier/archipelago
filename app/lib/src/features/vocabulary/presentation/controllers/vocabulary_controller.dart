@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../features/profile/domain/user.dart';
-import '../data/vocabulary_service.dart';
-import '../domain/paired_vocabulary_item.dart';
-import 'widgets/vocabulary_header_widget.dart';
+import '../../../profile/domain/user.dart';
+import '../../data/vocabulary_service.dart';
+import '../../domain/paired_vocabulary_item.dart';
+import '../widgets/vocabulary_header_widget.dart';
 
 class VocabularyController extends ChangeNotifier {
   User? _currentUser;
@@ -119,15 +119,6 @@ class VocabularyController extends ChangeNotifier {
       _visibleLanguageCodes = visibleLanguageCodes;
       // Always reload vocabulary when visible languages change
       // This updates the cards shown and recalculates the completed count with filters
-      _loadUserAndVocabulary(reset: true, showLoading: false);
-    }
-  }
-  
-  // Set own lemmas filter
-  void setOwnLemmasFilter(bool ownLemmas) {
-    if (_ownLemmasFilter != ownLemmas) {
-      _ownLemmasFilter = ownLemmas;
-      // Reload vocabulary when filter changes
       _loadUserAndVocabulary(reset: true, showLoading: false);
     }
   }
@@ -464,58 +455,6 @@ class VocabularyController extends ChangeNotifier {
       _errorMessage = 'Error loading more vocabulary: ${e.toString()}';
     }
     notifyListeners();
-  }
-
-  Future<bool> updateItem(
-    PairedVocabularyItem item,
-    String? sourceTranslation,
-    String? targetTranslation,
-    String? imageUrl,
-  ) async {
-    try {
-      // Update source card if it exists and translation changed
-      if (item.sourceCard != null && 
-          sourceTranslation != null && 
-          sourceTranslation.isNotEmpty &&
-          sourceTranslation != item.sourceCard!.translation) {
-        final result = await VocabularyService.updateCard(
-          cardId: item.sourceCard!.id,
-          translation: sourceTranslation,
-        );
-        
-        if (result['success'] != true) {
-          _errorMessage = result['message'] as String? ?? 'Failed to update source card';
-          notifyListeners();
-          return false;
-        }
-      }
-
-      // Update target card if it exists and translation changed
-      if (item.targetCard != null && 
-          targetTranslation != null && 
-          targetTranslation.isNotEmpty &&
-          targetTranslation != item.targetCard!.translation) {
-        final result = await VocabularyService.updateCard(
-          cardId: item.targetCard!.id,
-          translation: targetTranslation,
-        );
-        
-        if (result['success'] != true) {
-          _errorMessage = result['message'] as String? ?? 'Failed to update target card';
-          notifyListeners();
-          return false;
-        }
-      }
-
-
-      // Reload vocabulary to show updated data
-      await _loadUserAndVocabulary(reset: true);
-      return true;
-    } catch (e) {
-      _errorMessage = 'Error updating translation: ${e.toString()}';
-      notifyListeners();
-      return false;
-    }
   }
 
   Future<bool> deleteItem(PairedVocabularyItem item) async {

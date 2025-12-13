@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../data/vocabulary_service.dart';
-import '../domain/paired_vocabulary_item.dart';
-import '../../generate_flashcards/data/topic_service.dart';
-import '../../profile/domain/user.dart';
+import '../../data/vocabulary_service.dart';
+import '../../domain/paired_vocabulary_item.dart';
+import '../../../generate_flashcards/data/topic_service.dart';
+import '../../../profile/domain/user.dart';
 
 class EditConceptController extends ChangeNotifier {
   final PairedVocabularyItem item;

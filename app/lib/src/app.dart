@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'features/generate_flashcards/presentation/generate_flashcards_screen.dart';
 import 'features/practice_flashcards/presentation/practice_flashcards_screen.dart';
-import 'features/vocabulary/presentation/dictionary_screen.dart';
+import 'features/vocabulary/presentation/screens/dictionary_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/profile/domain/user.dart';
 import 'features/profile/domain/language.dart';
