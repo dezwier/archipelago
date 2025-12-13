@@ -75,7 +75,7 @@ class Concept(SQLModel, table=True):
     
     # Relationships
     topic: Optional[Topic] = Relationship(back_populates="concepts")
-    cards: List["Card"] = Relationship(back_populates="concept")
+    lemmas: List["Lemma"] = Relationship(back_populates="concept")
     images: List["Image"] = Relationship(back_populates="concept")
 
 
@@ -87,14 +87,14 @@ class Language(SQLModel, table=True):
     name: str  # English, French, Spanish, etc.
     
     # Relationships
-    cards: List["Card"] = Relationship(back_populates="language")
+    lemmas: List["Lemma"] = Relationship(back_populates="language")
 
 
-class Card(SQLModel, table=True):
-    """Card table - language-specific representation of a concept."""
-    __tablename__ = "card"
+class Lemma(SQLModel, table=True):
+    """Lemma table - language-specific representation of a concept."""
+    __tablename__ = "lemma"
     # Note: Unique constraint is enforced via case-insensitive functional index
-    # uq_card_concept_language_term_ci on (concept_id, language_code, LOWER(TRIM(term)))
+    # uq_lemma_concept_language_term_ci on (concept_id, language_code, LOWER(TRIM(term)))
     # This prevents duplicates like "Abandon" and "abandon"
     
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -109,18 +109,18 @@ class Card(SQLModel, table=True):
     verb_type: Optional[str] = None  # Verb type (e.g., 'regular', 'irregular')
     auxiliary_verb: Optional[str] = None  # Auxiliary verb (e.g., 'avoir', 'être' in French)
     formality_register: Optional[str] = Field(default=None, sa_column=Column("register", SAString))  # Register (e.g., 'formal', 'informal', 'slang')
-    confidence_score: Optional[float] = None  # Confidence score for the card
-    status: Optional[str] = None  # Status of the card
-    source: Optional[str] = None  # Source of the card data
+    confidence_score: Optional[float] = None  # Confidence score for the lemma
+    status: Optional[str] = None  # Status of the lemma
+    source: Optional[str] = None  # Source of the lemma data
     audio_url: Optional[str] = None  # Audio URL for pronunciation
-    notes: Optional[str] = None  # Additional notes for the card
+    notes: Optional[str] = None  # Additional notes for the lemma
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
     
     # Relationships
-    concept: Concept = Relationship(back_populates="cards")
-    language: Language = Relationship(back_populates="cards")
-    user_cards: List["UserCard"] = Relationship(back_populates="card")
+    concept: Concept = Relationship(back_populates="lemmas")
+    language: Language = Relationship(back_populates="lemmas")
+    user_cards: List["UserCard"] = Relationship(back_populates="lemma")
 
 
 class User(SQLModel, table=True):
@@ -150,12 +150,12 @@ class User(SQLModel, table=True):
 
 
 class UserCard(SQLModel, table=True):
-    """UserCard table - tracks user's progress with specific cards."""
+    """UserCard table - tracks user's progress with specific lemmas."""
     __tablename__ = "user_cards"
     
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")
-    card_id: int = Field(foreign_key="card.id")
+    lemma_id: int = Field(foreign_key="lemma.id")
     image_path: Optional[str] = None
     created_time: datetime = Field(default_factory=datetime.utcnow)
     last_success_time: Optional[datetime] = None
@@ -164,7 +164,7 @@ class UserCard(SQLModel, table=True):
     
     # Relationships
     user: User = Relationship(back_populates="user_cards")
-    card: Card = Relationship(back_populates="user_cards")
+    lemma: Lemma = Relationship(back_populates="user_cards")
 
 
 class UserPractice(SQLModel, table=True):

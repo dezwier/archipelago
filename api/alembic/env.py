@@ -9,7 +9,7 @@ from app.models.models import (
     Concept,
     Image,
     Language,
-    Card,
+    Lemma,
     UserCard,
     User,
     UserPractice,

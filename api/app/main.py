@@ -12,7 +12,7 @@ from app.core.database import init_db
 from app.models import models  # noqa: F401
 
 # Import routers
-from app.api.v1.endpoints import auth, languages, vocabulary, concepts, cards, topics, lemma_generation, concept_image
+from app.api.v1.endpoints import auth, languages, vocabulary, concepts, lemma, topics, lemma_generation, concept_image
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ app.include_router(auth.router, prefix=settings.api_v1_prefix)
 app.include_router(languages.router, prefix=settings.api_v1_prefix)
 app.include_router(vocabulary.router, prefix=settings.api_v1_prefix)
 app.include_router(concepts.router, prefix=settings.api_v1_prefix)
-app.include_router(cards.router, prefix=settings.api_v1_prefix)
+app.include_router(lemma.router, prefix=settings.api_v1_prefix)
 app.include_router(topics.router, prefix=settings.api_v1_prefix)
 app.include_router(lemma_generation.router, prefix=settings.api_v1_prefix)
 app.include_router(concept_image.router, prefix=settings.api_v1_prefix)

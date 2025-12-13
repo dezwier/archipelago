@@ -10,12 +10,13 @@ from pathlib import Path
 import logging
 from app.core.database import get_session
 from app.core.config import settings
-from app.models.models import Concept, Image, Card, Language, CEFRLevel
-from app.schemas.flashcard import (
+from app.models.models import Concept, Image, Lemma, Language, CEFRLevel
+from app.schemas.concept import (
     ConceptResponse, ImageResponse, ConceptCountResponse, CreateConceptOnlyRequest,
     GetConceptsWithMissingLanguagesRequest, ConceptsWithMissingLanguagesResponse,
-    ConceptWithMissingLanguages, normalize_part_of_speech
+    ConceptWithMissingLanguages
 )
+from app.schemas.utils import normalize_part_of_speech
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -350,24 +351,24 @@ async def delete_concept(
     for image in images:
         session.delete(image)
     
-    # Get all cards for this concept
-    from app.models.models import Card, UserCard
-    cards = session.exec(
-        select(Card).where(Card.concept_id == concept_id)
+    # Get all lemmas for this concept
+    from app.models.models import Lemma, UserCard
+    lemmas = session.exec(
+        select(Lemma).where(Lemma.concept_id == concept_id)
     ).all()
     
-    # Delete all UserCards that reference these cards
-    card_ids = [card.id for card in cards]
-    if card_ids:
+    # Delete all UserCards that reference these lemmas
+    lemma_ids = [lemma.id for lemma in lemmas]
+    if lemma_ids:
         user_cards = session.exec(
-            select(UserCard).where(UserCard.card_id.in_(card_ids))
+            select(UserCard).where(UserCard.lemma_id.in_(lemma_ids))
         ).all()
         for user_card in user_cards:
             session.delete(user_card)
     
-    # Delete all cards
-    for card in cards:
-        session.delete(card)
+    # Delete all lemmas
+    for lemma in lemmas:
+        session.delete(lemma)
     
     # Delete the concept
     session.delete(concept)
@@ -397,13 +398,13 @@ async def get_concept_count_with_cards_for_languages(
     session: Session = Depends(get_session)
 ):
     """
-    Get the count of concepts that have cards with terms for all of the given languages.
+    Get the count of concepts that have lemmas with terms for all of the given languages.
     
     Args:
         languages: Comma-separated list of language codes (e.g., "en,fr,es")
     
     Returns:
-        Count of concepts that have cards with terms for all specified languages
+        Count of concepts that have lemmas with terms for all specified languages
     """
     if not languages or not languages.strip():
         raise HTTPException(
@@ -420,36 +421,36 @@ async def get_concept_count_with_cards_for_languages(
             detail="At least one valid language code must be provided"
         )
     
-    # Get all cards with terms, filtered by the specified languages
-    all_cards = session.exec(
-        select(Card).where(
-            Card.language_code.in_(language_codes),
-            Card.term.isnot(None),
-            Card.term != ""
+    # Get all lemmas with terms, filtered by the specified languages
+    all_lemmas = session.exec(
+        select(Lemma).where(
+            Lemma.language_code.in_(language_codes),
+            Lemma.term.isnot(None),
+            Lemma.term != ""
         )
     ).all()
     
-    # Group cards by concept_id and language_code
-    concept_cards_map = {}
-    for card in all_cards:
-        if card.concept_id not in concept_cards_map:
-            concept_cards_map[card.concept_id] = {}
-        concept_cards_map[card.concept_id][card.language_code] = card
+    # Group lemmas by concept_id and language_code
+    concept_lemmas_map = {}
+    for lemma in all_lemmas:
+        if lemma.concept_id not in concept_lemmas_map:
+            concept_lemmas_map[lemma.concept_id] = {}
+        concept_lemmas_map[lemma.concept_id][lemma.language_code] = lemma
     
-    # Count concepts that have cards for all specified languages
+    # Count concepts that have lemmas for all specified languages
     count = 0
-    for concept_id, lang_cards in concept_cards_map.items():
-        # Check if this concept has cards for all specified languages
-        has_all_cards = True
+    for concept_id, lang_lemmas in concept_lemmas_map.items():
+        # Check if this concept has lemmas for all specified languages
+        has_all_lemmas = True
         for lang_code in language_codes:
-            if lang_code not in lang_cards:
-                has_all_cards = False
+            if lang_code not in lang_lemmas:
+                has_all_lemmas = False
                 break
-            card = lang_cards[lang_code]
-            if not card.term or not card.term.strip():
-                has_all_cards = False
+            lemma = lang_lemmas[lang_code]
+            if not lemma.term or not lemma.term.strip():
+                has_all_lemmas = False
                 break
-        if has_all_cards:
+        if has_all_lemmas:
             count += 1
     
     return ConceptCountResponse(count=count)
@@ -593,27 +594,27 @@ async def get_concepts_with_missing_languages(
     if request.search and request.search.strip():
         search_term = f"%{request.search.strip().lower()}%"
         
-        # Search in concept.term or card.term for visible languages
-        card_search_subquery = (
-            select(Card.concept_id)
+        # Search in concept.term or lemma.term for visible languages
+        lemma_search_subquery = (
+            select(Lemma.concept_id)
             .where(
-                Card.language_code.in_(language_codes),
-                func.lower(Card.term).like(search_term)
+                Lemma.language_code.in_(language_codes),
+                func.lower(Lemma.term).like(search_term)
             )
             .distinct()
         )
         
-        # Filter concepts where term matches OR has matching cards
+        # Filter concepts where term matches OR has matching lemmas
         base_query_with_user_id = base_query_with_user_id.where(
             or_(
                 func.lower(Concept.term).like(search_term),
-                Concept.id.in_(card_search_subquery)
+                Concept.id.in_(lemma_search_subquery)
             )
         )
         base_query_without_user_id = base_query_without_user_id.where(
             or_(
                 func.lower(Concept.term).like(search_term),
-                Concept.id.in_(card_search_subquery)
+                Concept.id.in_(lemma_search_subquery)
             )
         )
     
@@ -630,28 +631,28 @@ async def get_concepts_with_missing_languages(
     # Combine: concepts with user_id first, then those without, both alphabetically sorted
     all_concepts = list(concepts_with_user_id) + list(concepts_without_user_id)
     
-    # Get all cards for the specified languages
-    cards = session.exec(
-        select(Card).where(Card.language_code.in_(language_codes))
+    # Get all lemmas for the specified languages
+    lemmas = session.exec(
+        select(Lemma).where(Lemma.language_code.in_(language_codes))
     ).all()
     
-    # Group cards by concept_id and language_code
-    concept_cards_map = {}
-    for card in cards:
-        if card.concept_id not in concept_cards_map:
-            concept_cards_map[card.concept_id] = set()
-        concept_cards_map[card.concept_id].add(card.language_code.lower())
+    # Group lemmas by concept_id and language_code
+    concept_lemmas_map = {}
+    for lemma in lemmas:
+        if lemma.concept_id not in concept_lemmas_map:
+            concept_lemmas_map[lemma.concept_id] = set()
+        concept_lemmas_map[lemma.concept_id].add(lemma.language_code.lower())
     
     # Find concepts with missing languages
     result_concepts = []
     for concept in all_concepts:
-        # Get cards for this concept (if any)
-        concept_card_languages = concept_cards_map.get(concept.id, set())
+        # Get lemmas for this concept (if any)
+        concept_lemma_languages = concept_lemmas_map.get(concept.id, set())
         
         # Find which languages are missing
         missing_languages = []
         for lang_code in language_codes:
-            if lang_code not in concept_card_languages:
+            if lang_code not in concept_lemma_languages:
                 missing_languages.append(lang_code)
         
         # Only include concepts that are missing at least one language

@@ -18,7 +18,6 @@ import io
 from app.core.database import get_session
 from app.core.config import settings
 from app.models.models import Concept, Topic, Image
-from app.services.image_service import image_service
 
 logger = logging.getLogger(__name__)
 

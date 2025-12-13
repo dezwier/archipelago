@@ -347,6 +347,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 right: 16,
                 bottom: MediaQuery.of(context).padding.bottom + 70,
                 child: DictionaryFabButtons(
+                  filterButtonKey: _filterButtonKey,
                   onFilterPressed: () => _showFilterMenu(context),
                   onFilteringPressed: () => _showFilteringMenu(context),
                   onGenerateLemmasPressed: () => _handleGenerateLemmas(context),
@@ -393,50 +394,60 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     final RenderBox? button = _filterButtonKey.currentContext?.findRenderObject() as RenderBox?;
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     
+    RelativeRect position;
     if (button != null) {
-      final RelativeRect position = RelativeRect.fromRect(
+      position = RelativeRect.fromRect(
         Rect.fromPoints(
           button.localToGlobal(Offset.zero, ancestor: overlay),
           button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
         ),
         Offset.zero & overlay.size,
       );
-
-      showMenu<void>(
-        context: context,
-        position: position,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        items: DictionaryFilterMenu.buildMenuItems(
-          context: context,
-          allLanguages: _allLanguages,
-          languageVisibility: _languageVisibilityManager.languageVisibility,
-          languagesToShow: _languageVisibilityManager.languagesToShow,
-          showDescription: _showDescription,
-          showExtraInfo: _showExtraInfo,
-          onLanguageVisibilityToggled: (languageCode) {
-            setState(() {
-              _languageVisibilityManager.toggleLanguageVisibility(languageCode);
-              // Update language filter for search (concepts are no longer filtered by visibility)
-              _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-              // Update visible languages - this will refresh vocabulary and counts
-              _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-            });
-          },
-          onShowDescriptionChanged: (value) {
-            setState(() {
-              _showDescription = value;
-            });
-          },
-          onShowExtraInfoChanged: (value) {
-            setState(() {
-              _showExtraInfo = value;
-            });
-          },
-        ),
+    } else {
+      // Fallback: position menu near bottom right where the button should be
+      final screenSize = MediaQuery.of(context).size;
+      position = RelativeRect.fromLTRB(
+        screenSize.width - 200,
+        screenSize.height - 200,
+        screenSize.width - 16,
+        screenSize.height - 16,
       );
     }
+
+    showMenu<void>(
+      context: context,
+      position: position,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      items: DictionaryFilterMenu.buildMenuItems(
+        context: context,
+        allLanguages: _allLanguages,
+        languageVisibility: _languageVisibilityManager.languageVisibility,
+        languagesToShow: _languageVisibilityManager.languagesToShow,
+        showDescription: _showDescription,
+        showExtraInfo: _showExtraInfo,
+        onLanguageVisibilityToggled: (languageCode) {
+          setState(() {
+            _languageVisibilityManager.toggleLanguageVisibility(languageCode);
+            // Update language filter for search (concepts are no longer filtered by visibility)
+            _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
+            // Update visible languages - this will refresh vocabulary and counts
+            _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
+          });
+        },
+        onShowDescriptionChanged: (value) {
+          setState(() {
+            _showDescription = value;
+          });
+        },
+        onShowExtraInfoChanged: (value) {
+          setState(() {
+            _showExtraInfo = value;
+          });
+        },
+      ),
+    );
   }
 
   Future<void> _handleEdit(PairedVocabularyItem item) async {

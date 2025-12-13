@@ -6,15 +6,15 @@ from sqlmodel import Session, select, func, or_
 from sqlalchemy.orm import aliased
 from typing import Optional, List
 from app.core.database import get_session
-from app.models.models import Concept, Card, Image, CEFRLevel
-from app.schemas.flashcard import (
-    CardResponse,
+from app.models.models import Concept, Lemma, Image, CEFRLevel
+from app.schemas.lemma import LemmaResponse
+from app.schemas.concept import (
     PairedVocabularyItem,
     VocabularyResponse,
     ImageResponse,
-    normalize_part_of_speech,
 )
-from app.api.v1.endpoints.flashcard_helpers import ensure_capitalized
+from app.schemas.utils import normalize_part_of_speech
+from app.api.v1.endpoints.utils import ensure_capitalized
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,8 +28,8 @@ async def get_vocabulary(
     page: int = 1,
     page_size: int = 20,
     sort_by: str = "alphabetical",  # Options: "alphabetical", "recent", "random"
-    search: Optional[str] = None,  # Optional search query for concept.term and card.term
-    visible_languages: Optional[str] = None,  # Comma-separated list of visible language codes - cards are filtered to these languages
+    search: Optional[str] = None,  # Optional search query for concept.term and lemma.term
+    visible_languages: Optional[str] = None,  # Comma-separated list of visible language codes - lemmas are filtered to these languages
     own_user_id: Optional[int] = None,  # Filter for concepts created by this user (concept.user_id == own_user_id)
     include_public: bool = True,  # Include public concepts (concept.user_id is null)
     include_private: bool = True,  # Include private concepts (concept.user_id == logged in user)
@@ -40,7 +40,7 @@ async def get_vocabulary(
     session: Session = Depends(get_session)
 ):
     """
-    Get all concepts with cards for visible languages, with search and pagination.
+    Get all concepts with lemmas for visible languages, with search and pagination.
     Optimized to do filtering, sorting, and pagination at the database level.
     
     Args:
@@ -48,8 +48,8 @@ async def get_vocabulary(
         page: Page number (1-indexed, default: 1)
         page_size: Number of items per page (default: 20)
         sort_by: Sort order - "alphabetical" (default), "recent" (by created_at, newest first), or "random"
-        search: Optional search query to filter by concept.term and card.term (for visible languages)
-        visible_languages: Comma-separated list of visible language codes - only cards for these languages are returned
+        search: Optional search query to filter by concept.term and lemma.term (for visible languages)
+        visible_languages: Comma-separated list of visible language codes - only lemmas for these languages are returned
         own_user_id: Filter for concepts created by this user (concept.user_id == own_user_id) - deprecated, use include_public/include_private instead
         include_public: Include public concepts (concept.user_id is null) - default: True
         include_private: Include private concepts (concept.user_id == logged in user) - default: True
@@ -186,34 +186,34 @@ async def get_vocabulary(
         
         # Search in concept.term or card.term for visible languages
         if visible_language_codes:
-            # Subquery to find concept_ids that match search in cards for visible languages
-            card_search_subquery = (
-                select(Card.concept_id)
+            # Subquery to find concept_ids that match search in lemmas for visible languages
+            lemma_search_subquery = (
+                select(Lemma.concept_id)
                 .where(
-                    Card.language_code.in_(visible_language_codes),
-                    func.lower(Card.term).like(search_term)
+                    Lemma.language_code.in_(visible_language_codes),
+                    func.lower(Lemma.term).like(search_term)
                 )
                 .distinct()
             )
             
-            # Filter concepts where term matches OR has matching cards
+            # Filter concepts where term matches OR has matching lemmas
             concept_query = concept_query.where(
                 or_(
                     func.lower(Concept.term).like(search_term),
-                    Concept.id.in_(card_search_subquery)
+                    Concept.id.in_(lemma_search_subquery)
                 )
             )
         else:
-            # Search in concept.term or any card.term
-            card_search_subquery = (
-                select(Card.concept_id)
-                .where(func.lower(Card.term).like(search_term))
+            # Search in concept.term or any lemma.term
+            lemma_search_subquery = (
+                select(Lemma.concept_id)
+                .where(func.lower(Lemma.term).like(search_term))
                 .distinct()
             )
             concept_query = concept_query.where(
                 or_(
                     func.lower(Concept.term).like(search_term),
-                    Concept.id.in_(card_search_subquery)
+                    Concept.id.in_(lemma_search_subquery)
                 )
             )
     
@@ -227,29 +227,29 @@ async def get_vocabulary(
     
     # Apply sorting at database level
     if sort_by == "recent":
-        # Sort by concept.created_at descending, or most recent card.created_at
+        # Sort by concept.created_at descending, or most recent lemma.created_at
         if visible_language_codes:
-            # Subquery to get max created_at from visible language cards
-            card_time_subquery = (
+            # Subquery to get max created_at from visible language lemmas
+            lemma_time_subquery = (
                 select(
-                    Card.concept_id,
-                    func.max(Card.created_at).label('max_card_time')
+                    Lemma.concept_id,
+                    func.max(Lemma.created_at).label('max_lemma_time')
                 )
                 .where(
-                    Card.language_code.in_(visible_language_codes),
-                    Card.term.isnot(None),
-                    Card.term != ""
+                    Lemma.language_code.in_(visible_language_codes),
+                    Lemma.term.isnot(None),
+                    Lemma.term != ""
                 )
-                .group_by(Card.concept_id)
+                .group_by(Lemma.concept_id)
                 .subquery()
             )
-            # Join and sort by max card time or concept time
+            # Join and sort by max lemma time or concept time
             concept_query = (
                 concept_query
-                .outerjoin(card_time_subquery, Concept.id == card_time_subquery.c.concept_id)
+                .outerjoin(lemma_time_subquery, Concept.id == lemma_time_subquery.c.concept_id)
                 .order_by(
                     func.coalesce(
-                        card_time_subquery.c.max_card_time,
+                        lemma_time_subquery.c.max_lemma_time,
                         Concept.created_at
                     ).desc()
                 )
@@ -262,37 +262,37 @@ async def get_vocabulary(
         # SQLAlchemy's func.random() should work for most databases
         concept_query = concept_query.order_by(func.random())
     else:
-        # Alphabetical sorting - use first visible language card term, fallback to concept.term
+        # Alphabetical sorting - use first visible language lemma term, fallback to concept.term
         if visible_language_codes and len(visible_language_codes) > 0:
-            # Use a subquery to get one card per concept for the first visible language
-            # This prevents duplicates when a concept has multiple cards for the same language
+# Use a subquery to get one lemma per concept for the first visible language
+# This prevents duplicates when a concept has multiple lemmas for the same language
             first_lang = visible_language_codes[0]
-            card_sort_subquery = (
+            lemma_sort_subquery = (
                 select(
-                    Card.concept_id,
-                    func.min(Card.id).label('min_card_id')
+                    Lemma.concept_id,
+                    func.min(Lemma.id).label('min_lemma_id')
                 )
                 .where(
-                    Card.language_code == first_lang,
-                    Card.term.isnot(None),
-                    Card.term != ""
+                    Lemma.language_code == first_lang,
+                    Lemma.term.isnot(None),
+                    Lemma.term != ""
                 )
-                .group_by(Card.concept_id)
+                .group_by(Lemma.concept_id)
                 .subquery()
             )
             
-            # Join with the subquery to get the card ID, then join with Card to get the term
-            card_alias = aliased(Card)
+            # Join with the subquery to get the card ID, then join with Lemma to get the term
+            lemma_alias = aliased(Lemma)
             concept_query = (
                 concept_query
-                .outerjoin(card_sort_subquery, Concept.id == card_sort_subquery.c.concept_id)
+                .outerjoin(lemma_sort_subquery, Concept.id == lemma_sort_subquery.c.concept_id)
                 .outerjoin(
-                    card_alias,
-                    (card_alias.id == card_sort_subquery.c.min_card_id)
+                    lemma_alias,
+                    (lemma_alias.id == lemma_sort_subquery.c.min_lemma_id)
                 )
                 .order_by(
                     func.coalesce(
-                        func.lower(card_alias.term),
+                        func.lower(lemma_alias.term),
                         func.lower(Concept.term)
                     ).asc()
                 )
@@ -319,49 +319,49 @@ async def get_vocabulary(
     
     concept_ids = [c.id for c in concepts]
     
-    # Calculate total_concepts_with_term (concepts with term or at least one card with term)
+    # Calculate total_concepts_with_term (concepts with term or at least one lemma with term)
     # This is independent of search/pagination
     total_concepts_with_term_query = select(func.count(Concept.id)).where(
         or_(
             Concept.term.isnot(None),
             Concept.id.in_(
-                select(Card.concept_id)
-                .where(Card.term.isnot(None) & (Card.term != ""))
+                select(Lemma.concept_id)
+                .where(Lemma.term.isnot(None) & (Lemma.term != ""))
                 .distinct()
             )
         )
     )
     total_concepts_with_term = session.exec(total_concepts_with_term_query).one()
     
-    # Fetch cards for these concepts (only visible languages)
+    # Fetch lemmas for these concepts (only visible languages)
     if visible_language_codes:
-        cards_query = (
-            select(Card)
+        lemmas_query = (
+            select(Lemma)
             .where(
-                Card.concept_id.in_(concept_ids),
-                Card.language_code.in_(visible_language_codes),
-                Card.term.isnot(None),
-                Card.term != ""
+                Lemma.concept_id.in_(concept_ids),
+                Lemma.language_code.in_(visible_language_codes),
+                Lemma.term.isnot(None),
+                Lemma.term != ""
             )
         )
     else:
-        cards_query = (
-            select(Card)
+        lemmas_query = (
+            select(Lemma)
             .where(
-                Card.concept_id.in_(concept_ids),
-                Card.term.isnot(None),
-                Card.term != ""
+                Lemma.concept_id.in_(concept_ids),
+                Lemma.term.isnot(None),
+                Lemma.term != ""
             )
         )
     
-    cards = session.exec(cards_query).all()
+    lemmas = session.exec(lemmas_query).all()
     
-    # Group cards by concept_id and language_code
-    concept_cards_map = {}
-    for card in cards:
-        if card.concept_id not in concept_cards_map:
-            concept_cards_map[card.concept_id] = {}
-        concept_cards_map[card.concept_id][card.language_code] = card
+    # Group lemmas by concept_id and language_code
+    concept_lemmas_map = {}
+    for lemma in lemmas:
+        if lemma.concept_id not in concept_lemmas_map:
+            concept_lemmas_map[lemma.concept_id] = {}
+        concept_lemmas_map[lemma.concept_id][lemma.language_code] = lemma
     
     # Fetch images for these concepts
     images_query = (
@@ -381,57 +381,57 @@ async def get_vocabulary(
     # Build response items
     paired_items = []
     for concept in concepts:
-        lang_cards = concept_cards_map.get(concept.id, {})
+        lang_lemmas = concept_lemmas_map.get(concept.id, {})
         concept_images = concept_images_map.get(concept.id, [])
         
-        # Build list of cards for visible languages only (in order)
-        visible_cards_list = []
+        # Build list of lemmas for visible languages only (in order)
+        visible_lemmas_list = []
         if visible_language_codes:
             for lang_code in visible_language_codes:
-                card = lang_cards.get(lang_code)
-                if card and card.term and card.term.strip():
-                    visible_cards_list.append(
-                        CardResponse(
-                            id=card.id,
-                            concept_id=card.concept_id,
-                            language_code=card.language_code,
-                            translation=ensure_capitalized(card.term),
-                            description=card.description,
-                            ipa=card.ipa,
-                            audio_path=card.audio_url,
-                            gender=card.gender,
-                            article=card.article,
-                            plural_form=card.plural_form,
-                            verb_type=card.verb_type,
-                            auxiliary_verb=card.auxiliary_verb,
-                            formality_register=card.formality_register,
-                            notes=card.notes
+                lemma = lang_lemmas.get(lang_code)
+                if lemma and lemma.term and lemma.term.strip():
+                    visible_lemmas_list.append(
+                        LemmaResponse(
+                            id=lemma.id,
+                            concept_id=lemma.concept_id,
+                            language_code=lemma.language_code,
+                            translation=ensure_capitalized(lemma.term),
+                            description=lemma.description,
+                            ipa=lemma.ipa,
+                            audio_path=lemma.audio_url,
+                            gender=lemma.gender,
+                            article=lemma.article,
+                            plural_form=lemma.plural_form,
+                            verb_type=lemma.verb_type,
+                            auxiliary_verb=lemma.auxiliary_verb,
+                            formality_register=lemma.formality_register,
+                            notes=lemma.notes
                         )
                     )
         else:
-            for card in lang_cards.values():
-                if card.term and card.term.strip():
-                    visible_cards_list.append(
-                        CardResponse(
-                            id=card.id,
-                            concept_id=card.concept_id,
-                            language_code=card.language_code,
-                            translation=ensure_capitalized(card.term),
-                            description=card.description,
-                            ipa=card.ipa,
-                            audio_path=card.audio_url,
-                            gender=card.gender,
-                            article=card.article,
-                            plural_form=card.plural_form,
-                            verb_type=card.verb_type,
-                            auxiliary_verb=card.auxiliary_verb,
-                            formality_register=card.formality_register,
-                            notes=card.notes
+            for lemma in lang_lemmas.values():
+                if lemma.term and lemma.term.strip():
+                    visible_lemmas_list.append(
+                        LemmaResponse(
+                            id=lemma.id,
+                            concept_id=lemma.concept_id,
+                            language_code=lemma.language_code,
+                            translation=ensure_capitalized(lemma.term),
+                            description=lemma.description,
+                            ipa=lemma.ipa,
+                            audio_path=lemma.audio_url,
+                            gender=lemma.gender,
+                            article=lemma.article,
+                            plural_form=lemma.plural_form,
+                            verb_type=lemma.verb_type,
+                            auxiliary_verb=lemma.auxiliary_verb,
+                            formality_register=lemma.formality_register,
+                            notes=lemma.notes
                         )
                     )
         
-        source_card_response = visible_cards_list[0] if len(visible_cards_list) > 0 else None
-        target_card_response = visible_cards_list[1] if len(visible_cards_list) > 1 else None
+        source_card_response = visible_lemmas_list[0] if len(visible_lemmas_list) > 0 else None
+        target_card_response = visible_lemmas_list[1] if len(visible_lemmas_list) > 1 else None
         
         # Get topic information safely
         topic_name = None
@@ -451,7 +451,7 @@ async def get_vocabulary(
         paired_items.append(
             PairedVocabularyItem(
                 concept_id=concept.id,
-                cards=visible_cards_list,
+                cards=visible_lemmas_list,
                 source_card=source_card_response,
                 target_card=target_card_response,
                 images=concept_images,
@@ -518,53 +518,53 @@ async def get_vocabulary(
         if search and search.strip():
             search_term = f"%{search.strip().lower()}%"
             if visible_language_codes:
-                card_search_subquery = (
-                    select(Card.concept_id)
+                lemma_search_subquery = (
+                    select(Lemma.concept_id)
                     .where(
-                        Card.language_code.in_(visible_language_codes),
-                        func.lower(Card.term).like(search_term)
+                        Lemma.language_code.in_(visible_language_codes),
+                        func.lower(Lemma.term).like(search_term)
                     )
                     .distinct()
                 )
                 filtered_concept_query = filtered_concept_query.where(
                     or_(
                         func.lower(Concept.term).like(search_term),
-                        Concept.id.in_(card_search_subquery)
+                        Concept.id.in_(lemma_search_subquery)
                     )
                 )
             else:
-                card_search_subquery = (
-                    select(Card.concept_id)
-                    .where(func.lower(Card.term).like(search_term))
+                lemma_search_subquery = (
+                    select(Lemma.concept_id)
+                    .where(func.lower(Lemma.term).like(search_term))
                     .distinct()
                 )
                 filtered_concept_query = filtered_concept_query.where(
                     or_(
                         func.lower(Concept.term).like(search_term),
-                        Concept.id.in_(card_search_subquery)
+                        Concept.id.in_(lemma_search_subquery)
                     )
                 )
         
-        # Now filter to concepts that have cards for all visible languages
+        # Now filter to concepts that have lemmas for all visible languages
         # Get concept IDs from the filtered query
         filtered_concept_ids_subquery = filtered_concept_query.subquery()
         
-        # Find concepts that have cards for all visible languages
-        card_count_subquery = (
-            select(Card.concept_id)
+        # Find concepts that have lemmas for all visible languages
+        lemma_count_subquery = (
+            select(Lemma.concept_id)
             .where(
-                Card.concept_id.in_(select(filtered_concept_ids_subquery.c.id)),
-                Card.language_code.in_(visible_language_codes),
-                Card.term.isnot(None),
-                Card.term != ""
+                Lemma.concept_id.in_(select(filtered_concept_ids_subquery.c.id)),
+                Lemma.language_code.in_(visible_language_codes),
+                Lemma.term.isnot(None),
+                Lemma.term != ""
             )
-            .group_by(Card.concept_id)
-            .having(func.count(func.distinct(Card.language_code)) == len(visible_language_codes))
+            .group_by(Lemma.concept_id)
+            .having(func.count(func.distinct(Lemma.language_code)) == len(visible_language_codes))
             .subquery()
         )
         
         concepts_with_all_visible_languages = session.exec(
-            select(func.count()).select_from(card_count_subquery)
+            select(func.count()).select_from(lemma_count_subquery)
         ).one()
     
     return VocabularyResponse(
@@ -577,4 +577,3 @@ async def get_vocabulary(
         concepts_with_all_visible_languages=concepts_with_all_visible_languages,
         total_concepts_with_term=total_concepts_with_term
     )
-

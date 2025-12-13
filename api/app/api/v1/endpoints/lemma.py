@@ -1,5 +1,5 @@
 """
-Card CRUD endpoints.
+Lemma CRUD endpoints.
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlmodel import Session, select
@@ -9,13 +9,17 @@ from datetime import datetime, timezone
 from typing import List, Optional
 import logging
 from app.core.database import get_session
-from app.models.models import Card, Concept, Language, Image
-from app.schemas.flashcard import (
-    CardResponse, UpdateCardRequest, CreateConceptRequest, 
-    CreateConceptResponse, ConceptResponse, ImageResponse,
-    GenerateCardsForConceptsRequest, GenerateCardsForConceptsResponse
+from app.models.models import Lemma, Concept, Language, Image
+from app.schemas.lemma import LemmaResponse, UpdateLemmaRequest
+from app.schemas.concept import (
+    CreateConceptRequest,
+    CreateConceptResponse,
+    ConceptResponse,
+    ImageResponse,
+    GenerateCardsForConceptsRequest,
+    GenerateCardsForConceptsResponse
 )
-from app.api.v1.endpoints.flashcard_helpers import ensure_capitalized
+from app.api.v1.endpoints.utils import ensure_capitalized
 from app.api.v1.endpoints.llm_helpers import call_gemini_api
 from app.api.v1.endpoints.prompt_helpers import (
     generate_lemma_system_instruction,
@@ -27,7 +31,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cards", tags=["cards"])
 
 
-@router.get("", response_model=List[CardResponse])
+@router.get("", response_model=List[LemmaResponse])
 async def get_cards(
     skip: int = 0,
     limit: int = 100,
@@ -36,63 +40,63 @@ async def get_cards(
     session: Session = Depends(get_session)
 ):
     """
-    Get cards with optional filtering.
+    Get lemmas with optional filtering.
     
     Args:
-        skip: Number of cards to skip
-        limit: Maximum number of cards to return
+        skip: Number of lemmas to skip
+        limit: Maximum number of lemmas to return
         concept_id: Optional filter by concept ID
         language_code: Optional filter by language code
     
     Returns:
-        List of cards
+        List of lemmas
     """
-    query = select(Card)
+    query = select(Lemma)
     
     if concept_id is not None:
-        query = query.where(Card.concept_id == concept_id)
+        query = query.where(Lemma.concept_id == concept_id)
     
     if language_code is not None:
-        query = query.where(Card.language_code == language_code.lower())
+        query = query.where(Lemma.language_code == language_code.lower())
     
-    cards = session.exec(
-        query.offset(skip).limit(limit).order_by(Card.created_at.desc())
+    lemmas = session.exec(
+        query.offset(skip).limit(limit).order_by(Lemma.created_at.desc())
     ).all()
     
     return [
-        CardResponse(
-            id=card.id,
-            concept_id=card.concept_id,
-            language_code=card.language_code,
-            translation=ensure_capitalized(card.term),
-            description=card.description,
-            ipa=card.ipa,
-            audio_path=card.audio_url,
-            gender=card.gender,
-            article=card.article,
-            plural_form=card.plural_form,
-            verb_type=card.verb_type,
-            auxiliary_verb=card.auxiliary_verb,
-            formality_register=card.formality_register,
-            notes=card.notes
+        LemmaResponse(
+            id=lemma.id,
+            concept_id=lemma.concept_id,
+            language_code=lemma.language_code,
+            translation=ensure_capitalized(lemma.term),
+            description=lemma.description,
+            ipa=lemma.ipa,
+            audio_path=lemma.audio_url,
+            gender=lemma.gender,
+            article=lemma.article,
+            plural_form=lemma.plural_form,
+            verb_type=lemma.verb_type,
+            auxiliary_verb=lemma.auxiliary_verb,
+            formality_register=lemma.formality_register,
+            notes=lemma.notes
         )
-        for card in cards
+        for lemma in lemmas
     ]
 
 
-@router.get("/concept/{concept_id}", response_model=List[CardResponse])
+@router.get("/concept/{concept_id}", response_model=List[LemmaResponse])
 async def get_cards_by_concept_id(
     concept_id: int,
     session: Session = Depends(get_session)
 ):
     """
-    Get all cards for a given concept ID.
+    Get all lemmas for a given concept ID.
     
     Args:
         concept_id: The concept ID
     
     Returns:
-        List of cards associated with the concept
+        List of lemmas associated with the concept
     """
     # Verify that the concept exists
     concept = session.get(Concept, concept_id)
@@ -102,29 +106,29 @@ async def get_cards_by_concept_id(
             detail="Concept not found"
         )
     
-    # Get all cards for this concept
-    cards = session.exec(
-        select(Card).where(Card.concept_id == concept_id).order_by(Card.created_at.desc())
+    # Get all lemmas for this concept
+    lemmas = session.exec(
+        select(Lemma).where(Lemma.concept_id == concept_id).order_by(Lemma.created_at.desc())
     ).all()
     
     return [
-        CardResponse(
-            id=card.id,
-            concept_id=card.concept_id,
-            language_code=card.language_code,
-            translation=ensure_capitalized(card.term),
-            description=card.description,
-            ipa=card.ipa,
-            audio_path=card.audio_url,
-            gender=card.gender,
-            article=card.article,
-            plural_form=card.plural_form,
-            verb_type=card.verb_type,
-            auxiliary_verb=card.auxiliary_verb,
-            formality_register=card.formality_register,
-            notes=card.notes
+        LemmaResponse(
+            id=lemma.id,
+            concept_id=lemma.concept_id,
+            language_code=lemma.language_code,
+            translation=ensure_capitalized(lemma.term),
+            description=lemma.description,
+            ipa=lemma.ipa,
+            audio_path=lemma.audio_url,
+            gender=lemma.gender,
+            article=lemma.article,
+            plural_form=lemma.plural_form,
+            verb_type=lemma.verb_type,
+            auxiliary_verb=lemma.auxiliary_verb,
+            formality_register=lemma.formality_register,
+            notes=lemma.notes
         )
-        for card in cards
+        for lemma in lemmas
     ]
 
 
@@ -134,11 +138,11 @@ async def generate_cards_for_concept(
     session: Session = Depends(get_session)
 ):
     """
-    Generate cards for concepts in multiple languages.
+    Generate lemmas for concepts in multiple languages.
     
     This endpoint can handle two types of requests:
-    1. CreateConceptRequest: Finds an existing concept by term and generates cards
-    2. GenerateCardsForConceptsRequest: Generates cards for specified concept IDs
+    1. CreateConceptRequest: Finds an existing concept by term and generates lemmas
+    2. GenerateCardsForConceptsRequest: Generates lemmas for specified concept IDs
     
     Args:
         http_request: FastAPI Request object to inspect the body
@@ -237,7 +241,7 @@ async def generate_cards_for_concept(
         part_of_speech=part_of_speech_for_llm
     )
     
-    # Generate cards for each language
+    # Generate lemmas for each language
     created_cards = []
     errors = []
     
@@ -246,18 +250,18 @@ async def generate_cards_for_concept(
             # Generate user prompt for this language
             user_prompt = generate_lemma_user_prompt(target_language=lang_code)
             
-            logger.info(f"Generating card for concept {concept.id}, language {lang_code}")
+            logger.info(f"Generating lemma for concept {concept.id}, language {lang_code}")
             
-            # Call LLM to generate card data
+            # Call LLM to generate lemma data
             try:
                 llm_data, token_usage = call_gemini_api(
                     prompt=user_prompt,
                     system_instruction=system_instruction
                 )
-                logger.info(f"Generated card for {lang_code}. Tokens: {token_usage['total_tokens']}, Cost: ${token_usage['cost_usd']:.6f}")
+                logger.info(f"Generated lemma for {lang_code}. Tokens: {token_usage['total_tokens']}, Cost: ${token_usage['cost_usd']:.6f}")
             except Exception as e:
                 logger.error(f"LLM API call failed for language {lang_code}: {str(e)}")
-                errors.append(f"Failed to generate card for {lang_code}: {str(e)}")
+                errors.append(f"Failed to generate lemma for {lang_code}: {str(e)}")
                 continue
             
             # Validate LLM output
@@ -289,37 +293,37 @@ async def generate_cards_for_concept(
             if term:
                 term = term.strip()
             
-            # Check for existing cards with same concept_id, language_code, and term (case-insensitive)
+            # Check for existing lemmas with same concept_id, language_code, and term (case-insensitive)
             # This prevents duplicates and ensures the unique constraint is respected
             if term:
-                existing_cards = session.exec(
-                    select(Card).where(
-                        Card.concept_id == concept.id,
-                        Card.language_code == lang_code,
-                        func.lower(func.trim(Card.term)) == term.lower()
+                existing_lemmas = session.exec(
+                    select(Lemma).where(
+                        Lemma.concept_id == concept.id,
+                        Lemma.language_code == lang_code,
+                        func.lower(func.trim(Lemma.term)) == term.lower()
                     )
                 ).all()
                 
-                # Delete all matching cards to avoid unique constraint issues
-                for existing_card in existing_cards:
-                    session.delete(existing_card)
-                if existing_cards:
+                # Delete all matching lemmas to avoid unique constraint issues
+                for existing_lemma in existing_lemmas:
+                    session.delete(existing_lemma)
+                if existing_lemmas:
                     session.flush()
             else:
                 # If no term, check by concept_id and language_code only
-                existing_card = session.exec(
-                    select(Card).where(
-                        Card.concept_id == concept.id,
-                        Card.language_code == lang_code
+                existing_lemma = session.exec(
+                    select(Lemma).where(
+                        Lemma.concept_id == concept.id,
+                        Lemma.language_code == lang_code
                     )
                 ).first()
                 
-                if existing_card:
-                    session.delete(existing_card)
+                if existing_lemma:
+                    session.delete(existing_lemma)
                     session.flush()
             
-            # Create new card
-            card = Card(
+            # Create new lemma
+            lemma = Lemma(
                 concept_id=concept.id,
                 language_code=lang_code,
                 term=term,
@@ -334,39 +338,39 @@ async def generate_cards_for_concept(
                 status="active",
                 source="llm"
             )
-            session.add(card)
+            session.add(lemma)
             session.commit()
-            session.refresh(card)
+            session.refresh(lemma)
             
-            # Convert to CardResponse
-            card_response = CardResponse(
-                id=card.id,
-                concept_id=card.concept_id,
-                language_code=card.language_code,
-                translation=ensure_capitalized(card.term) if card.term else "",
-                description=card.description,
-                ipa=card.ipa,
-                audio_path=card.audio_url,
-                gender=card.gender,
-                article=card.article,
-                plural_form=card.plural_form,
-                verb_type=card.verb_type,
-                auxiliary_verb=card.auxiliary_verb,
-                formality_register=card.formality_register,
-                notes=card.notes
+            # Convert to LemmaResponse
+            lemma_response = LemmaResponse(
+                id=lemma.id,
+                concept_id=lemma.concept_id,
+                language_code=lemma.language_code,
+                translation=ensure_capitalized(lemma.term) if lemma.term else "",
+                description=lemma.description,
+                ipa=lemma.ipa,
+                audio_path=lemma.audio_url,
+                gender=lemma.gender,
+                article=lemma.article,
+                plural_form=lemma.plural_form,
+                verb_type=lemma.verb_type,
+                auxiliary_verb=lemma.auxiliary_verb,
+                formality_register=lemma.formality_register,
+                notes=lemma.notes
             )
-            created_cards.append(card_response)
+            created_cards.append(lemma_response)
             
         except Exception as e:
-            logger.error(f"Error generating card for language {lang_code}: {str(e)}")
-            errors.append(f"Error generating card for {lang_code}: {str(e)}")
+            logger.error(f"Error generating lemma for language {lang_code}: {str(e)}")
+            errors.append(f"Error generating lemma for {lang_code}: {str(e)}")
             continue
     
-    # If no cards were created, return error
+    # If no lemmas were created, return error
     if not created_cards:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate any cards. Errors: {'; '.join(errors)}"
+            detail=f"Failed to generate any lemmas. Errors: {'; '.join(errors)}"
         )
     
     # Load images for the concept
@@ -389,7 +393,7 @@ async def _generate_cards_for_concepts_list(
     session: Session
 ):
     """
-    Internal function to generate cards for multiple concepts.
+    Internal function to generate lemmas for multiple concepts.
     
     Args:
         request: GenerateCardsForConceptsRequest with concept_ids and languages
@@ -461,34 +465,34 @@ async def _generate_cards_for_concepts_list(
                 part_of_speech=part_of_speech
             )
             
-            # Generate cards for each language
+            # Generate lemmas for each language
             for lang_code in language_codes:
                 try:
-                    # Check if card already exists for this concept and language
-                    existing_card = session.exec(
-                        select(Card).where(
-                            Card.concept_id == concept.id,
-                            Card.language_code == lang_code
+                    # Check if lemma already exists for this concept and language
+                    existing_lemma = session.exec(
+                        select(Lemma).where(
+                            Lemma.concept_id == concept.id,
+                            Lemma.language_code == lang_code
                         )
                     ).first()
                     
-                    if existing_card:
-                        # Skip if card already exists
-                        logger.info(f"Card already exists for concept {concept.id}, language {lang_code}")
+                    if existing_lemma:
+                        # Skip if lemma already exists
+                        logger.info(f"Lemma already exists for concept {concept.id}, language {lang_code}")
                         continue
                     
                     # Generate user prompt for this language
                     user_prompt = generate_lemma_user_prompt(target_language=lang_code)
                     
-                    logger.info(f"Generating card for concept {concept.id}, language {lang_code}")
+                    logger.info(f"Generating lemma for concept {concept.id}, language {lang_code}")
                     
-                    # Call LLM to generate card data
+                    # Call LLM to generate lemma data
                     try:
                         llm_data, token_usage = call_gemini_api(
                             prompt=user_prompt,
                             system_instruction=system_instruction
                         )
-                        logger.info(f"Generated card for concept {concept.id}, {lang_code}. Tokens: {token_usage['total_tokens']}, Cost: ${token_usage['cost_usd']:.6f}")
+                        logger.info(f"Generated lemma for concept {concept.id}, {lang_code}. Tokens: {token_usage['total_tokens']}, Cost: ${token_usage['cost_usd']:.6f}")
                         
                         total_tokens += token_usage.get('total_tokens', 0)
                         total_cost_usd += token_usage.get('cost_usd', 0.0)
@@ -526,37 +530,37 @@ async def _generate_cards_for_concepts_list(
                     if term:
                         term = term.strip()
                     
-                    # Check for existing cards with same concept_id, language_code, and term (case-insensitive)
+                    # Check for existing lemmas with same concept_id, language_code, and term (case-insensitive)
                     # This prevents duplicates and ensures the unique constraint is respected
                     if term:
-                        existing_cards = session.exec(
-                            select(Card).where(
-                                Card.concept_id == concept.id,
-                                Card.language_code == lang_code,
-                                func.lower(func.trim(Card.term)) == term.lower()
+                        existing_lemmas = session.exec(
+                            select(Lemma).where(
+                                Lemma.concept_id == concept.id,
+                                Lemma.language_code == lang_code,
+                                func.lower(func.trim(Lemma.term)) == term.lower()
                             )
                         ).all()
                         
-                        # Delete all matching cards to avoid unique constraint issues
-                        for existing_card in existing_cards:
-                            session.delete(existing_card)
-                        if existing_cards:
+                        # Delete all matching lemmas to avoid unique constraint issues
+                        for existing_lemma in existing_lemmas:
+                            session.delete(existing_lemma)
+                        if existing_lemmas:
                             session.flush()
                     else:
                         # If no term, check by concept_id and language_code only
-                        existing_card = session.exec(
-                            select(Card).where(
-                                Card.concept_id == concept.id,
-                                Card.language_code == lang_code
+                        existing_lemma = session.exec(
+                            select(Lemma).where(
+                                Lemma.concept_id == concept.id,
+                                Lemma.language_code == lang_code
                             )
                         ).first()
                         
-                        if existing_card:
-                            session.delete(existing_card)
+                        if existing_lemma:
+                            session.delete(existing_lemma)
                             session.flush()
                     
-                    # Create new card
-                    card = Card(
+                    # Create new lemma
+                    lemma = Lemma(
                         concept_id=concept.id,
                         language_code=lang_code,
                         term=term,
@@ -571,15 +575,15 @@ async def _generate_cards_for_concepts_list(
                         status="active",
                         source="llm"
                     )
-                    session.add(card)
+                    session.add(lemma)
                     session.commit()
-                    session.refresh(card)
+                    session.refresh(lemma)
                     
                     total_cards_created += 1
-                    logger.info(f"Created card {card.id} for concept {concept.id}, language {lang_code}")
+                    logger.info(f"Created lemma {lemma.id} for concept {concept.id}, language {lang_code}")
                     
                 except Exception as e:
-                    logger.error(f"Error generating card for concept {concept.id}, language {lang_code}: {str(e)}")
+                    logger.error(f"Error generating lemma for concept {concept.id}, language {lang_code}: {str(e)}")
                     errors.append(f"Concept {concept.id}, {lang_code}: {str(e)}")
                     session.rollback()
                     continue
@@ -589,7 +593,7 @@ async def _generate_cards_for_concepts_list(
             errors.append(f"Concept {concept.id}: {str(e)}")
             continue
     
-    logger.info(f"Batch generation completed. Created {total_cards_created} cards, {len(errors)} errors")
+    logger.info(f"Batch generation completed. Created {total_cards_created} lemmas, {len(errors)} errors")
     
     return GenerateCardsForConceptsResponse(
         concepts_processed=len(concepts),
@@ -601,154 +605,154 @@ async def _generate_cards_for_concepts_list(
     )
 
 
-@router.get("/{card_id}", response_model=CardResponse)
+@router.get("/{lemma_id}", response_model=LemmaResponse)
 async def get_card(
-    card_id: int,
+    lemma_id: int,
     session: Session = Depends(get_session)
 ):
     """
-    Get a card by ID.
+    Get a lemma by ID.
     
     Args:
-        card_id: The card ID
+        lemma_id: The lemma ID
     
     Returns:
-        The card
+        The lemma
     """
-    card = session.get(Card, card_id)
-    if not card:
+    lemma = session.get(Lemma, lemma_id)
+    if not lemma:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Card not found"
+            detail="Lemma not found"
         )
     
-    return CardResponse(
-        id=card.id,
-        concept_id=card.concept_id,
-        language_code=card.language_code,
-        translation=ensure_capitalized(card.term),
-        description=card.description,
-        ipa=card.ipa,
-        audio_path=card.audio_url,
-        gender=card.gender,
-        article=card.article,
-        plural_form=card.plural_form,
-        verb_type=card.verb_type,
-        auxiliary_verb=card.auxiliary_verb,
-        formality_register=card.formality_register,
-        notes=card.notes
+    return LemmaResponse(
+        id=lemma.id,
+        concept_id=lemma.concept_id,
+        language_code=lemma.language_code,
+        translation=ensure_capitalized(lemma.term),
+        description=lemma.description,
+        ipa=lemma.ipa,
+        audio_path=lemma.audio_url,
+        gender=lemma.gender,
+        article=lemma.article,
+        plural_form=lemma.plural_form,
+        verb_type=lemma.verb_type,
+        auxiliary_verb=lemma.auxiliary_verb,
+        formality_register=lemma.formality_register,
+        notes=lemma.notes
     )
 
 
-@router.put("/{card_id}", response_model=CardResponse)
+@router.put("/{lemma_id}", response_model=LemmaResponse)
 async def update_card(
-    card_id: int,
-    request: UpdateCardRequest,
+    lemma_id: int,
+    request: UpdateLemmaRequest,
     session: Session = Depends(get_session)
 ):
     """
-    Update a card's translation and description.
+    Update a lemma's translation and description.
     
     Args:
-        card_id: The card ID
+        lemma_id: The lemma ID
         request: Update request with fields to update
     
     Returns:
-        The updated card
+        The updated lemma
     """
-    # Get the card
-    card = session.get(Card, card_id)
-    if not card:
+    # Get the lemma
+    lemma = session.get(Lemma, lemma_id)
+    if not lemma:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Card not found"
+            detail="Lemma not found"
         )
     
     # Check if translation update would create a duplicate
     if request.translation is not None:
         new_term = ensure_capitalized(request.translation.strip())
         
-        # Check if another card with same concept_id, language_code, and term already exists
-        existing_card = session.exec(
-            select(Card).where(
-                Card.concept_id == card.concept_id,
-                Card.language_code == card.language_code,
-                Card.term == new_term,
-                Card.id != card_id  # Exclude the current card
+        # Check if another lemma with same concept_id, language_code, and term already exists
+        existing_lemma = session.exec(
+            select(Lemma).where(
+                Lemma.concept_id == lemma.concept_id,
+                Lemma.language_code == lemma.language_code,
+                Lemma.term == new_term,
+                Lemma.id != lemma_id  # Exclude the current lemma
             )
         ).first()
         
-        if existing_card:
+        if existing_lemma:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"A card with the same concept_id, language_code, and term already exists (card_id: {existing_card.id})"
+                detail=f"A lemma with the same concept_id, language_code, and term already exists (lemma_id: {existing_lemma.id})"
             )
         
-        card.term = new_term
-        card.updated_at = datetime.now(timezone.utc)
+        lemma.term = new_term
+        lemma.updated_at = datetime.now(timezone.utc)
     
     if request.description is not None:
-        card.description = request.description.strip()
-        card.updated_at = datetime.now(timezone.utc)
+        lemma.description = request.description.strip()
+        lemma.updated_at = datetime.now(timezone.utc)
     
     try:
-        session.add(card)
+        session.add(lemma)
         session.commit()
-        session.refresh(card)
+        session.refresh(lemma)
     except IntegrityError as e:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Failed to update card: duplicate constraint violation"
+            detail="Failed to update lemma: duplicate constraint violation"
         ) from e
     
-    return CardResponse(
-        id=card.id,
-        concept_id=card.concept_id,
-        language_code=card.language_code,
-        translation=ensure_capitalized(card.term),
-        description=card.description,
-        ipa=card.ipa,
-        audio_path=card.audio_url,
-        gender=card.gender,
-        article=card.article,
-        plural_form=card.plural_form,
-        verb_type=card.verb_type,
-        auxiliary_verb=card.auxiliary_verb,
-        formality_register=card.formality_register,
-        notes=card.notes
+    return LemmaResponse(
+        id=lemma.id,
+        concept_id=lemma.concept_id,
+        language_code=lemma.language_code,
+        translation=ensure_capitalized(lemma.term),
+        description=lemma.description,
+        ipa=lemma.ipa,
+        audio_path=lemma.audio_url,
+        gender=lemma.gender,
+        article=lemma.article,
+        plural_form=lemma.plural_form,
+        verb_type=lemma.verb_type,
+        auxiliary_verb=lemma.auxiliary_verb,
+        formality_register=lemma.formality_register,
+        notes=lemma.notes
     )
 
 
-@router.delete("/{card_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{lemma_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_card(
-    card_id: int,
+    lemma_id: int,
     session: Session = Depends(get_session)
 ):
     """
-    Delete a card and all its associated user_cards.
+    Delete a lemma and all its associated user_cards.
     
     Args:
-        card_id: The card ID
+        lemma_id: The lemma ID
     """
-    card = session.get(Card, card_id)
-    if not card:
+    lemma = session.get(Lemma, lemma_id)
+    if not lemma:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Card not found"
+            detail="Lemma not found"
         )
     
-    # Delete all UserCards that reference this card
+    # Delete all UserCards that reference this lemma
     from app.models.models import UserCard
     user_cards = session.exec(
-        select(UserCard).where(UserCard.card_id == card_id)
+        select(UserCard).where(UserCard.lemma_id == lemma_id)
     ).all()
     
     for user_card in user_cards:
         session.delete(user_card)
     
-    # Delete the card
-    session.delete(card)
+    # Delete the lemma
+    session.delete(lemma)
     
     session.commit()
     

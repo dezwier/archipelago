@@ -6,8 +6,8 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from app.core.database import get_session
-from app.models.models import Language, Concept, Card
-from app.schemas.flashcard import (
+from app.models.models import Language, Concept, Lemma
+from app.schemas.lemma import (
     GenerateLemmaRequest,
     GenerateLemmaResponse,
     GenerateLemmasBatchRequest,
@@ -117,9 +117,9 @@ async def generate_lemma(
             detail=f"Invalid LLM output format: {str(e)}"
         )
     
-    # If concept_id is provided, create/update the card in the database
-    card_created = False
-    card_updated = False
+    # If concept_id is provided, create/update the lemma in the database
+    lemma_created = False
+    lemma_updated = False
     if request.concept_id is not None:
         try:
             # Verify concept exists
@@ -135,39 +135,39 @@ async def generate_lemma(
             if term:
                 term = term.strip()
             
-            # Check for existing cards with same concept_id, language_code, and term (case-insensitive)
+            # Check for existing lemmas with same concept_id, language_code, and term (case-insensitive)
             # This prevents duplicates and ensures the unique constraint is respected
             if term:
-                existing_cards = session.exec(
-                    select(Card).where(
-                        Card.concept_id == request.concept_id,
-                        Card.language_code == target_language_code,
-                        func.lower(func.trim(Card.term)) == term.lower()
+                existing_lemmas = session.exec(
+                    select(Lemma).where(
+                        Lemma.concept_id == request.concept_id,
+                        Lemma.language_code == target_language_code,
+                        func.lower(func.trim(Lemma.term)) == term.lower()
                     )
                 ).all()
                 
-                # Delete all matching cards to avoid unique constraint issues
-                card_updated = len(existing_cards) > 0
-                for existing_card in existing_cards:
-                    session.delete(existing_card)
-                if existing_cards:
+                # Delete all matching lemmas to avoid unique constraint issues
+                lemma_updated = len(existing_lemmas) > 0
+                for existing_lemma in existing_lemmas:
+                    session.delete(existing_lemma)
+                if existing_lemmas:
                     session.flush()
             else:
                 # If no term, check by concept_id and language_code only
-                existing_card = session.exec(
-                    select(Card).where(
-                        Card.concept_id == request.concept_id,
-                        Card.language_code == target_language_code
+                existing_lemma = session.exec(
+                    select(Lemma).where(
+                        Lemma.concept_id == request.concept_id,
+                        Lemma.language_code == target_language_code
                     )
                 ).first()
                 
-                if existing_card:
-                    session.delete(existing_card)
+                if existing_lemma:
+                    session.delete(existing_lemma)
                     session.flush()
-                    card_updated = True
+                    lemma_updated = True
             
-            # Create new card (or recreate if we just deleted one)
-            card = Card(
+            # Create new lemma (or recreate if we just deleted one)
+            lemma = Lemma(
                 concept_id=request.concept_id,
                 language_code=target_language_code,
                 term=term,
@@ -182,19 +182,19 @@ async def generate_lemma(
                 status="active",
                 source="llm"
             )
-            session.add(card)
+            session.add(lemma)
             session.commit()
-            session.refresh(card)
+            session.refresh(lemma)
             
-            logger.info(f"Card {'updated' if card_updated else 'created'} for concept {request.concept_id}, language {target_language_code}")
+            logger.info(f"Lemma {'updated' if lemma_updated else 'created'} for concept {request.concept_id}, language {target_language_code}")
             
         except IntegrityError as e:
             session.rollback()
             logger.error(f"Database integrity error: {str(e)}")
-            if "uq_card_concept_language_term" in str(e) or "unique constraint" in str(e).lower():
+            if "uq_lemma_concept_language_term" in str(e) or "unique constraint" in str(e).lower():
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="A card with the same concept_id, language_code, and term already exists"
+                    detail="A lemma with the same concept_id, language_code, and term already exists"
                 )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -202,10 +202,10 @@ async def generate_lemma(
             )
         except Exception as e:
             session.rollback()
-            logger.error(f"Failed to save card: {str(e)}")
+            logger.error(f"Failed to save lemma: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to save card: {str(e)}"
+                detail=f"Failed to save lemma: {str(e)}"
             )
     
     # Build response
@@ -333,37 +333,37 @@ async def generate_lemmas_batch(
                     if term:
                         term = term.strip()
                     
-                    # Check for existing cards with same concept_id, language_code, and term (case-insensitive)
+                    # Check for existing lemmas with same concept_id, language_code, and term (case-insensitive)
                     # This prevents duplicates and ensures the unique constraint is respected
                     if term:
-                        existing_cards = session.exec(
-                            select(Card).where(
-                                Card.concept_id == request.concept_id,
-                                Card.language_code == target_language_code,
-                                func.lower(func.trim(Card.term)) == term.lower()
+                        existing_lemmas = session.exec(
+                            select(Lemma).where(
+                                Lemma.concept_id == request.concept_id,
+                                Lemma.language_code == target_language_code,
+                                func.lower(func.trim(Lemma.term)) == term.lower()
                             )
                         ).all()
                         
-                        # Delete all matching cards to avoid unique constraint issues
-                        for existing_card in existing_cards:
-                            session.delete(existing_card)
-                        if existing_cards:
+                        # Delete all matching lemmas to avoid unique constraint issues
+                        for existing_lemma in existing_lemmas:
+                            session.delete(existing_lemma)
+                        if existing_lemmas:
                             session.flush()
                     else:
                         # If no term, check by concept_id and language_code only
-                        existing_card = session.exec(
-                            select(Card).where(
-                                Card.concept_id == request.concept_id,
-                                Card.language_code == target_language_code
+                        existing_lemma = session.exec(
+                            select(Lemma).where(
+                                Lemma.concept_id == request.concept_id,
+                                Lemma.language_code == target_language_code
                             )
                         ).first()
                         
-                        if existing_card:
-                            session.delete(existing_card)
+                        if existing_lemma:
+                            session.delete(existing_lemma)
                             session.flush()
                     
-                    # Create new card (or recreate if we just deleted one)
-                    card = Card(
+                    # Create new lemma (or recreate if we just deleted one)
+                    lemma = Lemma(
                         concept_id=request.concept_id,
                         language_code=target_language_code,
                         term=term,
@@ -378,9 +378,9 @@ async def generate_lemmas_batch(
                         status="active",
                         source="llm"
                     )
-                    session.add(card)
+                    session.add(lemma)
                     session.commit()
-                    session.refresh(card)
+                    session.refresh(lemma)
                     
                 except IntegrityError as e:
                     session.rollback()
@@ -388,7 +388,7 @@ async def generate_lemmas_batch(
                     # Continue with other languages even if one fails
                 except Exception as e:
                     session.rollback()
-                    logger.error(f"Failed to save card for language {target_language_code}: {str(e)}")
+                    logger.error(f"Failed to save lemma for language {target_language_code}: {str(e)}")
                     # Continue with other languages even if one fails
             
             # Build lemma response

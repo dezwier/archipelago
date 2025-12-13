@@ -5,6 +5,7 @@ class DictionaryFabButtons extends StatelessWidget {
   final VoidCallback onFilteringPressed;
   final VoidCallback? onGenerateLemmasPressed;
   final bool isLoadingConcepts;
+  final Key? filterButtonKey;
 
   const DictionaryFabButtons({
     super.key,
@@ -12,6 +13,7 @@ class DictionaryFabButtons extends StatelessWidget {
     required this.onFilteringPressed,
     this.onGenerateLemmasPressed,
     this.isLoadingConcepts = false,
+    this.filterButtonKey,
   });
 
   @override
@@ -50,6 +52,7 @@ class DictionaryFabButtons extends StatelessWidget {
         const SizedBox(height: 8),
         // Filter button
         FloatingActionButton.small(
+          key: filterButtonKey,
           heroTag: 'filter_fab',
           onPressed: onFilterPressed,
           backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
