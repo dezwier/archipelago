@@ -6,7 +6,7 @@ import '../../../../features/profile/domain/language.dart';
 import '../../../../features/profile/domain/user.dart';
 import '../../data/flashcard_service.dart';
 import '../../data/card_generation_background_service.dart';
-import 'language_selection_widget.dart';
+import '../../../../common_widgets/language_selection_widget.dart';
 import 'card_generation_progress_widget.dart';
 
 class GenerateCardsSection extends StatefulWidget {
@@ -317,32 +317,24 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
   }
 
   void _showCompletionMessage() {
-    if (!_isCancelled) {
-      String message = 'Generated $_cardsCreated card(s) for $_conceptsProcessed of $_totalConcepts concept(s)';
-      if (_errors.isNotEmpty) {
-        message += '\n\nErrors: ${_errors.length}';
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Cancelled. Processed $_conceptsProcessed of $_totalConcepts concept(s)'),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-    
     setState(() {
       _currentConceptTerm = null;
       _currentConceptMissingLanguages = [];
+    });
+  }
+  
+  void _dismissProgress() {
+    setState(() {
+      _totalConcepts = null;
+      _currentConceptIndex = 0;
+      _currentConceptTerm = null;
+      _currentConceptMissingLanguages = [];
+      _conceptsProcessed = 0;
+      _cardsCreated = 0;
+      _errors = [];
+      _isCancelled = false;
+      _isGeneratingCards = false;
+      _sessionCostUsd = 0.0;
     });
   }
 
@@ -392,6 +384,7 @@ class _GenerateCardsSectionState extends State<GenerateCardsSection> {
             isGenerating: _isGeneratingCards,
             isCancelled: _isCancelled,
             onCancel: _isGeneratingCards ? _handleCancel : null,
+            onDismiss: !_isGeneratingCards ? _dismissProgress : null,
           ),
           const SizedBox(height: 12),
         ],

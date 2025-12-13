@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../../features/profile/domain/language.dart';
-import '../../../../utils/language_emoji.dart';
+import '../features/profile/domain/language.dart';
+import '../utils/language_emoji.dart';
 
+/// A reusable widget that displays language selection buttons in a grid layout.
+/// Shows language flags as emoji buttons that can be toggled on/off.
 class LanguageSelectionWidget extends StatelessWidget {
   final List<Language> languages;
   final List<String> selectedLanguages;
@@ -26,21 +28,13 @@ class LanguageSelectionWidget extends StatelessWidget {
     onSelectionChanged(newSelection);
   }
 
-  void _toggleAllLanguages() {
-    if (selectedLanguages.length == languages.length) {
-      onSelectionChanged([]);
-    } else {
-      onSelectionChanged(languages.map((lang) => lang.code).toList());
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Calculate number of rows needed (5 per row)
+    // Calculate number of rows needed (8 per row)
     const int itemsPerRow = 8;
     final int rowCount = (languages.length / itemsPerRow).ceil();
 
@@ -48,7 +42,7 @@ class LanguageSelectionWidget extends StatelessWidget {
       children: [
         // "Select All" button
         const SizedBox(height: 6),
-        // Language buttons in grid (5 per row)
+        // Language buttons in grid (8 per row)
         for (int row = 0; row < rowCount; row++)
           Padding(
             padding: EdgeInsets.only(bottom: row < rowCount - 1 ? 8 : 0),

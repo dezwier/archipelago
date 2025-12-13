@@ -304,35 +304,27 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
   
   void _showCompletionMessage() {
-    if (!_isCancelled) {
-      String message = 'Generated $_cardsCreated card(s) for $_conceptsProcessed of $_totalConcepts concept(s)';
-      if (_errors.isNotEmpty) {
-        message += '\n\nErrors: ${_errors.length}';
-      }
-      
-      // Refresh vocabulary to show new cards
-      _controller.refresh();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Cancelled. Processed $_conceptsProcessed of $_totalConcepts concept(s)'),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
+    // Refresh vocabulary to show new cards
+    _controller.refresh();
     
     setState(() {
       _currentConceptTerm = null;
       _currentConceptMissingLanguages = [];
+    });
+  }
+  
+  void _dismissProgress() {
+    setState(() {
+      _totalConcepts = null;
+      _currentConceptIndex = 0;
+      _currentConceptTerm = null;
+      _currentConceptMissingLanguages = [];
+      _conceptsProcessed = 0;
+      _cardsCreated = 0;
+      _errors = [];
+      _isCancelled = false;
+      _isGeneratingCards = false;
+      _sessionCostUsd = 0.0;
     });
   }
   
@@ -422,6 +414,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                         isGenerating: _isGeneratingCards,
                         isCancelled: _isCancelled,
                         onCancel: _isGeneratingCards ? _handleCancel : null,
+                        onDismiss: !_isGeneratingCards ? _dismissProgress : null,
                       ),
                     ),
                   ),
@@ -565,13 +558,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     // Always show total concepts count (doesn't change during search)
     final totalConcepts = _controller.totalConceptCount ?? 0;
     
-    // Get count from API (calculated for visible languages, changes when visibility changes)
-    final conceptsWithAllCards = _controller.conceptsWithAllVisibleLanguages ?? 0;
-    
     // Get filtered count (number of concepts with filters applied)
     final filteredLemmas = _controller.totalItems;
     
-    return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $conceptsWithAllCards completed • $filteredLemmas filtered';
+    // Get completed count (includes filters AND considers which visible languages are complete)
+    final completedCount = _controller.conceptsWithAllVisibleLanguages ?? 0;
+    
+    return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $filteredLemmas filtered • $completedCount completed';
   }
 
   List<String> _getVisibleLanguageCodes() {
@@ -735,13 +728,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                 
                                 // Update language filter for search (concepts are no longer filtered by visibility)
                                 _controller.setLanguageCodes(_getVisibleLanguageCodes());
-                                // Update visible languages for count calculation
+                                // Update visible languages - this will refresh vocabulary and counts
                                 _controller.setVisibleLanguageCodes(_getVisibleLanguageCodes());
-                                
-                                // Re-search if there's an active search query (will use updated language codes)
-                                if (_controller.searchQuery.isNotEmpty) {
-                                  _controller.setSearchQuery(_controller.searchQuery);
-                                }
                               });
                             });
                           },

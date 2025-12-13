@@ -13,6 +13,7 @@ class CardGenerationProgressWidget extends StatelessWidget {
   final bool isGenerating;
   final bool isCancelled;
   final VoidCallback? onCancel;
+  final VoidCallback? onDismiss;
 
   const CardGenerationProgressWidget({
     super.key,
@@ -27,6 +28,7 @@ class CardGenerationProgressWidget extends StatelessWidget {
     required this.isGenerating,
     this.isCancelled = false,
     this.onCancel,
+    this.onDismiss,
   });
 
   @override
@@ -76,6 +78,14 @@ class CardGenerationProgressWidget extends StatelessWidget {
                   style: TextButton.styleFrom(
                     foregroundColor: Theme.of(context).colorScheme.error,
                   ),
+                ),
+              if (!isGenerating && onDismiss != null)
+                IconButton(
+                  onPressed: onDismiss,
+                  icon: const Icon(Icons.close, size: 20),
+                  tooltip: 'Dismiss',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
             ],
           ),

@@ -333,38 +333,6 @@ async def get_vocabulary(
     )
     total_concepts_with_term = session.exec(total_concepts_with_term_query).one()
     
-    if not concept_ids:
-        # Calculate concepts_with_all_visible_languages if needed
-        concepts_with_all_visible_languages = None
-        if visible_language_codes and len(visible_language_codes) > 0:
-            # Count concepts that have cards with terms for all visible languages
-            # Count distinct concept_ids that have cards for all languages
-            count_subquery = (
-                select(Card.concept_id)
-                .where(
-                    Card.language_code.in_(visible_language_codes),
-                    Card.term.isnot(None),
-                    Card.term != ""
-                )
-                .group_by(Card.concept_id)
-                .having(func.count(func.distinct(Card.language_code)) == len(visible_language_codes))
-                .subquery()
-            )
-            concepts_with_all_visible_languages = session.exec(
-                select(func.count()).select_from(count_subquery)
-            ).one()
-        
-        return VocabularyResponse(
-            items=[],
-            total=total,
-            page=page,
-            page_size=page_size,
-            has_next=False,
-            has_previous=page > 1,
-            total_concepts_with_term=total_concepts_with_term,
-            concepts_with_all_visible_languages=concepts_with_all_visible_languages
-        )
-    
     # Fetch cards for these concepts (only visible languages)
     if visible_language_codes:
         cards_query = (
@@ -502,12 +470,90 @@ async def get_vocabulary(
     has_previous = page > 1
     
     # Calculate concepts with all visible languages (only if visible_languages specified)
+    # This count should include all filters (topic, level, POS, public/private, search)
     concepts_with_all_visible_languages = None
     if visible_language_codes and len(visible_language_codes) > 0:
-        # Count concepts that have cards with terms for all visible languages
-        count_subquery = (
+        # Build the same filtered concept query as the main query (without pagination/sorting)
+        # Start with all concepts
+        filtered_concept_query = select(Concept)
+        
+        # Apply public/private filters (same as main query)
+        if not include_public and not include_private:
+            filtered_concept_query = filtered_concept_query.where(False)
+        elif include_public and not include_private:
+            filtered_concept_query = filtered_concept_query.where(Concept.user_id.is_(None))
+        elif not include_public and include_private:
+            if own_user_id is not None:
+                filtered_concept_query = filtered_concept_query.where(Concept.user_id == own_user_id)
+            else:
+                filtered_concept_query = filtered_concept_query.where(False)
+        
+        # Apply topic_ids filter (same as main query)
+        if topic_id_list is not None and len(topic_id_list) > 0:
+            if include_without_topic:
+                filtered_concept_query = filtered_concept_query.where(
+                    or_(
+                        Concept.topic_id.in_(topic_id_list),
+                        Concept.topic_id.is_(None)
+                    )
+                )
+            else:
+                filtered_concept_query = filtered_concept_query.where(Concept.topic_id.in_(topic_id_list))
+        else:
+            if not include_without_topic:
+                filtered_concept_query = filtered_concept_query.where(Concept.topic_id.isnot(None))
+        
+        # Apply levels filter (same as main query)
+        if level_list is not None and len(level_list) > 0:
+            filtered_concept_query = filtered_concept_query.where(Concept.level.in_(level_list))
+        
+        # Apply part_of_speech filter (same as main query)
+        if pos_list is not None and len(pos_list) > 0:
+            pos_list_lower = [pos.lower() for pos in pos_list]
+            filtered_concept_query = filtered_concept_query.where(
+                func.lower(Concept.part_of_speech).in_(pos_list_lower)
+            )
+        
+        # Apply search filter (same as main query)
+        if search and search.strip():
+            search_term = f"%{search.strip().lower()}%"
+            if visible_language_codes:
+                card_search_subquery = (
+                    select(Card.concept_id)
+                    .where(
+                        Card.language_code.in_(visible_language_codes),
+                        func.lower(Card.term).like(search_term)
+                    )
+                    .distinct()
+                )
+                filtered_concept_query = filtered_concept_query.where(
+                    or_(
+                        func.lower(Concept.term).like(search_term),
+                        Concept.id.in_(card_search_subquery)
+                    )
+                )
+            else:
+                card_search_subquery = (
+                    select(Card.concept_id)
+                    .where(func.lower(Card.term).like(search_term))
+                    .distinct()
+                )
+                filtered_concept_query = filtered_concept_query.where(
+                    or_(
+                        func.lower(Concept.term).like(search_term),
+                        Concept.id.in_(card_search_subquery)
+                    )
+                )
+        
+        # Now filter to concepts that have cards for all visible languages
+        # Get concept IDs from the filtered query
+        filtered_concept_ids_subquery = filtered_concept_query.subquery()
+        
+        # Find concepts that have cards for all visible languages
+        card_count_subquery = (
             select(Card.concept_id)
             .where(
+                Card.concept_id.in_(select(filtered_concept_ids_subquery.c.id)),
                 Card.language_code.in_(visible_language_codes),
                 Card.term.isnot(None),
                 Card.term != ""
@@ -516,8 +562,9 @@ async def get_vocabulary(
             .having(func.count(func.distinct(Card.language_code)) == len(visible_language_codes))
             .subquery()
         )
+        
         concepts_with_all_visible_languages = session.exec(
-            select(func.count()).select_from(count_subquery)
+            select(func.count()).select_from(card_count_subquery)
         ).one()
     
     return VocabularyResponse(
