@@ -450,5 +450,136 @@ class DictionaryService {
     }
   }
 
+  /// Get a single concept by ID with all its lemmas.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'item': Map<String, dynamic> (if successful) - paired dictionary item
+  /// - 'message': String (if error)
+  static Future<Map<String, dynamic>> getConceptById({
+    required int conceptId,
+    List<String> visibleLanguageCodes = const [],
+  }) async {
+    // Fetch concept and lemmas separately and construct the PairedDictionaryItem
+    return await _getConceptByIdFallback(conceptId, visibleLanguageCodes);
+  }
+
+  /// Fallback method to get concept by ID by fetching concept and lemmas separately
+  static Future<Map<String, dynamic>> _getConceptByIdFallback(
+    int conceptId,
+    List<String> visibleLanguageCodes,
+  ) async {
+    try {
+      // Fetch concept
+      final conceptUrl = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/$conceptId');
+      final conceptResponse = await http.get(
+        conceptUrl,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (conceptResponse.statusCode != 200) {
+        try {
+          final error = jsonDecode(conceptResponse.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to fetch concept',
+          };
+        } catch (_) {
+          return {
+            'success': false,
+            'message': 'Failed to fetch concept: ${conceptResponse.statusCode}',
+          };
+        }
+      }
+
+      final conceptData = jsonDecode(conceptResponse.body) as Map<String, dynamic>;
+
+      // Fetch lemmas
+      final lemmasUrl = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/concept/$conceptId');
+      final lemmasResponse = await http.get(
+        lemmasUrl,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (lemmasResponse.statusCode != 200) {
+        try {
+          final error = jsonDecode(lemmasResponse.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to fetch lemmas',
+          };
+        } catch (_) {
+          return {
+            'success': false,
+            'message': 'Failed to fetch lemmas: ${lemmasResponse.statusCode}',
+          };
+        }
+      }
+
+      final lemmasData = jsonDecode(lemmasResponse.body) as List<dynamic>;
+      
+      // Filter lemmas by visible languages if provided
+      List<dynamic> filteredLemmas = lemmasData;
+      if (visibleLanguageCodes.isNotEmpty) {
+        filteredLemmas = lemmasData.where((lemma) {
+          final langCode = (lemma as Map<String, dynamic>)['language_code'] as String?;
+          return langCode != null && visibleLanguageCodes.contains(langCode.toLowerCase());
+        }).toList();
+      }
+
+      // Fetch topic information if topic_id is present
+      String? topicName;
+      String? topicDescription;
+      String? topicIcon;
+      final topicId = conceptData['topic_id'] as int?;
+      
+      if (topicId != null) {
+        try {
+          final topicUrl = Uri.parse('${ApiConfig.apiBaseUrl}/topics/$topicId');
+          final topicResponse = await http.get(
+            topicUrl,
+            headers: {'Content-Type': 'application/json'},
+          );
+          
+          if (topicResponse.statusCode == 200) {
+            final topicData = jsonDecode(topicResponse.body) as Map<String, dynamic>;
+            topicName = topicData['name'] as String?;
+            topicDescription = topicData['description'] as String?;
+            topicIcon = topicData['icon'] as String?;
+          }
+        } catch (e) {
+          // If topic fetch fails, just continue without topic info
+          // This is not critical, so we don't fail the whole request
+        }
+      }
+
+      // Construct PairedDictionaryItem format
+      final item = <String, dynamic>{
+        'concept_id': conceptId,
+        'lemmas': filteredLemmas,
+        'concept_term': conceptData['term'],
+        'concept_description': conceptData['description'],
+        'part_of_speech': conceptData['part_of_speech'],
+        'concept_level': conceptData['level'],
+        'images': conceptData['images'] ?? [],
+        'image_path_1': conceptData['image_path_1'],
+        'topic_id': topicId,
+        'topic_name': topicName,
+        'topic_description': topicDescription,
+        'topic_icon': topicIcon,
+      };
+
+      return {
+        'success': true,
+        'item': item,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error fetching concept: ${e.toString()}',
+      };
+    }
+  }
+
 }
 

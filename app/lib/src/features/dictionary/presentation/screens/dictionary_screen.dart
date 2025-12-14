@@ -5,7 +5,7 @@ import '../widgets/dictionary_item_widget.dart';
 import '../widgets/dictionary_empty_state.dart';
 import '../widgets/dictionary_error_state.dart';
 import '../widgets/delete_dictionary_dialog.dart';
-import '../widgets/dictionary_detail_dialog.dart';
+import '../../../../common_widgets/concept_drawer.dart';
 import '../widgets/dictionary_filter_sheet.dart';
 import '../widgets/dictionary_search_bar.dart';
 import '../widgets/dictionary_filter_menu.dart';
@@ -510,20 +510,14 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
 
   void _handleItemTap(PairedDictionaryItem item) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DictionaryDetailDrawer(
-        item: item,
-        sourceLanguageCode: _controller.sourceLanguageCode,
-        targetLanguageCode: _controller.targetLanguageCode,
-        languageVisibility: _languageVisibilityManager.languageVisibility,
-        languagesToShow: _languageVisibilityManager.languagesToShow,
-        onEdit: () => _handleEdit(item),
-        onDelete: () => _handleDelete(item),
-        onItemUpdated: (updatedItem) => _handleItemUpdated(context, updatedItem),
-      ),
+    showConceptDrawer(
+      context,
+      conceptId: item.conceptId,
+      languageVisibility: _languageVisibilityManager.languageVisibility,
+      languagesToShow: _languageVisibilityManager.languagesToShow,
+      onEdit: () => _handleEdit(item),
+      onDelete: () => _handleDelete(item),
+      onItemUpdated: () => _handleItemUpdated(context, item),
     );
   }
 
@@ -531,18 +525,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     // Refresh the dictionary list to get updated item
     await _controller.refresh();
     
-    // Find the updated item in the list
-    final updatedItems = _controller.filteredItems;
-    final updatedItem = updatedItems.firstWhere(
-      (i) => i.conceptId == item.conceptId,
-      orElse: () => item,
-    );
-    
-    // Close current drawer and reopen with updated item
-    if (mounted) {
-      Navigator.of(context).pop(); // Close current drawer
-      _handleItemTap(updatedItem); // Reopen with updated item
-    }
+    // The drawer will reload the concept data itself via its onItemUpdated callback
+    // No need to close and reopen - the drawer handles its own refresh
   }
 
   Future<void> _handleGenerateLemmas(BuildContext context) async {

@@ -10,6 +10,7 @@ import '../../../profile/data/language_service.dart';
 import '../../../../utils/language_emoji.dart';
 import 'image_selector_widget.dart';
 import 'create_selectors_widget.dart';
+import '../../../../common_widgets/concept_drawer.dart';
 
 class CreateConceptSection extends StatefulWidget {
   const CreateConceptSection({super.key});
@@ -330,16 +331,39 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
         _languageStatus = {};
       });
       
-      final successMessage = _selectedLanguages.isNotEmpty
-          ? 'Concept created with lemmas in ${_selectedLanguages.length} language(s)!'
-          : 'Concept created successfully!';
+      // Show the concept drawer with the newly created concept
+      if (mounted) {
+        // Build language visibility map - show all selected languages, plus English if available
+        final languageVisibility = <String, bool>{};
+        final languagesToShow = <String>[];
+        
+        // Add selected languages
+        for (final langCode in _selectedLanguages) {
+          languageVisibility[langCode] = true;
+          languagesToShow.add(langCode);
+        }
+        
+        // If no languages selected, show all available languages (or at least English)
+        if (_selectedLanguages.isEmpty) {
+          // Show all languages that might have been created
+          // The drawer will fetch and show what's available
+          languageVisibility['en'] = true;
+          languagesToShow.add('en');
+        }
+        
+        // Show the drawer after a short delay to let the snackbar appear first
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            showConceptDrawer(
+              context,
+              conceptId: conceptId,
+              languageVisibility: languageVisibility.isNotEmpty ? languageVisibility : null,
+              languagesToShow: languagesToShow.isNotEmpty ? languagesToShow : null,
+            );
+          }
+        });
+      }
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(successMessage),
-          backgroundColor: Colors.green,
-        ),
-      );
       // Clear form after successful creation
       _termController.clear();
       _descriptionController.clear();
