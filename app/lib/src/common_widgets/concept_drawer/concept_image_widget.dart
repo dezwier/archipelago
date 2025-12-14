@@ -41,28 +41,15 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       return null;
     }
     
-    // Use current time for cache-busting
-    final cacheBust = DateTime.now().millisecondsSinceEpoch.toString();
-    
-    // If URL is already absolute, add cache-busting parameter
+    // If URL is already absolute, return as-is
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      final uri = Uri.parse(imageUrl);
-      return uri.replace(queryParameters: {
-        ...uri.queryParameters,
-        't': cacheBust,
-      }).toString();
+      return imageUrl;
     }
     
     // Otherwise, prepend the API base URL
     // Remove leading slash if present to avoid double slashes
     final cleanUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-    final baseUrl = '${ApiConfig.baseUrl}/$cleanUrl';
-    // Add cache-busting parameter
-    final uri = Uri.parse(baseUrl);
-    return uri.replace(queryParameters: {
-      ...uri.queryParameters,
-      't': cacheBust,
-    }).toString();
+    return '${ApiConfig.baseUrl}/$cleanUrl';
   }
 
   Future<void> _generateImage() async {
