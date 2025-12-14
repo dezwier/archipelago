@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
 import '../../data/topic_service.dart' show Topic, TopicService;
@@ -11,6 +10,7 @@ import '../../../profile/data/language_service.dart';
 import '../../../../common_widgets/language_selection_widget.dart';
 import '../../../../utils/language_emoji.dart';
 import 'topic_drawer.dart';
+import 'image_selector_widget.dart';
 
 class CreateConceptSection extends StatefulWidget {
   const CreateConceptSection({super.key});
@@ -33,7 +33,6 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
   int? _userId;
   User? _currentUser;
   File? _selectedImage;
-  final ImagePicker _imagePicker = ImagePicker();
   List<Language> _languages = [];
   bool _isLoadingLanguages = false;
   List<String> _selectedLanguages = [];
@@ -129,109 +128,6 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
     super.dispose();
   }
 
-  Future<void> _pickImageFromGallery() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-      
-      if (image != null) {
-        setState(() {
-          _selectedImage = File(image.path);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to pick image: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _pickImageFromCamera() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-      );
-      
-      if (image != null) {
-        setState(() {
-          _selectedImage = File(image.path);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        String errorMessage = 'Failed to capture image';
-        if (e.toString().contains('permission') || e.toString().contains('Permission')) {
-          errorMessage = 'Camera permission denied. Please enable camera access in settings.';
-        } else if (e.toString().contains('camera') || e.toString().contains('Camera')) {
-          errorMessage = 'Camera not available. Please check your device settings.';
-        } else {
-          errorMessage = 'Failed to capture image: ${e.toString()}';
-        }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    }
-  }
-
-  void _removeSelectedImage() {
-    setState(() {
-      _selectedImage = null;
-    });
-  }
-
-  Widget _buildSmallIconButton(
-    BuildContext context, {
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback? onPressed,
-  }) {
-    const double buttonWidth = 36.0;
-    const double iconSize = 18.0;
-
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            width: buttonWidth,
-            height: buttonWidth,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                width: 1,
-              ),
-            ),
-            child: Icon(
-              icon,
-              size: iconSize,
-              color: onPressed == null
-                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)
-                  : Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Future<void> _loadUserId() async {
     try {
@@ -506,93 +402,13 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Image selector with preview
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left side: Square image preview (same size as dictionary detail page)
-                  SizedBox(
-                    width: 185.0,
-                    height: 185.0,
-                    child: _selectedImage != null
-                        ? Stack(
-                            children: [
-                              Container(
-                                width: double.infinity,
-                                height: double.infinity,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
-                                    width: 1,
-                                  ),
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: Image.file(
-                                  _selectedImage!,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: Material(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: InkWell(
-                                    onTap: _removeSelectedImage,
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: Icon(
-                                        Icons.close,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
-                                width: 1,
-                              ),
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            ),
-                            child: Center(
-                              child: Icon(
-                                Icons.image_outlined,
-                                size: 48,
-                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                              ),
-                            ),
-                          ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Right side: Small Gallery and Camera buttons (matching dictionary action buttons style)
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildSmallIconButton(
-                        context,
-                        icon: Icons.photo_library_outlined,
-                        tooltip: 'Gallery',
-                        onPressed: _pickImageFromGallery,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildSmallIconButton(
-                        context,
-                        icon: Icons.camera_alt_outlined,
-                        tooltip: 'Camera',
-                        onPressed: _pickImageFromCamera,
-                      ),
-                    ],
-                  ),
-                ],
+              ImageSelectorWidget(
+                initialImage: _selectedImage,
+                onImageChanged: (File? image) {
+                  setState(() {
+                    _selectedImage = image;
+                  });
+                },
               ),
               const SizedBox(height: 18),
 
