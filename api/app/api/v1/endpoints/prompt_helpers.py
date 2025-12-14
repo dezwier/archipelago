@@ -26,7 +26,7 @@ def generate_lemma_system_instruction(
     if part_of_speech:
         part_of_speech_text = f"\nPart of speech: {part_of_speech}"
     else:
-        part_of_speech_text = "\nPart of speech: NOT PROVIDED - You must infer the part of speech from the term itself. The term can be a single word, a phrase, or a full sentence. For single words, determine if it's a noun, verb, adjective, adverb, etc. For phrases or sentences, use 'Saying' or 'Sentence' as appropriate."
+        part_of_speech_text = "\nPart of speech: NOT PROVIDED - You must infer the part of speech from the term itself. The term can be a single word, a phrase, or a full sentence. For single words, determine if it's a noun, verb, adjective, adverb, etc. For phrases or sentences, infer the most appropriate grammatical part of speech based on the primary word or structure."
     
     # Handle description/context
     description_text = ""
@@ -59,7 +59,7 @@ When given a target language, you must:
 6. Always return valid JSON in the specified format
 
 IMPORTANT - Valid values:
-- part_of_speech (if inferring): Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence
+- part_of_speech (if inferring): Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection
 - gender: Must be one of: masculine, feminine, neuter, or null (only for single words)
 - register: Must be one of: neutral, formal, informal, slang, or null
 

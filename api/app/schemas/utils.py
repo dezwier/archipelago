@@ -8,6 +8,7 @@ def normalize_part_of_speech(v: Optional[str]) -> Optional[str]:
     """
     Normalize part_of_speech value to proper case.
     Handles both lowercase and capitalized inputs.
+    Converts deprecated values ('Saying', 'Sentence') to None.
     
     Args:
         v: Part of speech value (can be None, lowercase, or capitalized)
@@ -22,6 +23,12 @@ def normalize_part_of_speech(v: Optional[str]) -> Optional[str]:
     if not v_normalized:
         return None
     
+    # Handle deprecated values - convert to None (missing)
+    v_lower = v_normalized.lower()
+    deprecated_values = {'saying', 'sentence'}
+    if v_lower in deprecated_values:
+        return None
+    
     # Map of lowercase to proper case
     pos_map = {
         'noun': 'Noun',
@@ -34,18 +41,15 @@ def normalize_part_of_speech(v: Optional[str]) -> Optional[str]:
         'determiner / article': 'Determiner / Article',
         'determiner': 'Determiner / Article',
         'article': 'Determiner / Article',
-        'interjection': 'Interjection',
-        'saying': 'Saying',
-        'sentence': 'Sentence'
+        'interjection': 'Interjection'
     }
     
     # Try to normalize
-    v_lower = v_normalized.lower()
     if v_lower in pos_map:
         return pos_map[v_lower]
     
     # If already in proper format, check if valid
-    valid_values = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence']
+    valid_values = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 'Conjunction', 'Determiner / Article', 'Interjection']
     if v_normalized in valid_values:
         return v_normalized
     

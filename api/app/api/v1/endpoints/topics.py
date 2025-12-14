@@ -20,6 +20,7 @@ class TopicResponse(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    icon: Optional[str] = None
     user_id: int
     created_at: Optional[datetime] = None
     
@@ -31,7 +32,15 @@ class CreateTopicRequest(BaseModel):
     """Request schema for creating a topic."""
     name: str
     description: Optional[str] = None
+    icon: Optional[str] = None
     user_id: int
+
+
+class UpdateTopicRequest(BaseModel):
+    """Request schema for updating a topic."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
 
 
 class TopicsResponse(BaseModel):
@@ -78,8 +87,36 @@ async def create_topic(
     topic = Topic(
         name=topic_name_lower,
         description=request.description,
+        icon=request.icon,
         user_id=request.user_id
     )
+    session.add(topic)
+    session.commit()
+    session.refresh(topic)
+    
+    return TopicResponse.model_validate(topic)
+
+
+@router.put("/{topic_id}", response_model=TopicResponse)
+async def update_topic(
+    topic_id: int,
+    request: UpdateTopicRequest,
+    session: Session = Depends(get_session)
+):
+    """Update a topic by ID."""
+    topic = session.get(Topic, topic_id)
+    if not topic:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+    
+    # Update fields if provided
+    if request.name is not None:
+        topic.name = request.name.lower().strip()
+    if request.description is not None:
+        topic.description = request.description if request.description.strip() else None
+    if request.icon is not None:
+        topic.icon = request.icon.strip() if request.icon.strip() else None
+    
     session.add(topic)
     session.commit()
     session.refresh(topic)

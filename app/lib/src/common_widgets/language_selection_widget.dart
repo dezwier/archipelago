@@ -35,7 +35,7 @@ class LanguageSelectionWidget extends StatelessWidget {
     }
 
     // Calculate number of rows needed (8 per row)
-    const int itemsPerRow = 8;
+    const int itemsPerRow = 4;
     final int rowCount = (languages.length / itemsPerRow).ceil();
 
     return Column(

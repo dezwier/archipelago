@@ -6,9 +6,6 @@ class PairedDictionaryItem {
   final DictionaryCard? sourceCard;
   final DictionaryCard? targetCard;
   final String? imagePath1;
-  final String? imagePath2;
-  final String? imagePath3;
-  final String? imagePath4;
   final List<Map<String, dynamic>>? images; // Images array from API
   final String? partOfSpeech;
   final String? conceptTerm;
@@ -17,6 +14,7 @@ class PairedDictionaryItem {
   final String? topicName;
   final int? topicId; // Topic ID for image generation
   final String? topicDescription; // Topic description for image generation
+  final String? topicIcon; // Topic icon (emoji)
 
   PairedDictionaryItem({
     required this.conceptId,
@@ -24,9 +22,6 @@ class PairedDictionaryItem {
     this.sourceCard,
     this.targetCard,
     this.imagePath1,
-    this.imagePath2,
-    this.imagePath3,
-    this.imagePath4,
     this.images,
     this.partOfSpeech,
     this.conceptTerm,
@@ -35,11 +30,12 @@ class PairedDictionaryItem {
     this.topicName,
     this.topicId,
     this.topicDescription,
+    this.topicIcon,
   }) : cards = cards ?? [];
 
   /// Get the first available image URL, or null if no images are available
   String? get firstImageUrl {
-    return imagePath1 ?? imagePath2 ?? imagePath3 ?? imagePath4;
+    return imagePath1;
   }
 
   /// Get a lemma by language code
@@ -93,9 +89,6 @@ class PairedDictionaryItem {
               ? DictionaryCard.fromJson(json['target_card'] as Map<String, dynamic>)
               : null,
       imagePath1: json['image_path_1'] as String?,
-      imagePath2: json['image_path_2'] as String?,
-      imagePath3: json['image_path_3'] as String?,
-      imagePath4: json['image_path_4'] as String?,
       images: imagesList,
       partOfSpeech: json['part_of_speech'] as String?,
       conceptTerm: json['concept_term'] as String?,
@@ -104,6 +97,7 @@ class PairedDictionaryItem {
       topicName: json['topic_name'] as String?,
       topicId: json['topic_id'] as int?,
       topicDescription: json['topic_description'] as String?,
+      topicIcon: json['topic_icon'] as String?,
     );
   }
 }

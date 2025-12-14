@@ -84,7 +84,7 @@ class GenerateLemmaRequest(BaseModel):
     term: str = Field(..., min_length=1, description="The term to translate (can be a single word or phrase)")
     target_language: str = Field(..., min_length=1, description="Language code to translate to")
     description: Optional[str] = Field(None, description="Optional description/context for the term")
-    part_of_speech: Optional[str] = Field(None, description="Optional part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence. If not provided, will be inferred.")
+    part_of_speech: Optional[str] = Field(None, description="Optional part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection. If not provided, will be inferred.")
     concept_id: Optional[int] = Field(None, description="Optional concept ID. If provided, the generated lemma will be saved as a lemma for this concept.")
     
     @field_validator('part_of_speech')
@@ -113,7 +113,7 @@ class GenerateLemmasBatchRequest(BaseModel):
     term: str = Field(..., min_length=1, description="The term to translate (can be a single word or phrase)")
     target_languages: List[str] = Field(..., min_items=1, description="List of language codes to translate to")
     description: Optional[str] = Field(None, description="Optional description/context for the term")
-    part_of_speech: Optional[str] = Field(None, description="Optional part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence. If not provided, will be inferred.")
+    part_of_speech: Optional[str] = Field(None, description="Optional part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection. If not provided, will be inferred.")
     concept_id: Optional[int] = Field(None, description="Optional concept ID. If provided, the generated lemmas will be saved as lemmas for this concept.")
     
     @field_validator('part_of_speech')

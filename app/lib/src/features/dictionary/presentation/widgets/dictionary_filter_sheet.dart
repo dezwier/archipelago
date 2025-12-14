@@ -18,8 +18,6 @@ class FilterConstants {
     'Conjunction',
     'Determiner / Article',
     'Interjection',
-    'Saying',
-    'Sentence',
   ];
 }
 

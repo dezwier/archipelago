@@ -21,7 +21,7 @@ from app.schemas.concept import (
 )
 from app.schemas.utils import normalize_part_of_speech
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,12 @@ class UpdateConceptRequest(BaseModel):
     description: Optional[str] = None
     part_of_speech: Optional[str] = None
     topic_id: Optional[int] = None
+    
+    @field_validator('part_of_speech')
+    @classmethod
+    def validate_part_of_speech(cls, v):
+        """Validate and normalize part_of_speech field, converting deprecated values to None."""
+        return normalize_part_of_speech(v)
 
 
 @router.get("", response_model=List[ConceptResponse])
@@ -257,7 +263,8 @@ async def update_concept(
         concept.updated_at = datetime.now(timezone.utc)
     
     if request.part_of_speech is not None:
-        concept.part_of_speech = request.part_of_speech.strip() if request.part_of_speech else None
+        # Normalize part_of_speech (converts deprecated 'Saying'/'Sentence' to None)
+        concept.part_of_speech = normalize_part_of_speech(request.part_of_speech)
         concept.updated_at = datetime.now(timezone.utc)
     
     if request.topic_id is not None:

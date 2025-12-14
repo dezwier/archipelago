@@ -26,11 +26,8 @@
     - Concept
         - id (pk, bigint)
         - internal_name
-        - image_path_1 (string)
-        - image_path_2 (string)
-        - image_path_3 (string)
-        - image_path_4 (string)
         - topic_id (fk, int)
+        - Note: Images are stored in a separate images table (one image max per concept)
 
     - Language
         - code (PK, char(2)) - e.g., 'en', 'fr', 'es', 'jp'

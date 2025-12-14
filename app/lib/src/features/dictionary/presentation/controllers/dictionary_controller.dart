@@ -60,7 +60,7 @@ class DictionaryController extends ChangeNotifier {
   Set<String> _selectedLevels = {'A1', 'A2', 'B1', 'B2', 'C1', 'C2'}; // Selected CEFR levels (default: all selected)
   Set<String> _selectedPartOfSpeech = {
     'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
-    'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence'
+    'Conjunction', 'Determiner / Article', 'Interjection'
   }; // Selected part of speech values (default: all selected)
   
   // Concept counts - fetched separately and not affected by search
@@ -234,7 +234,7 @@ class DictionaryController extends ChangeNotifier {
   List<String>? getEffectivePartOfSpeech() {
     const allPOS = {
       'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
-      'Conjunction', 'Determiner / Article', 'Interjection', 'Saying', 'Sentence'
+      'Conjunction', 'Determiner / Article', 'Interjection'
     };
     // If all POS are selected, return null (show all)
     if (_selectedPartOfSpeech.length == allPOS.length && 

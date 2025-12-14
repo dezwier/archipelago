@@ -191,7 +191,7 @@ class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(4),
         onTap: isDisabled ? null : onTap,
         child: Tooltip(
           message: tooltip ?? '',
@@ -199,9 +199,9 @@ class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: isDisabled 
-                  ? Colors.black.withValues(alpha: 0.3)
-                  : Colors.black.withValues(alpha: 0.6),
-              shape: BoxShape.circle,
+                  ? Colors.black.withValues(alpha: 0.2)
+                  : Colors.black.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(4),
             ),
             child: isLoading
                 ? SizedBox(
@@ -259,17 +259,10 @@ class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
                     ),
                     color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   ),
-                  child: Center(
-                    child: Icon(
-                      Icons.image_outlined,
-                      size: 48,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                    ),
-                  ),
                 ),
           // Buttons overlay at top right
           Positioned(
-            top: 4,
+            top: 8,
             right: 4,
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -281,14 +274,14 @@ class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
                         onTap: _pickImageFromGallery,
                         tooltip: 'Gallery',
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       // Camera button
                       _buildOverlayButton(
                         icon: Icons.camera_alt,
                         onTap: _pickImageFromCamera,
                         tooltip: 'Camera',
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       // Gemini generate button
                       _buildOverlayButton(
                         icon: Icons.auto_awesome,
@@ -299,6 +292,7 @@ class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
                         isEnabled: (widget.term?.trim().isNotEmpty ?? false) && !_isGeneratingImage,
                         isLoading: _isGeneratingImage,
                       ),
+                      const SizedBox(width: 4),
                     ]
                   : [
                       // Discard button
@@ -307,6 +301,7 @@ class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
                         onTap: _removeSelectedImage,
                         tooltip: 'Discard',
                       ),
+                      const SizedBox(width: 4),
                     ],
             ),
           ),

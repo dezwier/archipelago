@@ -440,6 +440,7 @@ async def get_dictionary(
         topic_name = None
         topic_id = None
         topic_description = None
+        topic_icon = None
         if concept.topic_id:
             topic_id = concept.topic_id
             # Access topic relationship - SQLModel will lazy load if needed
@@ -447,6 +448,7 @@ async def get_dictionary(
                 if concept.topic:
                     topic_name = concept.topic.name
                     topic_description = concept.topic.description
+                    topic_icon = concept.topic.icon
             except Exception:
                 # If topic relationship is not loaded or doesn't exist, topic_name stays None
                 pass
@@ -465,6 +467,7 @@ async def get_dictionary(
                 topic_name=topic_name,
                 topic_id=topic_id,
                 topic_description=topic_description,
+                topic_icon=topic_icon,
             )
         )
     

@@ -41,11 +41,17 @@ class ConceptResponse(BaseModel):
     updated_at: Optional[datetime] = None
     images: Optional[List[ImageResponse]] = None
     
+    @field_validator('part_of_speech')
+    @classmethod
+    def validate_part_of_speech(cls, v):
+        """Validate and normalize part_of_speech field, converting deprecated values to None."""
+        return normalize_part_of_speech(v)
+    
     # Backward compatibility: computed fields from images list
     @computed_field
     @property
     def image_path_1(self) -> Optional[str]:
-        """Get first image URL for backward compatibility."""
+        """Get first (and only) image URL for backward compatibility."""
         images = self.images
         if images is None or not images:
             return None
@@ -56,52 +62,6 @@ class ConceptResponse(BaseModel):
         if primary:
             return primary.url
         return images[0].url if images else None
-    
-    @computed_field
-    @property
-    def image_path_2(self) -> Optional[str]:
-        """Get second image URL for backward compatibility."""
-        images = self.images
-        if images is None or len(images) < 2:
-            return None
-        # Type narrowing: images is now List[ImageResponse]
-        assert images is not None  # Type guard for linter
-        # Skip primary if it's first, return second image
-        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
-        if non_primary:
-            return non_primary[0].url
-        # If all are primary or only one image, return None
-        return images[1].url if len(images) > 1 else None
-    
-    @computed_field
-    @property
-    def image_path_3(self) -> Optional[str]:
-        """Get third image URL for backward compatibility."""
-        images = self.images
-        if images is None or len(images) < 3:
-            return None
-        # Type narrowing: images is now List[ImageResponse]
-        assert images is not None  # Type guard for linter
-        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
-        if len(non_primary) > 1:
-            return non_primary[1].url
-        # Fallback to third image overall
-        return images[2].url if len(images) > 2 else None  # type: ignore[index]
-    
-    @computed_field
-    @property
-    def image_path_4(self) -> Optional[str]:
-        """Get fourth image URL for backward compatibility."""
-        images = self.images
-        if images is None or len(images) < 4:
-            return None
-        # Type narrowing: images is now List[ImageResponse]
-        assert images is not None  # Type guard for linter
-        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
-        if len(non_primary) > 2:
-            return non_primary[2].url
-        # Fallback to fourth image overall
-        return images[3].url if len(images) > 3 else None  # type: ignore[index]
 
     class Config:
         from_attributes = True
@@ -112,6 +72,7 @@ class TopicResponse(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    icon: Optional[str] = None
     user_id: int
     created_at: str
 
@@ -129,7 +90,7 @@ class CreateConceptRequest(BaseModel):
     term: str = Field(..., min_length=1, description="The term to create a concept for")
     topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
     user_id: Optional[int] = Field(None, description="User ID who created the concept")
-    part_of_speech: Optional[str] = Field(None, description="Part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Saying, Sentence. If not provided, will be inferred from the term.")
+    part_of_speech: Optional[str] = Field(None, description="Part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection. If not provided, will be inferred from the term.")
     core_meaning_en: Optional[str] = Field(None, description="Core meaning in English")
     excluded_senses: Optional[List[str]] = Field(default=[], description="List of excluded senses")
     languages: List[str] = Field(..., min_items=1, description="List of language codes to generate lemmas for")
@@ -233,12 +194,13 @@ class PairedDictionaryItem(BaseModel):
     topic_name: Optional[str] = None
     topic_id: Optional[int] = None
     topic_description: Optional[str] = None
+    topic_icon: Optional[str] = None
     
-    # Backward compatibility: computed fields from images list
+    # Backward compatibility: computed field from images list
     @computed_field
     @property
     def image_path_1(self) -> Optional[str]:
-        """Get first image URL for backward compatibility."""
+        """Get first (and only) image URL for backward compatibility."""
         images = self.images
         if images is None or not images:
             return None
@@ -248,48 +210,6 @@ class PairedDictionaryItem(BaseModel):
         if primary:
             return primary.url
         return images[0].url if images else None  # type: ignore[index]
-    
-    @computed_field
-    @property
-    def image_path_2(self) -> Optional[str]:
-        """Get second image URL for backward compatibility."""
-        images = self.images
-        if images is None or len(images) < 2:
-            return None
-        # Type narrowing: images is now List[ImageResponse]
-        assert images is not None  # Type guard for linter
-        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
-        if non_primary:
-            return non_primary[0].url
-        return images[1].url if len(images) > 1 else None  # type: ignore[index]
-    
-    @computed_field
-    @property
-    def image_path_3(self) -> Optional[str]:
-        """Get third image URL for backward compatibility."""
-        images = self.images
-        if images is None or len(images) < 3:
-            return None
-        # Type narrowing: images is now List[ImageResponse]
-        assert images is not None  # Type guard for linter
-        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
-        if len(non_primary) > 1:
-            return non_primary[1].url
-        return images[2].url if len(images) > 2 else None  # type: ignore[index]
-    
-    @computed_field
-    @property
-    def image_path_4(self) -> Optional[str]:
-        """Get fourth image URL for backward compatibility."""
-        images = self.images
-        if images is None or len(images) < 4:
-            return None
-        # Type narrowing: images is now List[ImageResponse]
-        assert images is not None  # Type guard for linter
-        non_primary = [img for img in images if not img.is_primary]  # type: ignore[union-attr]
-        if len(non_primary) > 2:
-            return non_primary[2].url
-        return images[3].url if len(images) > 3 else None  # type: ignore[index]
 
     class Config:
         from_attributes = True

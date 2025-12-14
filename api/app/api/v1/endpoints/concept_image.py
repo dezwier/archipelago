@@ -344,7 +344,8 @@ async def generate_concept_image(
             if img.url and img.url.startswith("/assets/"):
                 image_filename_to_delete = img.url.replace("/assets/", "")
                 image_path_to_delete = assets_dir / image_filename_to_delete
-                if image_path_to_delete.exists():
+                # Don't delete the file we just saved (same filename)
+                if image_path_to_delete.exists() and image_path_to_delete != image_path:
                     try:
                         image_path_to_delete.unlink()
                         logger.info(f"Deleted existing image file: {image_path_to_delete}")

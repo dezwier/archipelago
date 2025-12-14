@@ -6,15 +6,17 @@ class Topic {
   final int id;
   final String name;
   final String? description;
+  final String? icon;
   final DateTime? createdAt;
 
-  Topic({required this.id, required this.name, this.description, this.createdAt});
+  Topic({required this.id, required this.name, this.description, this.icon, this.createdAt});
 
   factory Topic.fromJson(Map<String, dynamic> json) {
     return Topic(
       id: json['id'] as int,
       name: json['name'] as String,
       description: json['description'] as String?,
+      icon: json['icon'] as String?,
       createdAt: json['created_at'] != null 
           ? DateTime.parse(json['created_at'] as String)
           : null,
@@ -49,7 +51,7 @@ class TopicService {
 
   /// Create a topic or get existing one if it already exists.
   /// Returns a map with 'success' boolean and either 'topic' or 'error' message.
-  static Future<Map<String, dynamic>> createTopic(String name, {required int userId, String? description}) async {
+  static Future<Map<String, dynamic>> createTopic(String name, {required int userId, String? description, String? icon}) async {
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/topics');
     
     try {
@@ -57,6 +59,7 @@ class TopicService {
         'name': name.trim(),
         'user_id': userId,
         if (description != null && description.trim().isNotEmpty) 'description': description.trim(),
+        if (icon != null && icon.trim().isNotEmpty) 'icon': icon.trim(),
       };
       
       final response = await http.post(
@@ -74,6 +77,56 @@ class TopicService {
       } else {
         // Try to parse error message
         String errorMessage = 'Failed to create topic';
+        try {
+          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+          errorMessage = errorData['detail'] as String? ?? errorMessage;
+        } catch (_) {
+          errorMessage = 'Server returned status ${response.statusCode}';
+        }
+        return {
+          'success': false,
+          'error': errorMessage,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Update a topic.
+  /// Returns a map with 'success' boolean and either 'topic' or 'error' message.
+  static Future<Map<String, dynamic>> updateTopic(
+    int topicId, {
+    String? name,
+    String? description,
+    String? icon,
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/topics/$topicId');
+    
+    try {
+      final body = <String, dynamic>{};
+      if (name != null) body['name'] = name.trim();
+      if (description != null) body['description'] = description.trim().isNotEmpty ? description.trim() : null;
+      if (icon != null) body['icon'] = icon.trim().isNotEmpty ? icon.trim() : null;
+      
+      final response = await http.put(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'topic': Topic.fromJson(data),
+        };
+      } else {
+        // Try to parse error message
+        String errorMessage = 'Failed to update topic';
         try {
           final errorData = jsonDecode(response.body) as Map<String, dynamic>;
           errorMessage = errorData['detail'] as String? ?? errorMessage;

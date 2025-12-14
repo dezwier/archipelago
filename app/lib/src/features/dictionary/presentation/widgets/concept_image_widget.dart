@@ -263,6 +263,126 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
     }
   }
 
+  Future<void> _pickImageFromCamera() async {
+    if (_isReloading) return;
+    
+    try {
+      // Pick image from camera
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+      );
+      
+      if (image == null) {
+        // User cancelled image picker
+        return;
+      }
+      
+      setState(() {
+        _isReloading = true;
+      });
+
+      // Upload the selected image
+      final uploadResult = await FlashcardService.uploadConceptImage(
+        conceptId: widget.item.conceptId,
+        imageFile: File(image.path),
+      );
+
+      if (!mounted) return;
+
+      if (uploadResult['success'] == true) {
+        // Image uploaded successfully - refresh the item
+        widget.onItemUpdated?.call(widget.item);
+        // Hide edit buttons after successful upload
+        if (mounted) {
+          setState(() {
+            _showButtons = false;
+          });
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Image uploaded successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        final errorMessage = uploadResult['message'] as String? ?? 'Failed to upload image';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      
+      String errorMessage = 'Failed to capture image';
+      if (e.toString().contains('permission') || e.toString().contains('Permission')) {
+        errorMessage = 'Camera permission denied. Please enable camera access in settings.';
+      } else if (e.toString().contains('camera') || e.toString().contains('Camera')) {
+        errorMessage = 'Camera not available. Please check your device settings.';
+      } else {
+        errorMessage = 'Error capturing/uploading image: ${e.toString()}';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isReloading = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildOverlayButton({
+    required IconData icon,
+    required VoidCallback? onTap,
+    bool isLoading = false,
+  }) {
+    final isDisabled = onTap == null || isLoading;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(4),
+        onTap: isDisabled ? null : onTap,
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: isDisabled 
+                ? Colors.black.withValues(alpha: 0.2)
+                : Colors.black.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: isLoading
+              ? SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Icon(
+                  icon,
+                  color: isDisabled 
+                      ? Colors.white.withValues(alpha: 0.5)
+                      : Colors.white,
+                  size: 18,
+                ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = widget.size ?? 185.0;
@@ -327,70 +447,32 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
             // Edit buttons overlay at top right (shown when tapped or no image)
             if (shouldShowButtons)
               Positioned(
-                top: 4,
+                top: 8,
                 right: 4,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Gallery button
+                    _buildOverlayButton(
+                      icon: Icons.photo_library,
+                      onTap: _isReloading ? null : _reloadFromLibrary,
+                      isLoading: _isReloading,
+                    ),
+                    const SizedBox(width: 8),
+                    // Camera button
+                    _buildOverlayButton(
+                      icon: Icons.camera_alt,
+                      onTap: _isReloading ? null : _pickImageFromCamera,
+                      isLoading: _isReloading,
+                    ),
+                    const SizedBox(width: 8),
                     // Generate button
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: _isGenerating ? null : _generateImage,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: _isGenerating
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.auto_awesome,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                        ),
-                      ),
+                    _buildOverlayButton(
+                      icon: Icons.auto_awesome,
+                      onTap: _isGenerating ? null : _generateImage,
+                      isLoading: _isGenerating,
                     ),
                     const SizedBox(width: 4),
-                    // Gallery button
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: _isReloading ? null : _reloadFromLibrary,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: _isReloading
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.photo_library,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -414,7 +496,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
               ),
               color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
             ),
-            child: (_isGenerating || _isReloading)
+            child: _isReloading
                 ? Center(
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
@@ -427,70 +509,32 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
           ),
           // Buttons at top right
           Positioned(
-            top: 4,
+            top: 8,
             right: 4,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Gallery button
+                _buildOverlayButton(
+                  icon: Icons.photo_library,
+                  onTap: _isReloading ? null : _reloadFromLibrary,
+                  isLoading: _isReloading,
+                ),
+                const SizedBox(width: 8),
+                // Camera button
+                _buildOverlayButton(
+                  icon: Icons.camera_alt,
+                  onTap: _isReloading ? null : _pickImageFromCamera,
+                  isLoading: _isReloading,
+                ),
+                const SizedBox(width: 8),
                 // Generate button
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: _isGenerating ? null : _generateImage,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: _isGenerating
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Icon(
-                              Icons.auto_awesome,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                    ),
-                  ),
+                _buildOverlayButton(
+                  icon: Icons.auto_awesome,
+                  onTap: _isGenerating ? null : _generateImage,
+                  isLoading: _isGenerating,
                 ),
                 const SizedBox(width: 4),
-                // Gallery button
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: _isReloading ? null : _reloadFromLibrary,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: _isReloading
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Icon(
-                              Icons.photo_library,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
