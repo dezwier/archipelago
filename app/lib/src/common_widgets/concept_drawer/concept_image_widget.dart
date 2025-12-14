@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
 import 'package:archipelago/src/constants/api_config.dart';
-import 'package:archipelago/src/features/generate_flashcards/data/flashcard_service.dart';
+import 'package:archipelago/src/features/create/data/flashcard_service.dart';
 
 class ConceptImageWidget extends StatefulWidget {
   final PairedDictionaryItem item;

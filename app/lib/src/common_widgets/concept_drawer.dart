@@ -4,7 +4,7 @@ import '../../utils/language_emoji.dart';
 import '../../features/dictionary/domain/paired_dictionary_item.dart';
 import '../../features/dictionary/domain/dictionary_card.dart';
 import '../../features/dictionary/data/dictionary_service.dart';
-import '../../features/generate_flashcards/data/flashcard_service.dart';
+import '../../features/create/data/flashcard_service.dart';
 import 'language_lemma_widget.dart';
 import '../../features/dictionary/presentation/widgets/concept_image_widget.dart';
 import 'concept_image_buttons.dart';

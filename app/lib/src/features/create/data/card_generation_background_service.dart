@@ -39,7 +39,7 @@ class CardGenerationBackgroundService {
     await prefs.setStringList(_keyErrors, []);
     await prefs.setStringList(_keySelectedLanguages, selectedLanguages);
     await prefs.setStringList(_keyConceptIds, conceptIds.map((id) => id.toString()).toList());
-    await prefs.setString(_keyConceptTerms, jsonEncode(conceptTerms.map((k, v) => MapEntry(k.toString(), v))));
+    await prefs.setString(_keyConceptTerms, jsonEncode(conceptTerms.map((k, v) => MapEntry(k.toString(), v.toString()))));
     await prefs.setString(_keyConceptMissingLanguages, jsonEncode(conceptMissingLanguages.map((k, v) => MapEntry(k.toString(), v))));
     await prefs.setBool(_keyIsCancelled, false);
   }
@@ -58,7 +58,19 @@ class CardGenerationBackgroundService {
     
     final conceptTermsStr = prefs.getString(_keyConceptTerms) ?? '{}';
     final conceptTermsMap = jsonDecode(conceptTermsStr) as Map<String, dynamic>;
-    final conceptTerms = conceptTermsMap.map((k, v) => MapEntry(int.parse(k), v as String));
+    final conceptTerms = conceptTermsMap.map((k, v) {
+      // Ensure v is always converted to a String
+      // If v is a Map (object), it means the term was stored as an object - extract the term field
+      if (v is Map) {
+        // If it's a Map, try to get the 'term' field, otherwise convert to string
+        final termValue = v['term'] as String?;
+        if (termValue != null) {
+          return MapEntry(int.parse(k), termValue);
+        }
+      }
+      // Otherwise, convert to string (handles both String and other types)
+      return MapEntry(int.parse(k), v.toString());
+    });
     
     final conceptMissingLanguagesStr = prefs.getString(_keyConceptMissingLanguages) ?? '{}';
     final conceptMissingLanguagesMap = jsonDecode(conceptMissingLanguagesStr) as Map<String, dynamic>;

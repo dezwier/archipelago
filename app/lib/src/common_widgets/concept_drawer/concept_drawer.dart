@@ -4,7 +4,7 @@ import 'package:archipelago/src/utils/language_emoji.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
 import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
-import 'package:archipelago/src/features/generate_flashcards/data/flashcard_service.dart';
+import 'package:archipelago/src/features/create/data/flashcard_service.dart';
 import 'language_lemma_widget.dart';
 import 'concept_image_widget.dart';
 import 'concept_image_buttons.dart';

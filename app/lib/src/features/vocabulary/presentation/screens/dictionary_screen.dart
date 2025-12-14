@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
-import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_item_widget.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_empty_state.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_error_state.dart';
-import 'package:archipelago/src/common_widgets/concept_drawer/concept_delete.dart';
-import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_filter_sheet.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_search_bar.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_filter_menu.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_fab_buttons.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_empty_search_state.dart';
-import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
-import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
-import 'package:archipelago/src/features/dictionary/presentation/screens/edit_concept_screen.dart';
-import 'package:archipelago/src/features/profile/data/language_service.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart';
-import 'package:archipelago/src/features/create/data/flashcard_service.dart';
-import 'package:archipelago/src/features/create/data/card_generation_background_service.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/card_generation_progress_widget.dart';
+import '../controllers/vocabulary_controller.dart';
+import '../../domain/paired_vocabulary_item.dart';
+import '../widgets/vocabulary_item_widget.dart';
+import '../widgets/vocabulary_empty_state.dart';
+import '../widgets/vocabulary_error_state.dart';
+import '../widgets/delete_vocabulary_dialog.dart';
+import '../widgets/vocabulary_detail_dialog.dart';
+import '../widgets/vocabulary_filter_sheet.dart';
+import '../widgets/dictionary_search_bar.dart';
+import '../widgets/dictionary_filter_menu.dart';
+import '../widgets/dictionary_fab_buttons.dart';
+import '../widgets/dictionary_empty_search_state.dart';
+import '../controllers/card_generation_state.dart';
+import '../controllers/language_visibility_manager.dart';
+import 'edit_concept_screen.dart';
+import '../../../profile/data/language_service.dart';
+import '../../../profile/domain/language.dart';
+import '../../../create/data/topic_service.dart';
+import '../../../create/data/flashcard_service.dart';
+import '../../../create/data/card_generation_background_service.dart';
+import '../../../create/presentation/widgets/card_generation_progress_widget.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:archipelago/src/features/profile/domain/user.dart';
+import '../../../profile/domain/user.dart';
 
 class DictionaryScreen extends StatefulWidget {
   const DictionaryScreen({super.key});
@@ -32,7 +32,7 @@ class DictionaryScreen extends StatefulWidget {
 }
 
 class _DictionaryScreenState extends State<DictionaryScreen> {
-  late final DictionaryController _controller;
+  late final VocabularyController _controller;
   late final CardGenerationState _cardGenerationState;
   late final LanguageVisibilityManager _languageVisibilityManager;
   final ScrollController _scrollController = ScrollController();
@@ -52,7 +52,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = DictionaryController();
+    _controller = VocabularyController();
     _cardGenerationState = CardGenerationState();
     _languageVisibilityManager = LanguageVisibilityManager();
     _controller.initialize();
@@ -193,7 +193,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
   
   void _onCardGenerationComplete() {
-    // Refresh dictionary to show new cards
+    // Refresh vocabulary to show new cards
     _controller.refresh();
     _cardGenerationState.clearCurrentConcept();
   }
@@ -202,7 +202,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     if (_scrollController.position.pixels >= 
         _scrollController.position.maxScrollExtent * 0.8) {
       // Load more when 80% scrolled
-      _controller.loadMoreDictionary();
+      _controller.loadMoreVocabulary();
     }
   }
 
@@ -222,7 +222,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
 
         if (_controller.errorMessage != null) {
           return Scaffold(
-            body: DictionaryErrorState(
+            body: VocabularyErrorState(
               errorMessage: _controller.errorMessage!,
               onRetry: _controller.refresh,
             ),
@@ -280,13 +280,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                       ),
                     ),
                   ),
-                // Paired dictionary items
+                // Paired vocabulary items
                 if (_controller.filteredItems.isNotEmpty)
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final item = _controller.filteredItems[index];
-                        return DictionaryItemWidget(
+                        return VocabularyItemWidget(
                           item: item,
                           sourceLanguageCode: _controller.sourceLanguageCode,
                           targetLanguageCode: _controller.targetLanguageCode,
@@ -307,7 +307,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                     hasScrollBody: false,
                     child: _controller.searchQuery.isNotEmpty
                         ? const DictionaryEmptySearchState()
-                        : const DictionaryEmptyState(),
+                        : const VocabularyEmptyState(),
                   ),
                 // Loading more indicator
                 if (_controller.isLoadingMore)
@@ -381,7 +381,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     final firstVisibleLanguage = _languageVisibilityManager.languagesToShow.isNotEmpty 
         ? _languageVisibilityManager.languagesToShow.first 
         : null;
-    showDictionaryFilterSheet(
+    showVocabularyFilterSheet(
       context: context,
       controller: _controller,
       topics: _allTopics,
@@ -432,7 +432,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
             _languageVisibilityManager.toggleLanguageVisibility(languageCode);
             // Update language filter for search (concepts are no longer filtered by visibility)
             _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-            // Update visible languages - this will refresh dictionary and counts
+            // Update visible languages - this will refresh vocabulary and counts
             _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
           });
         },
@@ -450,7 +450,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
   }
 
-  Future<void> _handleEdit(PairedDictionaryItem item) async {
+  Future<void> _handleEdit(PairedVocabularyItem item) async {
     // Navigate to edit concept screen
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -459,7 +459,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
 
     if (result == true && mounted) {
-      // Refresh the dictionary list to show updated concept
+      // Refresh the vocabulary list to show updated concept
       await _controller.refresh();
       
       // Refresh the detail drawer if it's still open
@@ -478,10 +478,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     }
   }
 
-  Future<void> _handleDelete(PairedDictionaryItem item) async {
+  Future<void> _handleDelete(PairedVocabularyItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => const DeleteDictionaryDialog(),
+      builder: (context) => const DeleteVocabularyDialog(),
     );
 
     if (confirmed == true && mounted) {
@@ -509,24 +509,40 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     }
   }
 
-  void _handleItemTap(PairedDictionaryItem item) {
-    showConceptDrawer(
-      context,
-      conceptId: item.conceptId,
-      languageVisibility: _languageVisibilityManager.languageVisibility,
-      languagesToShow: _languageVisibilityManager.languagesToShow,
-      onEdit: () => _handleEdit(item),
-      onDelete: () => _handleDelete(item),
-      onItemUpdated: () => _handleItemUpdated(context, item),
+  void _handleItemTap(PairedVocabularyItem item) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => VocabularyDetailDrawer(
+        item: item,
+        sourceLanguageCode: _controller.sourceLanguageCode,
+        targetLanguageCode: _controller.targetLanguageCode,
+        languageVisibility: _languageVisibilityManager.languageVisibility,
+        languagesToShow: _languageVisibilityManager.languagesToShow,
+        onEdit: () => _handleEdit(item),
+        onDelete: () => _handleDelete(item),
+        onItemUpdated: (updatedItem) => _handleItemUpdated(context, updatedItem),
+      ),
     );
   }
 
-  Future<void> _handleItemUpdated(BuildContext context, PairedDictionaryItem item) async {
-    // Refresh the dictionary list to get updated item
+  Future<void> _handleItemUpdated(BuildContext context, PairedVocabularyItem item) async {
+    // Refresh the vocabulary list to get updated item
     await _controller.refresh();
     
-    // The drawer will reload the concept data itself via its onItemUpdated callback
-    // No need to close and reopen - the drawer handles its own refresh
+    // Find the updated item in the list
+    final updatedItems = _controller.filteredItems;
+    final updatedItem = updatedItems.firstWhere(
+      (i) => i.conceptId == item.conceptId,
+      orElse: () => item,
+    );
+    
+    // Close current drawer and reopen with updated item
+    if (mounted) {
+      Navigator.of(context).pop(); // Close current drawer
+      _handleItemTap(updatedItem); // Reopen with updated item
+    }
   }
 
   Future<void> _handleGenerateLemmas(BuildContext context) async {

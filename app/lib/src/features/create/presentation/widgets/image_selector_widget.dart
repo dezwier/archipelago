@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:archipelago/src/features/generate_flashcards/data/flashcard_service.dart';
+import 'package:archipelago/src/features/create/data/flashcard_service.dart';
 
 class ImageSelectorWidget extends StatefulWidget {
   final File? initialImage;

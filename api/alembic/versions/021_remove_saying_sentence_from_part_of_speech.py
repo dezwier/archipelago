@@ -31,3 +31,4 @@ def downgrade() -> None:
     # Cannot restore the original values, so downgrade does nothing
     # The data has been lost (converted to NULL)
     pass
+
