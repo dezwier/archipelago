@@ -9,12 +9,11 @@ from sqlmodel import Session, select, func, or_
 from sqlalchemy.orm import aliased
 from typing import Optional, List
 from app.core.database import get_session
-from app.models.models import Concept, Lemma, Image, CEFRLevel
+from app.models.models import Concept, Lemma, CEFRLevel
 from app.schemas.lemma import LemmaResponse
 from app.schemas.concept import (
     PairedDictionaryItem,
     DictionaryResponse,
-    ImageResponse,
 )
 from app.schemas.utils import normalize_part_of_speech
 from app.api.v1.endpoints.utils import ensure_capitalized
@@ -366,26 +365,10 @@ async def get_dictionary(
             concept_lemmas_map[lemma.concept_id] = {}
         concept_lemmas_map[lemma.concept_id][lemma.language_code] = lemma
     
-    # Fetch images for these concepts
-    images_query = (
-        select(Image)
-        .where(Image.concept_id.in_(concept_ids))
-        .order_by(Image.created_at)
-    )
-    images = session.exec(images_query).all()
-    
-    # Group images by concept_id
-    concept_images_map = {}
-    for img in images:
-        if img.concept_id not in concept_images_map:
-            concept_images_map[img.concept_id] = []
-        concept_images_map[img.concept_id].append(ImageResponse.model_validate(img))
-    
     # Build response items
     paired_items = []
     for concept in concepts:
         lang_lemmas = concept_lemmas_map.get(concept.id, {})
-        concept_images = concept_images_map.get(concept.id, [])
         
         # Build list of lemmas for visible languages only (in order)
         visible_lemmas_list = []
@@ -459,7 +442,7 @@ async def get_dictionary(
                 lemmas=visible_lemmas_list,
                 source_lemma=source_lemma_response,
                 target_lemma=target_lemma_response,
-                images=concept_images,
+                image_url=concept.image_url,
                 part_of_speech=concept.part_of_speech,
                 concept_term=concept.term if concept.term and concept.term.strip() else None,
                 concept_description=concept.description if concept.description and concept.description.strip() else None,

@@ -259,12 +259,6 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Image.asset(
-                                'assets/images/translate_icon.png',
-                                height: 32,
-                                width: 32,
-                              ),
-                              const SizedBox(width: 12),
                               Text(
                                 'Settings',
                                 style: TextStyle(

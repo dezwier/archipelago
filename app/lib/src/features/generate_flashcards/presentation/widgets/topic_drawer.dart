@@ -244,7 +244,7 @@ class _TopicDrawerState extends State<TopicDrawer> {
                 Icon(
                   Icons.add_circle_outline,
                   color: Theme.of(context).colorScheme.primary,
-                  size: 24,
+                  size: 20,
                 ),
                 const SizedBox(width: 12),
                 Text(

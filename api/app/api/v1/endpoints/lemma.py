@@ -12,13 +12,12 @@ from datetime import datetime, timezone
 from typing import List, Optional
 import logging
 from app.core.database import get_session
-from app.models.models import Lemma, Concept, Language, Image
+from app.models.models import Lemma, Concept, Language
 from app.schemas.lemma import LemmaResponse, UpdateLemmaRequest
 from app.schemas.concept import (
     CreateConceptRequest,
     CreateConceptResponse,
     ConceptResponse,
-    ImageResponse,
     GenerateLemmasForConceptsRequest,
     GenerateLemmasForConceptsResponse
 )
@@ -376,14 +375,7 @@ async def generate_lemmas_for_concept(
             detail=f"Failed to generate any lemmas. Errors: {'; '.join(errors)}"
         )
     
-    # Load images for the concept
-    images = session.exec(
-        select(Image).where(Image.concept_id == concept.id)
-    ).all()
-    
-    concept_dict = ConceptResponse.model_validate(concept).model_dump()
-    concept_dict['images'] = [ImageResponse.model_validate(img) for img in images]
-    concept_response = ConceptResponse(**concept_dict)
+    concept_response = ConceptResponse.model_validate(concept)
     
     return CreateConceptResponse(
         concept=concept_response,

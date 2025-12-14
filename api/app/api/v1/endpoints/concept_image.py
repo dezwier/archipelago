@@ -16,7 +16,7 @@ import io
 
 from app.core.database import get_session
 from app.core.config import settings
-from app.models.models import Concept, Topic, Image
+from app.models.models import Concept, Topic
 
 logger = logging.getLogger(__name__)
 
@@ -331,47 +331,23 @@ async def generate_concept_image(
     # For now, we'll store the relative path
     image_url = f"/assets/{image_filename}"
     
-    # Enforce one image per concept: Delete ALL existing images for this concept
-    existing_images = session.exec(
-        select(Image).where(Image.concept_id == request.concept_id)
-    ).all()
+    # Delete existing image file if it exists (different filename)
+    if concept.image_url and concept.image_url.startswith("/assets/"):
+        existing_image_filename = concept.image_url.replace("/assets/", "")
+        existing_image_path = assets_dir / existing_image_filename
+        if existing_image_path.exists() and existing_image_path != image_path:
+            try:
+                existing_image_path.unlink()
+                logger.info(f"Deleted existing image file: {existing_image_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete existing image file {existing_image_path}: {str(e)}")
     
-    # Delete all existing images (both database records and files)
-    if existing_images:
-        assets_dir = ensure_assets_directory()
-        for img in existing_images:
-            # Delete image file if it's a local asset
-            if img.url and img.url.startswith("/assets/"):
-                image_filename_to_delete = img.url.replace("/assets/", "")
-                image_path_to_delete = assets_dir / image_filename_to_delete
-                # Don't delete the file we just saved (same filename)
-                if image_path_to_delete.exists() and image_path_to_delete != image_path:
-                    try:
-                        image_path_to_delete.unlink()
-                        logger.info(f"Deleted existing image file: {image_path_to_delete}")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete image file {image_path_to_delete}: {str(e)}")
-            
-            # Delete database record
-            session.delete(img)
-        
-        session.commit()
-        logger.info(f"Deleted {len(existing_images)} existing image(s) for concept {request.concept_id}")
-    
-    # The new generated image is always the only (and therefore primary) image
-    is_primary = True
-    
-    image_record = Image(
-        concept_id=request.concept_id,
-        url=image_url,
-        image_type="illustration",
-        is_primary=is_primary,
-        source="generated",
-        created_at=datetime.now(timezone.utc)
-    )
-    session.add(image_record)
+    # Update concept with new image URL
+    concept.image_url = image_url
+    concept.updated_at = datetime.now(timezone.utc)
+    session.add(concept)
     session.commit()
-    session.refresh(image_record)
+    session.refresh(concept)
     
     # Return the image file
     return FileResponse(
@@ -478,46 +454,25 @@ async def upload_concept_image(
         if concept_id:
             image_url = f"/assets/{image_filename}"
             
-            # Enforce one image per concept: Delete ALL existing images for this concept
-            existing_images = session.exec(
-                select(Image).where(Image.concept_id == concept_id)
-            ).all()
-            
-            # Delete all existing images (both database records and files)
-            if existing_images:
-                for img in existing_images:
-                    # Delete image file if it's a local asset
-                    if img.url and img.url.startswith("/assets/"):
-                        image_filename_to_delete = img.url.replace("/assets/", "")
-                        image_path_to_delete = assets_dir / image_filename_to_delete
-                        if image_path_to_delete.exists() and image_path_to_delete != image_path:
-                            # Only delete if it's a different file (not the one we're about to save)
-                            try:
-                                image_path_to_delete.unlink()
-                                logger.info(f"Deleted existing image file: {image_path_to_delete}")
-                            except Exception as e:
-                                logger.warning(f"Failed to delete image file {image_path_to_delete}: {str(e)}")
-                    
-                    # Delete database record
-                    session.delete(img)
+            # Get the concept
+            concept = session.get(Concept, concept_id)
+            if concept:
+                # Delete existing image file if it exists (different filename)
+                if concept.image_url and concept.image_url.startswith("/assets/"):
+                    existing_image_filename = concept.image_url.replace("/assets/", "")
+                    existing_image_path = assets_dir / existing_image_filename
+                    if existing_image_path.exists() and existing_image_path != image_path:
+                        try:
+                            existing_image_path.unlink()
+                            logger.info(f"Deleted existing image file: {existing_image_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete existing image file {existing_image_path}: {str(e)}")
                 
+                # Update concept with new image URL
+                concept.image_url = image_url
+                concept.updated_at = datetime.now(timezone.utc)
+                session.add(concept)
                 session.commit()
-                logger.info(f"Deleted {len(existing_images)} existing image(s) for concept {concept_id}")
-            
-            # The new uploaded image is always the only (and therefore primary) image
-            is_primary = True
-            
-            # Create new image record
-            image_record = Image(
-                concept_id=concept_id,
-                url=image_url,
-                image_type="illustration",
-                is_primary=is_primary,
-                source="uploaded",
-                created_at=datetime.now(timezone.utc)
-            )
-            session.add(image_record)
-            session.commit()
         
         # Return the image file
         return FileResponse(
@@ -618,46 +573,23 @@ async def upload_concept_image_with_id(
     # Update database
     image_url = f"/assets/{image_filename}"
     
-    # Enforce one image per concept: Delete ALL existing images for this concept
-    existing_images = session.exec(
-        select(Image).where(Image.concept_id == concept_id)
-    ).all()
+    # Delete existing image file if it exists (different filename)
+    if concept.image_url and concept.image_url.startswith("/assets/"):
+        existing_image_filename = concept.image_url.replace("/assets/", "")
+        existing_image_path = assets_dir / existing_image_filename
+        if existing_image_path.exists() and existing_image_path != image_path:
+            try:
+                existing_image_path.unlink()
+                logger.info(f"Deleted existing image file: {existing_image_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete existing image file {existing_image_path}: {str(e)}")
     
-    # Delete all existing images (both database records and files)
-    if existing_images:
-        for img in existing_images:
-            # Delete image file if it's a local asset
-            if img.url and img.url.startswith("/assets/"):
-                image_filename_to_delete = img.url.replace("/assets/", "")
-                image_path_to_delete = assets_dir / image_filename_to_delete
-                if image_path_to_delete.exists() and image_path_to_delete != image_path:
-                    # Only delete if it's a different file (not the one we're about to save)
-                    try:
-                        image_path_to_delete.unlink()
-                        logger.info(f"Deleted existing image file: {image_path_to_delete}")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete image file {image_path_to_delete}: {str(e)}")
-            
-            # Delete database record
-            session.delete(img)
-        
-        session.commit()
-        logger.info(f"Deleted {len(existing_images)} existing image(s) for concept {concept_id}")
-    
-    # The new uploaded image is always the only (and therefore primary) image
-    is_primary = True
-    
-    # Create new image record
-    image_record = Image(
-        concept_id=concept_id,
-        url=image_url,
-        image_type="illustration",
-        is_primary=is_primary,
-        source="uploaded",
-        created_at=datetime.now(timezone.utc)
-    )
-    session.add(image_record)
+    # Update concept with new image URL
+    concept.image_url = image_url
+    concept.updated_at = datetime.now(timezone.utc)
+    session.add(concept)
     session.commit()
+    session.refresh(concept)
     
     # Return the image file
     return FileResponse(
@@ -765,48 +697,43 @@ async def delete_concept_images(
             detail=f"Concept with ID {concept_id} not found"
         )
     
-    # Get all images for this concept
-    images = session.exec(
-        select(Image).where(Image.concept_id == concept_id)
-    ).all()
-    
-    if not images:
+    # Check if concept has an image
+    if not concept.image_url:
         return {
             "success": True,
-            "message": f"No images found for concept {concept_id}",
-            "deleted_count": 0
+            "message": f"No image found for concept {concept_id}",
+            "deleted_count": 0,
+            "deleted_files": 0
         }
     
-    # Delete image files from assets directory
-    assets_dir = ensure_assets_directory()
+    # Delete image file from assets directory if it's a local asset
     deleted_files = 0
-    for image in images:
-        # Extract filename from URL (e.g., "/assets/45405.jpg" -> "45405.jpg")
-        if image.url and image.url.startswith("/assets/"):
-            image_filename = image.url.replace("/assets/", "")
-            image_path = assets_dir / image_filename
-            
-            # Delete the image file if it exists
-            if image_path.exists():
-                try:
-                    image_path.unlink()
-                    logger.info(f"Deleted image file: {image_path}")
-                    deleted_files += 1
-                except Exception as e:
-                    logger.warning(f"Failed to delete image file {image_path}: {str(e)}")
-        elif image.url and (image.url.startswith("http://") or image.url.startswith("https://")):
-            # External URL, no file to delete
-            logger.info(f"Skipping external image URL: {image.url}")
+    if concept.image_url.startswith("/assets/"):
+        assets_dir = ensure_assets_directory()
+        image_filename = concept.image_url.replace("/assets/", "")
+        image_path = assets_dir / image_filename
+        
+        # Delete the image file if it exists
+        if image_path.exists():
+            try:
+                image_path.unlink()
+                logger.info(f"Deleted image file: {image_path}")
+                deleted_files = 1
+            except Exception as e:
+                logger.warning(f"Failed to delete image file {image_path}: {str(e)}")
+    elif concept.image_url.startswith("http://") or concept.image_url.startswith("https://"):
+        # External URL, no file to delete
+        logger.info(f"Skipping external image URL: {concept.image_url}")
     
-    # Delete all image records
-    for image in images:
-        session.delete(image)
-    
+    # Clear the image URL from the concept
+    concept.image_url = None
+    concept.updated_at = datetime.now(timezone.utc)
+    session.add(concept)
     session.commit()
     
     return {
         "success": True,
-        "message": f"Deleted {len(images)} image record(s) and {deleted_files} file(s) for concept {concept_id}",
-        "deleted_count": len(images),
+        "message": f"Deleted image for concept {concept_id}",
+        "deleted_count": 1,
         "deleted_files": deleted_files
     }

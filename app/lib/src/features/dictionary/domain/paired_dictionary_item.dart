@@ -6,7 +6,7 @@ class PairedDictionaryItem {
   final DictionaryCard? sourceCard;
   final DictionaryCard? targetCard;
   final String? imagePath1;
-  final List<Map<String, dynamic>>? images; // Images array from API
+  final String? imageUrl; // Direct image URL from API
   final String? partOfSpeech;
   final String? conceptTerm;
   final String? conceptDescription;
@@ -22,7 +22,7 @@ class PairedDictionaryItem {
     this.sourceCard,
     this.targetCard,
     this.imagePath1,
-    this.images,
+    this.imageUrl,
     this.partOfSpeech,
     this.conceptTerm,
     this.conceptDescription,
@@ -35,7 +35,7 @@ class PairedDictionaryItem {
 
   /// Get the first available image URL, or null if no images are available
   String? get firstImageUrl {
-    return imagePath1;
+    return imageUrl ?? imagePath1;
   }
 
   /// Get a lemma by language code
@@ -66,15 +66,6 @@ class PairedDictionaryItem {
           .toList();
     }
     
-    // Parse images array if available
-    List<Map<String, dynamic>>? imagesList;
-    if (json['images'] != null) {
-      final imagesData = json['images'] as List<dynamic>;
-      imagesList = imagesData
-          .map((imgJson) => imgJson as Map<String, dynamic>)
-          .toList();
-    }
-    
     return PairedDictionaryItem(
       conceptId: json['concept_id'] as int,
       cards: cardsList,
@@ -89,7 +80,7 @@ class PairedDictionaryItem {
               ? DictionaryCard.fromJson(json['target_card'] as Map<String, dynamic>)
               : null,
       imagePath1: json['image_path_1'] as String?,
-      images: imagesList,
+      imageUrl: json['image_url'] as String?,
       partOfSpeech: json['part_of_speech'] as String?,
       conceptTerm: json['concept_term'] as String?,
       conceptDescription: json['concept_description'] as String?,

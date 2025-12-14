@@ -71,13 +71,14 @@ class Concept(SQLModel, table=True):
     frequency_bucket: Optional[str] = None
     level: Optional[CEFRLevel] = None  # CEFR language proficiency level (A1-C2)
     status: Optional[str] = None
+    image_url: Optional[str] = None  # URL of the concept's image (max 1 image per concept)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
     
     # Relationships
     topic: Optional[Topic] = Relationship(back_populates="concepts")
     lemmas: List["Lemma"] = Relationship(back_populates="concept")
-    images: List["Image"] = Relationship(back_populates="concept")
+    images: List["Image"] = Relationship(back_populates="concept")  # Deprecated: kept for backward compatibility during migration
 
 
 class Language(SQLModel, table=True):

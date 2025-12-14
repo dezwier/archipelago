@@ -37,9 +37,9 @@ class ConceptResponse(BaseModel):
     level: Optional[str] = None  # CEFR level (A1, A2, B1, B2, C1, C2)
     frequency_bucket: Optional[str] = None
     status: Optional[str] = None
+    image_url: Optional[str] = None  # URL of the concept's image
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    images: Optional[List[ImageResponse]] = None
     
     @field_validator('part_of_speech')
     @classmethod
@@ -47,21 +47,12 @@ class ConceptResponse(BaseModel):
         """Validate and normalize part_of_speech field, converting deprecated values to None."""
         return normalize_part_of_speech(v)
     
-    # Backward compatibility: computed fields from images list
+    # Backward compatibility: computed field for image_path_1
     @computed_field
     @property
     def image_path_1(self) -> Optional[str]:
-        """Get first (and only) image URL for backward compatibility."""
-        images = self.images
-        if images is None or not images:
-            return None
-        # Type narrowing: images is now List[ImageResponse]
-        assert images is not None  # Type guard for linter
-        # Return primary image first, or first image if no primary
-        primary = next((img for img in images if img.is_primary), None)  # type: ignore[union-attr]
-        if primary:
-            return primary.url
-        return images[0].url if images else None
+        """Get image URL for backward compatibility."""
+        return self.image_url
 
     class Config:
         from_attributes = True
@@ -186,7 +177,7 @@ class PairedDictionaryItem(BaseModel):
     lemmas: List[LemmaResponse] = Field(default=[], description="All lemmas for this concept")
     source_lemma: Optional[LemmaResponse] = None
     target_lemma: Optional[LemmaResponse] = None
-    images: Optional[List[ImageResponse]] = None
+    image_url: Optional[str] = None  # URL of the concept's image
     part_of_speech: Optional[str] = None
     concept_term: Optional[str] = None
     concept_description: Optional[str] = None
@@ -196,20 +187,12 @@ class PairedDictionaryItem(BaseModel):
     topic_description: Optional[str] = None
     topic_icon: Optional[str] = None
     
-    # Backward compatibility: computed field from images list
+    # Backward compatibility: computed field for image_path_1
     @computed_field
     @property
     def image_path_1(self) -> Optional[str]:
-        """Get first (and only) image URL for backward compatibility."""
-        images = self.images
-        if images is None or not images:
-            return None
-        # Type narrowing: images is now List[ImageResponse]
-        assert images is not None  # Type guard for linter
-        primary = next((img for img in images if img.is_primary), None)  # type: ignore[union-attr]
-        if primary:
-            return primary.url
-        return images[0].url if images else None  # type: ignore[index]
+        """Get image URL for backward compatibility."""
+        return self.image_url
 
     class Config:
         from_attributes = True

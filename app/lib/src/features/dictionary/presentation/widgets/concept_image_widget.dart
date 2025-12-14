@@ -33,39 +33,16 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
   bool _showButtons = false;
   final ImagePicker _imagePicker = ImagePicker();
 
-  /// Get the primary image URL from the images array
+  /// Get the primary image URL from the item
   String? get _primaryImageUrl {
-    if (widget.item.images == null || widget.item.images!.isEmpty) {
-      return null;
-    }
-    
-    // Find primary image
-    final primaryImage = widget.item.images!.firstWhere(
-      (img) => img['is_primary'] == true,
-      orElse: () => widget.item.images!.first,
-    );
-    
-    // Build full URL from the image URL
-    final imageUrl = primaryImage['url'] as String?;
+    // Use image_url or fallback to image_path_1 (for backward compatibility)
+    final imageUrl = widget.item.imageUrl ?? widget.item.imagePath1;
     if (imageUrl == null || imageUrl.isEmpty) {
       return null;
     }
     
-    // Get created_at timestamp for cache-busting (if available)
-    final createdAt = primaryImage['created_at'] as String?;
-    String? cacheBust;
-    if (createdAt != null) {
-      try {
-        // Parse ISO format timestamp and use milliseconds since epoch
-        final dateTime = DateTime.parse(createdAt);
-        cacheBust = dateTime.millisecondsSinceEpoch.toString();
-      } catch (_) {
-        // If parsing fails, use current time as fallback
-        cacheBust = DateTime.now().millisecondsSinceEpoch.toString();
-      }
-    } else {
-      cacheBust = DateTime.now().millisecondsSinceEpoch.toString();
-    }
+    // Use current time for cache-busting
+    final cacheBust = DateTime.now().millisecondsSinceEpoch.toString();
     
     // If URL is already absolute, add cache-busting parameter
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {

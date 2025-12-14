@@ -13,9 +13,9 @@ from pathlib import Path
 import logging
 from app.core.database import get_session
 from app.core.config import settings
-from app.models.models import Concept, Image, Lemma, Language, CEFRLevel
+from app.models.models import Concept, Lemma, Language, CEFRLevel
 from app.schemas.concept import (
-    ConceptResponse, ImageResponse, ConceptCountResponse, CreateConceptOnlyRequest,
+    ConceptResponse, ConceptCountResponse, CreateConceptOnlyRequest,
     GetConceptsWithMissingLanguagesRequest, ConceptsWithMissingLanguagesResponse,
     ConceptWithMissingLanguages
 )
@@ -62,25 +62,7 @@ async def get_concepts(
         select(Concept).offset(skip).limit(limit).order_by(Concept.created_at.desc())  # type: ignore[attr-defined]
     ).all()
     
-    # Load images for each concept
-    concept_ids = [c.id for c in concepts]
-    images = session.exec(
-        select(Image).where(Image.concept_id.in_(concept_ids))
-    ).all()
-    
-    image_map = {}
-    for img in images:
-        if img.concept_id not in image_map:
-            image_map[img.concept_id] = []
-        image_map[img.concept_id].append(img)
-    
-    result = []
-    for concept in concepts:
-        concept_dict = ConceptResponse.model_validate(concept).model_dump()
-        concept_dict['images'] = [ImageResponse.model_validate(img) for img in image_map.get(concept.id, [])]
-        result.append(ConceptResponse(**concept_dict))
-    
-    return result
+    return [ConceptResponse.model_validate(concept) for concept in concepts]
 
 
 @router.post("/generate-only", response_model=ConceptResponse, status_code=status.HTTP_201_CREATED)
@@ -129,14 +111,7 @@ async def create_concept_only(
             detail="Failed to create concept: constraint violation"
         ) from e
     
-    # Load images for the concept (will be empty for new concept)
-    images = session.exec(
-        select(Image).where(Image.concept_id == concept.id)
-    ).all()
-    
-    concept_dict = ConceptResponse.model_validate(concept).model_dump()
-    concept_dict['images'] = [ImageResponse.model_validate(img) for img in images]
-    return ConceptResponse(**concept_dict)
+    return ConceptResponse.model_validate(concept)
 
 
 @router.get("/by-term", response_model=List[ConceptResponse])
@@ -173,25 +148,7 @@ async def get_concepts_by_term(
         ).order_by(Concept.created_at.desc())  # type: ignore[attr-defined]
     ).all()
     
-    # Load images for each concept
-    concept_ids = [c.id for c in concepts]
-    images = session.exec(
-        select(Image).where(Image.concept_id.in_(concept_ids))
-    ).all()
-    
-    image_map = {}
-    for img in images:
-        if img.concept_id not in image_map:
-            image_map[img.concept_id] = []
-        image_map[img.concept_id].append(img)
-    
-    result = []
-    for concept in concepts:
-        concept_dict = ConceptResponse.model_validate(concept).model_dump()
-        concept_dict['images'] = [ImageResponse.model_validate(img) for img in image_map.get(concept.id, [])]
-        result.append(ConceptResponse(**concept_dict))
-    
-    return result
+    return [ConceptResponse.model_validate(concept) for concept in concepts]
 
 @router.get("/{concept_id}", response_model=ConceptResponse)
 async def get_concept(
@@ -214,14 +171,7 @@ async def get_concept(
             detail="Concept not found"
         )
     
-    # Load images for the concept
-    images = session.exec(
-        select(Image).where(Image.concept_id == concept_id)
-    ).all()
-    
-    concept_dict = ConceptResponse.model_validate(concept).model_dump()
-    concept_dict['images'] = [ImageResponse.model_validate(img) for img in images]
-    return ConceptResponse(**concept_dict)
+    return ConceptResponse.model_validate(concept)
 
 
 @router.put("/{concept_id}", response_model=ConceptResponse)
@@ -282,14 +232,7 @@ async def update_concept(
             detail="Failed to update concept: constraint violation"
         ) from e
     
-    # Load images for the concept
-    images = session.exec(
-        select(Image).where(Image.concept_id == concept_id)
-    ).all()
-    
-    concept_dict = ConceptResponse.model_validate(concept).model_dump()
-    concept_dict['images'] = [ImageResponse.model_validate(img) for img in images]
-    return ConceptResponse(**concept_dict)
+    return ConceptResponse.model_validate(concept)
 
 
 def _get_assets_directory() -> Path:
@@ -333,33 +276,21 @@ async def delete_concept(
             detail="Concept not found"
         )
     
-    # Get all images for this concept
-    images = session.exec(
-        select(Image).where(Image.concept_id == concept_id)
-    ).all()
-    
-    # Delete image files from assets directory
-    if images:
+    # Delete image file from assets directory if it exists
+    if concept.image_url and concept.image_url.startswith("/assets/"):
         assets_dir = _get_assets_directory()
-        for image in images:
-            # Extract filename from URL (e.g., "/assets/47099.jpg" -> "47099.jpg")
-            if image.url and image.url.startswith("/assets/"):
-                image_filename = image.url.replace("/assets/", "")
-                image_path = assets_dir / image_filename
-                
-                # Delete the image file if it exists
-                if image_path.exists():
-                    try:
-                        image_path.unlink()
-                        logger.info(f"Deleted image file: {image_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete image file {image_path}: {str(e)}")
-                else:
-                    logger.warning(f"Image file not found: {image_path}")
-    
-    # Delete all image records
-    for image in images:
-        session.delete(image)
+        image_filename = concept.image_url.replace("/assets/", "")
+        image_path = assets_dir / image_filename
+        
+        # Delete the image file if it exists
+        if image_path.exists():
+            try:
+                image_path.unlink()
+                logger.info(f"Deleted image file: {image_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete image file {image_path}: {str(e)}")
+        else:
+            logger.warning(f"Image file not found: {image_path}")
     
     # Get all lemmas for this concept
     from app.models.models import Lemma, UserCard
@@ -667,17 +598,11 @@ async def get_concepts_with_missing_languages(
         
         # Only include concepts that are missing at least one language
         if missing_languages:
-            # Load images for the concept
-            images = session.exec(
-                select(Image).where(Image.concept_id == concept.id)
-            ).all()
-            
             # Convert concept to dict and ensure level is serialized as string
             concept_dict = ConceptResponse.model_validate(concept).model_dump()
             # Ensure level is a string value (CEFRLevel enum value)
             if concept.level is not None:
                 concept_dict['level'] = concept.level.value
-            concept_dict['images'] = [ImageResponse.model_validate(img) for img in images]
             concept_response = ConceptResponse(**concept_dict)
             
             result_concepts.append(ConceptWithMissingLanguages(

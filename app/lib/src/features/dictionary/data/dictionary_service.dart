@@ -561,7 +561,7 @@ class DictionaryService {
         'concept_description': conceptData['description'],
         'part_of_speech': conceptData['part_of_speech'],
         'concept_level': conceptData['level'],
-        'images': conceptData['images'] ?? [],
+        'image_url': conceptData['image_url'],
         'image_path_1': conceptData['image_path_1'],
         'topic_id': topicId,
         'topic_name': topicName,
