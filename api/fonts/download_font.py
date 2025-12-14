@@ -7,7 +7,8 @@ import urllib.request
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-FONT_URL = "https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf"
+# Use the official noto-fonts repository - this URL is verified to work
+FONT_URL = "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
 FONT_FILE = SCRIPT_DIR / "NotoSans-Regular.ttf"
 
 def download_font():
@@ -19,7 +20,11 @@ def download_font():
     
     print("Downloading Noto Sans font...")
     try:
-        urllib.request.urlretrieve(FONT_URL, FONT_FILE)
+        req = urllib.request.Request(FONT_URL)
+        req.add_header('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
+        with urllib.request.urlopen(req, timeout=30) as response:
+            with open(FONT_FILE, 'wb') as f:
+                f.write(response.read())
         if FONT_FILE.exists():
             size_kb = FONT_FILE.stat().st_size / 1024
             print(f"✓ Successfully downloaded Noto Sans font to {FONT_FILE}")

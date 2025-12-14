@@ -97,8 +97,16 @@ def register_unicode_fonts():
         return _unicode_font_name, _emoji_font_name
     
     # First, check for bundled fonts in the api/fonts directory
+    # Try multiple path resolution strategies for different deployment environments
     api_root = Path(__file__).parent.parent.parent.parent.parent
     bundled_fonts_dir = api_root / "fonts"
+    
+    # Also check if we're in a Docker/deployed environment (common paths)
+    alternative_paths = [
+        Path("/app/fonts"),  # Common Docker path
+        Path("./fonts"),  # Current directory
+        Path("fonts"),  # Relative to current working directory
+    ]
     
     # Search paths for fonts (bundled fonts first, then system fonts)
     search_paths = [
@@ -112,6 +120,11 @@ def register_unicode_fonts():
         "/usr/share/fonts/truetype/liberation",
         "C:/Windows/Fonts",
     ]
+    
+    # Add alternative paths to search (for Docker/deployment environments)
+    for alt_path in alternative_paths:
+        if alt_path.exists() and str(alt_path) not in search_paths:
+            search_paths.insert(1, str(alt_path))  # Insert after bundled_fonts_dir
     
     # Try to find Unicode-supporting fonts
     unicode_patterns = [
@@ -140,15 +153,25 @@ def register_unicode_fonts():
     
     for font_path in unicode_fonts:
         if not os.path.exists(font_path):
+            logger.debug("Font file does not exist: %s", font_path)
             continue
         try:
+            # Verify it's actually a font file by checking file size (should be > 10KB)
+            font_size = os.path.getsize(font_path)
+            if font_size < 10000:
+                logger.warning("Font file too small (%d bytes), may be corrupted: %s", font_size, font_path)
+                continue
+            
             pdfmetrics.registerFont(TTFont("UnicodeFont", font_path))
             _unicode_font_name = "UnicodeFont"
             _unicode_font_registered = True
-            logger.info("Successfully registered Unicode font: %s", font_path)
+            logger.info("Successfully registered Unicode font: %s (size: %d KB)", font_path, font_size // 1024)
             break
         except Exception as e:
             logger.warning("Failed to register font %s: %s", font_path, str(e))
+            # Log more details for debugging
+            if hasattr(e, 'args') and e.args:
+                logger.debug("Font registration error details: %s", e.args)
             continue
     
     # Find and try emoji fonts
@@ -169,8 +192,8 @@ def register_unicode_fonts():
     if not _unicode_font_registered:
         logger.error("CRITICAL: No working Unicode font found! IPA symbols and emojis will not render correctly.")
         logger.error("Please download Noto Sans font and place it in api/fonts/ directory.")
-        logger.error("Download from: https://fonts.google.com/noto/specimen/Noto+Sans")
-        logger.error("Or run: python3 -c \"import urllib.request; urllib.request.urlretrieve('https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf', 'api/fonts/NotoSans-Regular.ttf')\"")
+        logger.error("Run: python3 api/fonts/download_font.py")
+        logger.error("Or: ./api/fonts/download_font.sh")
         _unicode_font_registered = True
     
     return _unicode_font_name, _emoji_font_name

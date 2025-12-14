@@ -12,13 +12,19 @@ Run this command from the project root:
 
 ```bash
 cd api/fonts
-curl -L -o NotoSans-Regular.ttf "https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf"
+curl -L -o NotoSans-Regular.ttf "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
 ```
 
 Or using Python:
 
 ```bash
-python3 -c "import urllib.request; urllib.request.urlretrieve('https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf', 'api/fonts/NotoSans-Regular.ttf')"
+python3 api/fonts/download_font.py
+```
+
+Or using the shell script:
+
+```bash
+./api/fonts/download_font.sh
 ```
 
 ### Manual Download

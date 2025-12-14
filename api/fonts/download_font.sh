@@ -4,7 +4,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FONT_URL="https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf"
+FONT_URL="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
 FONT_FILE="$SCRIPT_DIR/NotoSans-Regular.ttf"
 
 echo "Downloading Noto Sans font..."
