@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../../../constants/api_config.dart';
+import 'package:archipelago/src/constants/api_config.dart';
 
 class Topic {
   final int id;

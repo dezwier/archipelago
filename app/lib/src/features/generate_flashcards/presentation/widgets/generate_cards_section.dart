@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../../../../features/profile/domain/language.dart';
-import '../../../../features/profile/domain/user.dart';
-import '../../data/flashcard_service.dart';
-import '../../data/card_generation_background_service.dart';
-import '../../../../common_widgets/language_selection_widget.dart';
-import '../../../dictionary/presentation/widgets/card_generation_progress_widget.dart';
+import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'package:archipelago/src/features/generate_flashcards/data/flashcard_service.dart';
+import 'package:archipelago/src/features/generate_flashcards/data/card_generation_background_service.dart';
+import 'package:archipelago/src/common_widgets/language_selection_widget.dart';
+import 'package:archipelago/src/features/dictionary/presentation/widgets/card_generation_progress_widget.dart';
 
 class GenerateCardsSection extends StatefulWidget {
   final List<Language> languages;

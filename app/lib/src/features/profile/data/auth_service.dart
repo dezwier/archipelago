@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../../../constants/api_config.dart';
-import '../domain/user.dart';
+import 'package:archipelago/src/constants/api_config.dart';
+import 'package:archipelago/src/features/profile/domain/user.dart';
 
 class AuthService {
   static Future<Map<String, dynamic>> login(String username, String password) async {

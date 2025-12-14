@@ -1,4 +1,4 @@
-import '../../../profile/domain/language.dart';
+import 'package:archipelago/src/features/profile/domain/language.dart';
 
 class LanguageVisibilityManager {
   Map<String, bool> _languageVisibility = {};

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../data/auth_service.dart';
-import '../data/language_service.dart';
-import '../domain/user.dart';
-import '../domain/language.dart';
-import '../../../common_widgets/language_button.dart';
+import 'package:archipelago/src/features/profile/data/auth_service.dart';
+import 'package:archipelago/src/features/profile/data/language_service.dart';
+import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/common_widgets/language_button.dart';
 
 class RegisterScreen extends StatefulWidget {
   final Function(User) onRegisterSuccess;

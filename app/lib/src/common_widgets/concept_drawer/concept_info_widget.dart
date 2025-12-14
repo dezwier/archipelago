@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../domain/paired_dictionary_item.dart';
+import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
 
 class ConceptInfoWidget extends StatelessWidget {
   final PairedDictionaryItem item;

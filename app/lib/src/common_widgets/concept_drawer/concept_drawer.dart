@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../utils/html_entity_decoder.dart';
-import '../../utils/language_emoji.dart';
-import '../../features/dictionary/domain/paired_dictionary_item.dart';
-import '../../features/dictionary/domain/dictionary_card.dart';
-import '../../features/dictionary/data/dictionary_service.dart';
-import '../../features/generate_flashcards/data/flashcard_service.dart';
+import 'package:archipelago/src/utils/html_entity_decoder.dart';
+import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
+import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
+import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
+import 'package:archipelago/src/features/generate_flashcards/data/flashcard_service.dart';
 import 'language_lemma_widget.dart';
-import '../../features/dictionary/presentation/widgets/concept_image_widget.dart';
+import 'concept_image_widget.dart';
 import 'concept_image_buttons.dart';
-import '../concept_info_widget.dart';
+import 'concept_info_widget.dart';
 
 /// A generic drawer widget that displays concept details based on a concept ID.
 /// This widget can be used anywhere in the app to show concept information.

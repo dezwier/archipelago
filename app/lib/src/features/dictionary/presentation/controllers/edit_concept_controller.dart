@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../data/dictionary_service.dart';
-import '../../domain/paired_dictionary_item.dart';
-import '../../../generate_flashcards/data/topic_service.dart';
-import '../../../profile/domain/user.dart';
+import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
+import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
+import 'package:archipelago/src/features/generate_flashcards/data/topic_service.dart';
+import 'package:archipelago/src/features/profile/domain/user.dart';
 
 class EditConceptController extends ChangeNotifier {
   final PairedDictionaryItem item;

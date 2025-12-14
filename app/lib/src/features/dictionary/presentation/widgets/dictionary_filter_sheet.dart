@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../generate_flashcards/data/topic_service.dart';
-import '../controllers/dictionary_controller.dart';
+import 'package:archipelago/src/features/generate_flashcards/data/topic_service.dart';
+import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
 
 /// Constants for filter options
 class FilterConstants {

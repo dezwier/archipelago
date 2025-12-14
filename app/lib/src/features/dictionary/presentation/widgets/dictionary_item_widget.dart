@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../domain/paired_dictionary_item.dart';
-import '../../domain/dictionary_card.dart';
-import '../../../../utils/html_entity_decoder.dart';
-import '../../../../utils/language_emoji.dart';
-import 'language_lemma_widget.dart';
+import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
+import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
+import 'package:archipelago/src/utils/html_entity_decoder.dart';
+import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/common_widgets/concept_drawer/language_lemma_widget.dart';
 
 class DictionaryItemWidget extends StatelessWidget {
   final PairedDictionaryItem item;

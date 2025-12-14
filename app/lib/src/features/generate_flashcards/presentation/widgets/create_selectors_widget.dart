@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../data/topic_service.dart' show Topic;
-import '../../../profile/domain/language.dart';
-import '../../../../common_widgets/language_selection_widget.dart';
+import 'package:archipelago/src/features/generate_flashcards/data/topic_service.dart' show Topic;
+import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/common_widgets/language_selection_widget.dart';
 import 'topic_drawer.dart';
 
 class CreateSelectorsWidget extends StatelessWidget {

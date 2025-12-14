@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../controllers/edit_concept_controller.dart';
-import '../../domain/paired_dictionary_item.dart';
+import 'package:archipelago/src/features/dictionary/presentation/controllers/edit_concept_controller.dart';
+import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
 
 class EditConceptScreen extends StatefulWidget {
   final PairedDictionaryItem item;

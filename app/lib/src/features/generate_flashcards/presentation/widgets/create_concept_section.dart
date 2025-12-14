@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
-import '../../data/topic_service.dart' show Topic, TopicService;
-import '../../data/flashcard_service.dart';
-import '../../../profile/domain/user.dart';
-import '../../../profile/domain/language.dart';
-import '../../../profile/data/language_service.dart';
-import '../../../../utils/language_emoji.dart';
+import 'package:archipelago/src/features/generate_flashcards/data/topic_service.dart' show Topic, TopicService;
+import 'package:archipelago/src/features/generate_flashcards/data/flashcard_service.dart';
+import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/profile/data/language_service.dart';
+import 'package:archipelago/src/utils/language_emoji.dart';
 import 'image_selector_widget.dart';
 import 'create_selectors_widget.dart';
-import '../../../../common_widgets/concept_drawer.dart';
+import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
 
 class CreateConceptSection extends StatefulWidget {
   const CreateConceptSection({super.key});

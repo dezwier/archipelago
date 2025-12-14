@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../data/auth_service.dart';
-import '../data/language_service.dart';
-import '../domain/user.dart';
-import '../domain/language.dart';
-import '../../../utils/language_emoji.dart';
+import 'package:archipelago/src/features/profile/data/auth_service.dart';
+import 'package:archipelago/src/features/profile/data/language_service.dart';
+import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/utils/language_emoji.dart';
 import 'register_screen.dart';
 
 class ProfileScreen extends StatefulWidget {

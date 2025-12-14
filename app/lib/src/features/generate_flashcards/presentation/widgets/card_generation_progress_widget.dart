@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../utils/language_emoji.dart';
+import 'package:archipelago/src/utils/language_emoji.dart';
 
 class CardGenerationProgressWidget extends StatelessWidget {
   final int? totalConcepts;

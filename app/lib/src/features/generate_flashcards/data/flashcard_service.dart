@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../constants/api_config.dart';
-import '../../profile/domain/user.dart';
+import 'package:archipelago/src/constants/api_config.dart';
+import 'package:archipelago/src/features/profile/domain/user.dart';
 
 class FlashcardService {
   /// Preview a concept with cards for multiple languages using LLM generation.

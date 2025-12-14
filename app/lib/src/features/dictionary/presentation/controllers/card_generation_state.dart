@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../../generate_flashcards/data/card_generation_background_service.dart';
+import 'package:archipelago/src/features/generate_flashcards/data/card_generation_background_service.dart';
 
 class CardGenerationState extends ChangeNotifier {
   // Progress tracking for lemma generation

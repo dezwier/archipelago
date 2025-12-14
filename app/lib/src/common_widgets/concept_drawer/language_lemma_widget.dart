@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
-import '../../../../utils/html_entity_decoder.dart';
-import '../../../../utils/language_emoji.dart';
-import '../../../../constants/api_config.dart';
-import '../../domain/dictionary_card.dart';
+import 'package:archipelago/src/utils/html_entity_decoder.dart';
+import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/constants/api_config.dart';
+import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
 
 class LanguageLemmaWidget extends StatefulWidget {
   final DictionaryCard card;

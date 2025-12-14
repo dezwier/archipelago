@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../../utils/language_emoji.dart';
-import '../../../profile/domain/language.dart';
+import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/features/profile/domain/language.dart';
 
 class DictionaryFilterMenu {
   static List<PopupMenuEntry<void>> buildMenuItems({

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../features/profile/domain/language.dart';
-import '../utils/language_emoji.dart';
+import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/utils/language_emoji.dart';
 
 /// A reusable widget that displays language selection buttons in a grid layout.
 /// Shows language flags as emoji buttons that can be toggled on/off.
