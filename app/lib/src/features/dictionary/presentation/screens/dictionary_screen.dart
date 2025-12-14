@@ -11,6 +11,7 @@ import 'package:archipelago/src/features/dictionary/presentation/widgets/diction
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_filter_menu.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_fab_buttons.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_empty_search_state.dart';
+import 'package:archipelago/src/features/dictionary/presentation/widgets/export_flashcards_drawer.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
 import 'package:archipelago/src/features/dictionary/presentation/screens/edit_concept_screen.dart';
@@ -351,6 +352,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                   onFilterPressed: () => _showFilterMenu(context),
                   onFilteringPressed: () => _showFilteringMenu(context),
                   onGenerateLemmasPressed: () => _handleGenerateLemmas(context),
+                  onExportPressed: () => _showExportDrawer(context),
                   isLoadingConcepts: _isLoadingConcepts,
                 ),
               ),
@@ -387,6 +389,18 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       topics: _allTopics,
       isLoadingTopics: _isLoadingTopics,
       firstVisibleLanguage: firstVisibleLanguage,
+    );
+  }
+
+  void _showExportDrawer(BuildContext context) {
+    final completedCount = _controller.conceptsWithAllVisibleLanguages ?? 0;
+    final visibleLanguageCodes = _languageVisibilityManager.getVisibleLanguageCodes();
+    
+    showExportFlashcardsDrawer(
+      context: context,
+      completedConceptsCount: completedCount,
+      availableLanguages: _allLanguages,
+      visibleLanguageCodes: visibleLanguageCodes,
     );
   }
 

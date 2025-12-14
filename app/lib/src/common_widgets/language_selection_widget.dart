@@ -9,6 +9,7 @@ class LanguageSelectionWidget extends StatelessWidget {
   final List<String> selectedLanguages;
   final bool isLoading;
   final ValueChanged<List<String>> onSelectionChanged;
+  final int itemsPerRow;
 
   const LanguageSelectionWidget({
     super.key,
@@ -16,6 +17,7 @@ class LanguageSelectionWidget extends StatelessWidget {
     required this.selectedLanguages,
     required this.isLoading,
     required this.onSelectionChanged,
+    this.itemsPerRow = 4,
   });
 
   void _toggleLanguage(String languageCode) {
@@ -45,15 +47,14 @@ class LanguageSelectionWidget extends StatelessWidget {
       );
     }
 
-    // Calculate number of rows needed (8 per row)
-    const int itemsPerRow = 4;
+    // Calculate number of rows needed
     final int rowCount = (languages.length / itemsPerRow).ceil();
 
     return Column(
       children: [
         // "Select All" button
         const SizedBox(height: 6),
-        // Language buttons in grid (8 per row)
+        // Language buttons in grid
         for (int row = 0; row < rowCount; row++)
           Padding(
             padding: EdgeInsets.only(bottom: row < rowCount - 1 ? 8 : 0),

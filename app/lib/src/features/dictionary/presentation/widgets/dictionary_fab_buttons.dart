@@ -4,6 +4,7 @@ class DictionaryFabButtons extends StatelessWidget {
   final VoidCallback onFilterPressed;
   final VoidCallback onFilteringPressed;
   final VoidCallback? onGenerateLemmasPressed;
+  final VoidCallback? onExportPressed;
   final bool isLoadingConcepts;
   final Key? filterButtonKey;
 
@@ -12,6 +13,7 @@ class DictionaryFabButtons extends StatelessWidget {
     required this.onFilterPressed,
     required this.onFilteringPressed,
     this.onGenerateLemmasPressed,
+    this.onExportPressed,
     this.isLoadingConcepts = false,
     this.filterButtonKey,
   });
@@ -59,6 +61,16 @@ class DictionaryFabButtons extends StatelessWidget {
           foregroundColor: Theme.of(context).colorScheme.onSurface,
           child: const Icon(Icons.visibility),
           tooltip: 'Show/Hide',
+        ),
+        const SizedBox(height: 8),
+        // Export button
+        FloatingActionButton.small(
+          heroTag: 'export_fab',
+          onPressed: onExportPressed,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
+          child: const Icon(Icons.picture_as_pdf),
+          tooltip: 'Export Flashcards',
         ),
       ],
     );
