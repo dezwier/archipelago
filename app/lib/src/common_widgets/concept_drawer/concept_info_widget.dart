@@ -73,7 +73,7 @@ class ConceptInfoWidget extends StatelessWidget {
           ],
           if (item.topicName != null) ...[
             Wrap(
-              crossAxisAlignment: WrapCrossAlignment.start,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   'Topic: ',

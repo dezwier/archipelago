@@ -72,10 +72,16 @@ class CreateSelectorsWidget extends StatelessWidget {
       children: [
         // Topic selector
         isLoadingTopics
-            ? const Center(
+            ? Center(
                 child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: CircularProgressIndicator(),
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                    ),
+                  ),
                 ),
               )
             : OutlinedButton(

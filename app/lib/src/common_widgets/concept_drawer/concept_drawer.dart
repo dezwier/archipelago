@@ -37,9 +37,16 @@ class ConceptDrawer extends StatefulWidget {
 class _ConceptDrawerState extends State<ConceptDrawer> {
   PairedDictionaryItem? _item;
   bool _isLoading = true;
+  bool _isLoadingLemmas = true;
+  bool _isLoadingTopic = false;
   String? _errorMessage;
   bool _isEditing = false;
   final Set<String> _retrievingLanguages = {};
+  
+  // Partial data for progressive loading
+  Map<String, dynamic>? _conceptData;
+  List<dynamic>? _lemmasData;
+  Map<String, dynamic>? _topicData;
 
   // Default language visibility - show all languages if not provided
   Map<String, bool> _getLanguageVisibility() {
@@ -64,6 +71,17 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
     return _item!.cards.map((c) => c.languageCode).toList();
   }
 
+  /// Check if we should show placeholder (no concept data yet)
+  bool _shouldShowPlaceholder() {
+    return _item == null;
+  }
+
+  /// Check if we should show content area
+  bool _shouldShowContent() {
+    // Show content if we have lemmas data or if item is built
+    return _lemmasData != null || _item != null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -73,46 +91,170 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
   Future<void> _loadConcept() async {
     setState(() {
       _isLoading = true;
+      _isLoadingLemmas = true;
+      _isLoadingTopic = false;
       _errorMessage = null;
+      _conceptData = null;
+      _lemmasData = null;
+      _topicData = null;
     });
 
-    try {
-      // Get visible language codes for the API call
-      // If languageVisibility is provided, use it; otherwise fetch all languages
-      List<String> visibleLanguageCodes = [];
-      if (widget.languageVisibility != null) {
-        visibleLanguageCodes = widget.languageVisibility!.entries
-            .where((entry) => entry.value)
-            .map((entry) => entry.key)
-            .toList();
-      }
-      // If no language visibility specified, pass empty list to get all languages
+    // Get visible language codes for the API call
+    List<String> visibleLanguageCodes = [];
+    if (widget.languageVisibility != null) {
+      visibleLanguageCodes = widget.languageVisibility!.entries
+          .where((entry) => entry.value)
+          .map((entry) => entry.key)
+          .toList();
+    }
 
-      final result = await DictionaryService.getConceptById(
-        conceptId: widget.conceptId,
-        visibleLanguageCodes: visibleLanguageCodes,
-      );
-
+    // Start all API calls in parallel for faster loading
+    final conceptFuture = DictionaryService.getConceptDataOnly(widget.conceptId);
+    final lemmasFuture = DictionaryService.getLemmasOnly(widget.conceptId, visibleLanguageCodes);
+    
+    // Handle concept data (needed first to check for topic_id)
+    conceptFuture.then((result) {
       if (!mounted) return;
-
+      
       if (result['success'] == true) {
-        final itemData = result['item'] as Map<String, dynamic>;
+        final conceptData = result['data'] as Map<String, dynamic>;
         setState(() {
-          _item = PairedDictionaryItem.fromJson(itemData);
-          _isLoading = false;
+          _conceptData = conceptData;
         });
+        
+        // Build partial item immediately with concept data
+        _tryBuildItem();
+        
+        // Start topic fetch if topic_id exists
+        final topicId = conceptData['topic_id'] as int?;
+        if (topicId != null) {
+          setState(() {
+            _isLoadingTopic = true;
+          });
+          
+          DictionaryService.getTopicDataOnly(topicId).then((topicResult) {
+            if (!mounted) return;
+            
+            if (topicResult['success'] == true) {
+              setState(() {
+                _topicData = topicResult['data'] as Map<String, dynamic>?;
+                _isLoadingTopic = false;
+              });
+            } else {
+              setState(() {
+                _isLoadingTopic = false;
+              });
+            }
+            
+            // Update item with topic data
+            _tryBuildItem();
+          });
+        } else {
+          setState(() {
+            _isLoadingTopic = false;
+          });
+        }
       } else {
         setState(() {
           _errorMessage = result['message'] as String? ?? 'Failed to load concept';
           _isLoading = false;
         });
       }
-    } catch (e) {
+    }).catchError((e) {
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Error loading concept: ${e.toString()}';
         _isLoading = false;
       });
+    });
+    
+    // Handle lemmas data
+    lemmasFuture.then((result) {
+      if (!mounted) return;
+      
+      if (result['success'] == true) {
+        setState(() {
+          _lemmasData = result['data'] as List<dynamic>;
+          _isLoadingLemmas = false;
+        });
+        _tryBuildItem();
+      } else {
+        setState(() {
+          _isLoadingLemmas = false;
+          // Don't set error here - concept might still be loading
+          // Only set error if concept also failed
+          if (_conceptData == null) {
+            _errorMessage = result['message'] as String? ?? 'Failed to load lemmas';
+            _isLoading = false;
+          }
+        });
+      }
+    }).catchError((e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingLemmas = false;
+        if (_conceptData == null) {
+          _errorMessage = 'Error loading lemmas: ${e.toString()}';
+          _isLoading = false;
+        }
+      });
+    });
+  }
+
+  /// Try to build the PairedDictionaryItem when we have enough data
+  /// Can build partial item with just concept data, then update as more data arrives
+  void _tryBuildItem() {
+    // Need at least concept data to build a partial item
+    if (_conceptData == null) {
+      return;
+    }
+    
+    try {
+      // Extract topic information
+      String? topicName;
+      String? topicDescription;
+      String? topicIcon;
+      final topicId = _conceptData!['topic_id'] as int?;
+      
+      if (_topicData != null) {
+        topicName = _topicData!['name'] as String?;
+        topicDescription = _topicData!['description'] as String?;
+        topicIcon = _topicData!['icon'] as String?;
+      }
+
+      // Construct PairedDictionaryItem format
+      // Use empty list for lemmas if not loaded yet
+      final itemData = <String, dynamic>{
+        'concept_id': widget.conceptId,
+        'lemmas': _lemmasData ?? [],
+        'concept_term': _conceptData!['term'],
+        'concept_description': _conceptData!['description'],
+        'part_of_speech': _conceptData!['part_of_speech'],
+        'concept_level': _conceptData!['level'],
+        'image_url': _conceptData!['image_url'],
+        'image_path_1': _conceptData!['image_path_1'],
+        'topic_id': topicId,
+        'topic_name': topicName,
+        'topic_description': topicDescription,
+        'topic_icon': topicIcon,
+      };
+
+      if (mounted) {
+        setState(() {
+          _item = PairedDictionaryItem.fromJson(itemData);
+          // Only mark as fully loaded when we have both concept and lemmas
+          if (_lemmasData != null && !_isLoadingTopic) {
+            _isLoading = false;
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Error building concept item: ${e.toString()}';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -181,7 +323,7 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
                         // Images and buttons layout
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: _item == null
+                          child: _shouldShowPlaceholder()
                               ? Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -234,7 +376,7 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
                                     ),
                                   ],
                                 )
-                              : _isEditing
+                              : _item != null && _isEditing
                                   ? Column(
                                       children: [
                                         // Images on top
@@ -294,7 +436,9 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
                                                   _item!.conceptDescription != null ||
                                                   _item!.topicName != null ||
                                                   _item!.topicDescription != null)
-                                                ConceptInfoWidget(item: _item!),
+                                                ConceptInfoWidget(
+                                                  item: _item!,
+                                                ),
                                               if (_item!.conceptTerm != null ||
                                                   _item!.conceptDescription != null ||
                                                   _item!.topicName != null ||
@@ -319,20 +463,30 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
                                       ],
                                     ),
                         ),
-                        // Content
+                        // Content - show progressively as data loads
                         Expanded(
-                          child: _isLoading || _item == null
-                              ? const SizedBox.shrink()
-                              : SingleChildScrollView(
+                          child: _shouldShowContent()
+                              ? SingleChildScrollView(
                                   padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       const SizedBox(height: 24),
-                                      ..._buildLanguageSections(context),
+                                      if (_isLoadingLemmas && _item == null)
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                                          child: Center(
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                        )
+                                      else if (_item != null)
+                                        ..._buildLanguageSections(context),
                                     ],
                                   ),
-                                ),
+                                )
+                              : const SizedBox.shrink(),
                         ),
                       ],
                     ),
@@ -426,21 +580,15 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
               Padding(
                 padding: const EdgeInsets.only(left: 8.0, top: 4.0),
                 child: SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: Center(
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.6),
-                        ),
-                      ),
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6),
                     ),
                   ),
                 ),
@@ -545,21 +693,18 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
         ),
         // Button or spinner on the right
         if (_retrievingLanguages.contains(languageCode))
-          SizedBox(
-            width: 32,
-            height: 32,
-            child: Center(
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
-                  ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
                 ),
               ),
             ),

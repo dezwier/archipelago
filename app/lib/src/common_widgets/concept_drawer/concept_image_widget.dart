@@ -431,17 +431,9 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
                   },
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
+                    // Show placeholder without spinner while image loads
                     return Container(
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                              : null,
-                          strokeWidth: 2,
-                        ),
-                      ),
                     );
                   },
                 ),

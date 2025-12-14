@@ -464,13 +464,66 @@ class DictionaryService {
     return await _getConceptByIdFallback(conceptId, visibleLanguageCodes);
   }
 
-  /// Fallback method to get concept by ID by fetching concept and lemmas separately
-  static Future<Map<String, dynamic>> _getConceptByIdFallback(
+  /// Get concept data only (for progressive loading)
+  /// Returns: {'success': bool, 'data': Map<String, dynamic>?, 'message': String?}
+  static Future<Map<String, dynamic>> getConceptDataOnly(int conceptId) async {
+    try {
+      final conceptData = await _fetchConceptData(conceptId);
+      return {
+        'success': true,
+        'data': conceptData,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'data': null,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  /// Get lemmas for a concept (for progressive loading)
+  /// Returns: {'success': bool, 'data': List<dynamic>?, 'message': String?}
+  static Future<Map<String, dynamic>> getLemmasOnly(
     int conceptId,
     List<String> visibleLanguageCodes,
   ) async {
     try {
-      // Fetch concept
+      final lemmasData = await _fetchLemmas(conceptId, visibleLanguageCodes);
+      return {
+        'success': true,
+        'data': lemmasData,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'data': null,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  /// Get topic data (for progressive loading)
+  /// Returns: {'success': bool, 'data': Map<String, dynamic>?, 'message': String?}
+  static Future<Map<String, dynamic>> getTopicDataOnly(int? topicId) async {
+    try {
+      final topicData = await _fetchTopicData(topicId);
+      return {
+        'success': true,
+        'data': topicData,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'data': null,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  /// Fetch concept data by ID
+  static Future<Map<String, dynamic>> _fetchConceptData(int conceptId) async {
+    try {
       final conceptUrl = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/$conceptId');
       final conceptResponse = await http.get(
         conceptUrl,
@@ -480,21 +533,22 @@ class DictionaryService {
       if (conceptResponse.statusCode != 200) {
         try {
           final error = jsonDecode(conceptResponse.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to fetch concept',
-          };
-        } catch (_) {
-          return {
-            'success': false,
-            'message': 'Failed to fetch concept: ${conceptResponse.statusCode}',
-          };
+          throw Exception(error['detail'] as String? ?? 'Failed to fetch concept');
+        } catch (e) {
+          if (e is Exception) rethrow;
+          throw Exception('Failed to fetch concept: ${conceptResponse.statusCode}');
         }
       }
 
-      final conceptData = jsonDecode(conceptResponse.body) as Map<String, dynamic>;
+      return jsonDecode(conceptResponse.body) as Map<String, dynamic>;
+    } catch (e) {
+      rethrow;
+    }
+  }
 
-      // Fetch lemmas
+  /// Fetch lemmas for a concept
+  static Future<List<dynamic>> _fetchLemmas(int conceptId, List<String> visibleLanguageCodes) async {
+    try {
       final lemmasUrl = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/concept/$conceptId');
       final lemmasResponse = await http.get(
         lemmasUrl,
@@ -504,59 +558,91 @@ class DictionaryService {
       if (lemmasResponse.statusCode != 200) {
         try {
           final error = jsonDecode(lemmasResponse.body) as Map<String, dynamic>;
-          return {
-            'success': false,
-            'message': error['detail'] as String? ?? 'Failed to fetch lemmas',
-          };
-        } catch (_) {
-          return {
-            'success': false,
-            'message': 'Failed to fetch lemmas: ${lemmasResponse.statusCode}',
-          };
+          throw Exception(error['detail'] as String? ?? 'Failed to fetch lemmas');
+        } catch (e) {
+          if (e is Exception) rethrow;
+          throw Exception('Failed to fetch lemmas: ${lemmasResponse.statusCode}');
         }
       }
 
       final lemmasData = jsonDecode(lemmasResponse.body) as List<dynamic>;
       
       // Filter lemmas by visible languages if provided
-      List<dynamic> filteredLemmas = lemmasData;
       if (visibleLanguageCodes.isNotEmpty) {
-        filteredLemmas = lemmasData.where((lemma) {
+        return lemmasData.where((lemma) {
           final langCode = (lemma as Map<String, dynamic>)['language_code'] as String?;
           return langCode != null && visibleLanguageCodes.contains(langCode.toLowerCase());
         }).toList();
       }
+      
+      return lemmasData;
+    } catch (e) {
+      rethrow;
+    }
+  }
 
-      // Fetch topic information if topic_id is present
+  /// Fetch topic data by ID
+  static Future<Map<String, dynamic>?> _fetchTopicData(int? topicId) async {
+    if (topicId == null) return null;
+    
+    try {
+      final topicUrl = Uri.parse('${ApiConfig.apiBaseUrl}/topics/$topicId');
+      final topicResponse = await http.get(
+        topicUrl,
+        headers: {'Content-Type': 'application/json'},
+      );
+      
+      if (topicResponse.statusCode == 200) {
+        return jsonDecode(topicResponse.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      // If topic fetch fails, return null (not critical)
+      return null;
+    }
+  }
+
+  /// Fallback method to get concept by ID by fetching concept and lemmas separately
+  /// Now uses parallel API calls for better performance
+  static Future<Map<String, dynamic>> _getConceptByIdFallback(
+    int conceptId,
+    List<String> visibleLanguageCodes,
+  ) async {
+    try {
+      // Start all API calls in parallel
+      final conceptFuture = _fetchConceptData(conceptId);
+      final lemmasFuture = _fetchLemmas(conceptId, visibleLanguageCodes);
+      
+      // Wait for concept data first (needed to check for topic_id)
+      final conceptData = await conceptFuture;
+      final topicId = conceptData['topic_id'] as int?;
+      
+      // Start topic fetch if needed, otherwise use completed future
+      final topicFuture = _fetchTopicData(topicId);
+      
+      // Wait for lemmas and topic in parallel
+      final results = await Future.wait([
+        lemmasFuture,
+        topicFuture,
+      ]);
+      
+      final lemmasData = results[0] as List<dynamic>;
+      final topicData = results[1] as Map<String, dynamic>?;
+
+      // Extract topic information
       String? topicName;
       String? topicDescription;
       String? topicIcon;
-      final topicId = conceptData['topic_id'] as int?;
-      
-      if (topicId != null) {
-        try {
-          final topicUrl = Uri.parse('${ApiConfig.apiBaseUrl}/topics/$topicId');
-          final topicResponse = await http.get(
-            topicUrl,
-            headers: {'Content-Type': 'application/json'},
-          );
-          
-          if (topicResponse.statusCode == 200) {
-            final topicData = jsonDecode(topicResponse.body) as Map<String, dynamic>;
-            topicName = topicData['name'] as String?;
-            topicDescription = topicData['description'] as String?;
-            topicIcon = topicData['icon'] as String?;
-          }
-        } catch (e) {
-          // If topic fetch fails, just continue without topic info
-          // This is not critical, so we don't fail the whole request
-        }
+      if (topicData != null) {
+        topicName = topicData['name'] as String?;
+        topicDescription = topicData['description'] as String?;
+        topicIcon = topicData['icon'] as String?;
       }
 
       // Construct PairedDictionaryItem format
       final item = <String, dynamic>{
         'concept_id': conceptId,
-        'lemmas': filteredLemmas,
+        'lemmas': lemmasData,
         'concept_term': conceptData['term'],
         'concept_description': conceptData['description'],
         'part_of_speech': conceptData['part_of_speech'],
