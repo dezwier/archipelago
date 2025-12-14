@@ -29,11 +29,36 @@ class ConceptImageWidget extends StatefulWidget {
 
 class _ConceptImageWidgetState extends State<ConceptImageWidget> {
   bool _isGenerating = false;
-  bool _isReloading = false;
+  bool _isLoadingCamera = false;
+  bool _isLoadingGallery = false;
   bool _showButtons = false;
+  int _imageReloadKey = 0; // Key to force image reload when updated
+  String _cacheBustTimestamp = DateTime.now().millisecondsSinceEpoch.toString(); // Timestamp that updates on image change
   final ImagePicker _imagePicker = ImagePicker();
 
-  /// Get the primary image URL from the item
+  String? _previousImageUrl;
+
+  @override
+  void didUpdateWidget(ConceptImageWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the image URL changed, force a reload
+    final currentImageUrl = widget.item.imageUrl ?? widget.item.imagePath1;
+    if (currentImageUrl != _previousImageUrl && currentImageUrl != null) {
+      setState(() {
+        _imageReloadKey++;
+        _cacheBustTimestamp = DateTime.now().millisecondsSinceEpoch.toString();
+        _previousImageUrl = currentImageUrl;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _previousImageUrl = widget.item.imageUrl ?? widget.item.imagePath1;
+  }
+
+  /// Get the primary image URL from the item with cache-busting
   String? get _primaryImageUrl {
     // Use image_url or fallback to image_path_1 (for backward compatibility)
     final imageUrl = widget.item.imageUrl ?? widget.item.imagePath1;
@@ -41,19 +66,26 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       return null;
     }
     
-    // If URL is already absolute, return as-is
+    // Build base URL
+    String baseUrl;
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      return imageUrl;
+      baseUrl = imageUrl;
+    } else {
+      // Otherwise, prepend the API base URL
+      final cleanUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+      baseUrl = '${ApiConfig.baseUrl}/$cleanUrl';
     }
     
-    // Otherwise, prepend the API base URL
-    // Remove leading slash if present to avoid double slashes
-    final cleanUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-    return '${ApiConfig.baseUrl}/$cleanUrl';
+    // Add cache-busting timestamp parameter (only updates when image changes)
+    final uri = Uri.parse(baseUrl);
+    return uri.replace(queryParameters: {
+      ...uri.queryParameters,
+      't': _cacheBustTimestamp,
+    }).toString();
   }
 
   Future<void> _generateImage() async {
-    if (_isGenerating) return;
+    if (_isGenerating || _isLoadingCamera || _isLoadingGallery) return;
     
     setState(() {
       _isGenerating = true;
@@ -107,14 +139,16 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        // Image generated successfully - refresh the item
-        widget.onItemUpdated?.call(widget.item);
-        // Hide edit buttons after successful generation
+        // Force image reload by updating the key and cache-bust timestamp
         if (mounted) {
           setState(() {
+            _imageReloadKey++;
+            _cacheBustTimestamp = DateTime.now().millisecondsSinceEpoch.toString();
             _showButtons = false;
           });
         }
+        // Don't trigger full drawer reload - just update the image URL locally
+        // The image will reload automatically due to the key change and cache-busting
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -158,7 +192,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
   }
 
   Future<void> _reloadFromLibrary() async {
-    if (_isReloading) return;
+    if (_isLoadingGallery || _isLoadingCamera || _isGenerating) return;
     
     try {
       // Pick image from gallery
@@ -173,7 +207,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       }
       
       setState(() {
-        _isReloading = true;
+        _isLoadingGallery = true;
       });
 
       // Upload the selected image
@@ -185,14 +219,16 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       if (!mounted) return;
 
       if (uploadResult['success'] == true) {
-        // Image uploaded successfully - refresh the item
-        widget.onItemUpdated?.call(widget.item);
-        // Hide edit buttons after successful upload
+        // Force image reload by updating the key and cache-bust timestamp
         if (mounted) {
           setState(() {
+            _imageReloadKey++;
+            _cacheBustTimestamp = DateTime.now().millisecondsSinceEpoch.toString();
             _showButtons = false;
           });
         }
+        // Don't trigger full drawer reload - just update the image URL locally
+        // The image will reload automatically due to the key change and cache-busting
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -221,14 +257,14 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
     } finally {
       if (mounted) {
         setState(() {
-          _isReloading = false;
+          _isLoadingGallery = false;
         });
       }
     }
   }
 
   Future<void> _pickImageFromCamera() async {
-    if (_isReloading) return;
+    if (_isLoadingCamera || _isLoadingGallery || _isGenerating) return;
     
     try {
       // Pick image from camera
@@ -243,7 +279,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       }
       
       setState(() {
-        _isReloading = true;
+        _isLoadingCamera = true;
       });
 
       // Upload the selected image
@@ -255,14 +291,16 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       if (!mounted) return;
 
       if (uploadResult['success'] == true) {
-        // Image uploaded successfully - refresh the item
-        widget.onItemUpdated?.call(widget.item);
-        // Hide edit buttons after successful upload
+        // Force image reload by updating the key and cache-bust timestamp
         if (mounted) {
           setState(() {
+            _imageReloadKey++;
+            _cacheBustTimestamp = DateTime.now().millisecondsSinceEpoch.toString();
             _showButtons = false;
           });
         }
+        // Don't trigger full drawer reload - just update the image URL locally
+        // The image will reload automatically due to the key change and cache-busting
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -301,7 +339,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
     } finally {
       if (mounted) {
         setState(() {
-          _isReloading = false;
+          _isLoadingCamera = false;
         });
       }
     }
@@ -377,6 +415,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
                 clipBehavior: Clip.antiAlias,
                 child: Image.network(
                   imageUrl,
+                  key: ValueKey('${widget.item.conceptId}_${widget.item.imageUrl}_$_imageReloadKey'),
                   fit: BoxFit.cover,
                   width: double.infinity,
                   height: double.infinity,
@@ -419,21 +458,21 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
                     // Gallery button
                     _buildOverlayButton(
                       icon: Icons.photo_library,
-                      onTap: _isReloading ? null : _reloadFromLibrary,
-                      isLoading: _isReloading,
+                      onTap: (_isLoadingGallery || _isLoadingCamera || _isGenerating) ? null : _reloadFromLibrary,
+                      isLoading: _isLoadingGallery,
                     ),
                     const SizedBox(width: 8),
                     // Camera button
                     _buildOverlayButton(
                       icon: Icons.camera_alt,
-                      onTap: _isReloading ? null : _pickImageFromCamera,
-                      isLoading: _isReloading,
+                      onTap: (_isLoadingCamera || _isLoadingGallery || _isGenerating) ? null : _pickImageFromCamera,
+                      isLoading: _isLoadingCamera,
                     ),
                     const SizedBox(width: 8),
                     // Generate button
                     _buildOverlayButton(
                       icon: Icons.auto_awesome,
-                      onTap: _isGenerating ? null : _generateImage,
+                      onTap: (_isGenerating || _isLoadingCamera || _isLoadingGallery) ? null : _generateImage,
                       isLoading: _isGenerating,
                     ),
                     const SizedBox(width: 4),
@@ -460,7 +499,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
               ),
               color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
             ),
-            child: _isReloading
+            child: (_isLoadingCamera || _isLoadingGallery)
                 ? Center(
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
@@ -481,21 +520,21 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
                 // Gallery button
                 _buildOverlayButton(
                   icon: Icons.photo_library,
-                  onTap: _isReloading ? null : _reloadFromLibrary,
-                  isLoading: _isReloading,
+                  onTap: (_isLoadingGallery || _isLoadingCamera || _isGenerating) ? null : _reloadFromLibrary,
+                  isLoading: _isLoadingGallery,
                 ),
                 const SizedBox(width: 8),
                 // Camera button
                 _buildOverlayButton(
                   icon: Icons.camera_alt,
-                  onTap: _isReloading ? null : _pickImageFromCamera,
-                  isLoading: _isReloading,
+                  onTap: (_isLoadingCamera || _isLoadingGallery || _isGenerating) ? null : _pickImageFromCamera,
+                  isLoading: _isLoadingCamera,
                 ),
                 const SizedBox(width: 8),
                 // Generate button
                 _buildOverlayButton(
                   icon: Icons.auto_awesome,
-                  onTap: _isGenerating ? null : _generateImage,
+                  onTap: (_isGenerating || _isLoadingCamera || _isLoadingGallery) ? null : _generateImage,
                   isLoading: _isGenerating,
                 ),
                 const SizedBox(width: 4),

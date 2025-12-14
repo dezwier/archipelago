@@ -1067,6 +1067,37 @@ class FlashcardService {
       );
 
       if (response.statusCode == 200) {
+        // Check if response actually contains image data
+        if (response.bodyBytes.isEmpty) {
+          return {
+            'success': false,
+            'message': 'Failed to generate image, no image in data response',
+          };
+        }
+        
+        // Check if response is JSON error instead of image
+        final contentType = response.headers['content-type'] ?? '';
+        if (contentType.contains('application/json')) {
+          try {
+            final error = jsonDecode(response.body) as Map<String, dynamic>;
+            return {
+              'success': false,
+              'message': error['detail'] as String? ?? 'Failed to generate image',
+            };
+          } catch (_) {
+            // If JSON decode fails, continue to treat as image
+          }
+        }
+        
+        // Validate that we have actual image data (at least some bytes)
+        if (response.bodyBytes.length < 100) {
+          // Very small response is likely not a valid image
+          return {
+            'success': false,
+            'message': 'Failed to generate image, response too small to be valid image data',
+          };
+        }
+        
         // Save the image bytes to a temporary file
         final tempDir = Directory.systemTemp;
         final timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -1079,11 +1110,19 @@ class FlashcardService {
           'data': tempFile,
         };
       } else {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        return {
-          'success': false,
-          'message': error['detail'] as String? ?? 'Failed to generate image',
-        };
+        // Try to parse error response
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to generate image',
+          };
+        } catch (_) {
+          return {
+            'success': false,
+            'message': 'Failed to generate image: ${response.statusCode} ${response.reasonPhrase}',
+          };
+        }
       }
     } catch (e) {
       String errorMessage = 'Network error: ${e.toString()}';

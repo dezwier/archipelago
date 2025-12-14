@@ -123,10 +123,12 @@ def generate_image_with_gemini(prompt: str) -> bytes:
             detail="Google Gemini API key not configured. Please set GOOGLE_GEMINI_API_KEY environment variable."
         )
     
-    # Use Gemini's OpenAI-compatible endpoint for image generation
+    # Use Gemini's native API endpoint for image generation (OpenAI-compatible format)
+    # Note: Imagen currently only available via OpenAI-compatible endpoint
     base_url = "https://generativelanguage.googleapis.com/v1beta/openai/images/generations"
     model_name = "imagen-4.0-ultra-generate-001"  # Best quality Imagen model for highest detail and precision
     
+    # Use both query parameter (like other Gemini endpoints) and Authorization header (required by endpoint)
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -142,18 +144,79 @@ def generate_image_with_gemini(prompt: str) -> bytes:
     
     try:
         logger.info(f"Generating image with Gemini Imagen model: {model_name}")
+        logger.info(f"Request URL: {base_url}?key=***")
+        logger.info(f"Request payload: {payload}")
+        # Use query parameter (standard Gemini auth) AND Authorization header (required by endpoint)
         response = requests.post(
             f"{base_url}?key={api_key}",
             json=payload,
             headers=headers,
             timeout=60
         )
+        
+        # Log response status and initial structure for debugging
+        logger.info(f"Gemini API response status: {response.status_code}")
+        logger.info(f"Gemini API response headers: {dict(response.headers)}")
+        
+        # Check for HTTP errors
+        if not response.ok:
+            try:
+                error_data = response.json()
+                logger.error(f"Gemini API HTTP error response: {error_data}")
+                error_info = error_data.get("error", {})
+                if isinstance(error_info, dict):
+                    error_msg = error_info.get("message", f"HTTP {response.status_code}: {response.text[:200]}")
+                else:
+                    error_msg = str(error_info) if error_info else f"HTTP {response.status_code}: {response.text[:200]}"
+                raise Exception(f"Gemini API error: {error_msg}")
+            except ValueError:
+                # Response is not JSON
+                raise Exception(f"Gemini API HTTP error {response.status_code}: {response.text[:500]}")
+        
         response.raise_for_status()
         data = response.json()
         
+        # Log the full response structure for debugging
+        logger.info(f"Gemini API response structure: {list(data.keys())}")
+        logger.info(f"Gemini API full response: {data}")
+        
+        # Check for error in response first
+        if "error" in data:
+            error_info = data.get("error", {})
+            error_msg = error_info.get("message", "Unknown error") if isinstance(error_info, dict) else str(error_info)
+            logger.error(f"Gemini API returned error: {error_info}")
+            raise Exception(f"Gemini API error: {error_msg}")
+        
+        # Check if response only contains model name (indicates an error or incomplete response)
+        # This can happen if the API key doesn't have image generation access, quota exceeded, or model not available
+        if len(data) == 1 and "model" in data and "data" not in data:
+            error_detail = (
+                f"Gemini API returned incomplete response (only model name). "
+                f"Full response: {data}. "
+                f"This may indicate: (1) API key doesn't have image generation access, "
+                f"(2) Quota exceeded, (3) Model not available, or (4) Authentication issue. "
+                f"Response status was {response.status_code}."
+            )
+            logger.error(error_detail)
+            raise Exception(error_detail)
+        
+        # Log the response structure for debugging
+        if "data" in data:
+            logger.debug(f"Gemini API data array length: {len(data.get('data', []))}")
+        else:
+            logger.warning(f"Gemini API response missing 'data' field. Full response: {data}")
+        
         # Extract base64 encoded image
         if "data" not in data or len(data["data"]) == 0:
-            raise Exception("No image data in response")
+            error_detail = f"No image data in response. Response keys: {list(data.keys())}. Full response: {data}"
+            logger.error(error_detail)
+            raise Exception(error_detail)
+        
+        # Check if b64_json is present
+        if "b64_json" not in data["data"][0]:
+            error_detail = f"Response data missing 'b64_json' field. Available keys: {list(data['data'][0].keys())}"
+            logger.error(error_detail)
+            raise Exception(error_detail)
         
         image_b64 = data["data"][0]["b64_json"]
         image_bytes = base64.b64decode(image_b64)
@@ -172,9 +235,11 @@ def generate_image_with_gemini(prompt: str) -> bytes:
         if hasattr(e, 'response') and e.response is not None:
             try:
                 error_data = e.response.json()
-                error_msg += f" - {error_data}"
+                error_msg += f" - Response: {error_data}"
+                logger.error(f"Gemini API error response: {error_data}")
             except:
-                error_msg += f" - Status: {e.response.status_code}"
+                error_msg += f" - Status: {e.response.status_code}, Body: {e.response.text[:500]}"
+                logger.error(f"Gemini API error (non-JSON): Status {e.response.status_code}, Body: {e.response.text[:500]}")
         logger.error(error_msg)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -182,9 +247,13 @@ def generate_image_with_gemini(prompt: str) -> bytes:
         )
     except Exception as e:
         logger.error(f"Failed to process Gemini image response: {str(e)}")
+        # Include more context in the error message
+        error_detail = str(e)
+        if "No image data in response" in error_detail:
+            error_detail += ". The Gemini API may have returned an error or unexpected response format."
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate image: {str(e)}"
+            detail=f"Failed to generate image: {error_detail}"
         )
 
 
