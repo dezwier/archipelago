@@ -19,7 +19,7 @@ import '../../../profile/domain/language.dart';
 import '../../../generate_flashcards/data/topic_service.dart';
 import '../../../generate_flashcards/data/flashcard_service.dart';
 import '../../../generate_flashcards/data/card_generation_background_service.dart';
-import '../../../generate_flashcards/presentation/widgets/card_generation_progress_widget.dart';
+import '../widgets/card_generation_progress_widget.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../profile/domain/user.dart';

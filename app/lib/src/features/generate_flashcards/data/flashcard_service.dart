@@ -314,7 +314,7 @@ class FlashcardService {
     required String term,
     int? topicId,
     int? userId,
-    required String partOfSpeech,
+    String? partOfSpeech,
     String? coreMeaningEn,
     required List<String> languages,
     List<String>? excludedSenses,
@@ -333,9 +333,13 @@ class FlashcardService {
     try {
       final body = {
         'term': trimmedTerm,
-        'part_of_speech': partOfSpeech.trim(),
         'languages': languages.map((lang) => lang.toLowerCase()).toList(),
       };
+      
+      // Only include part_of_speech if provided
+      if (partOfSpeech != null && partOfSpeech.trim().isNotEmpty) {
+        body['part_of_speech'] = partOfSpeech.trim();
+      }
       
       // Only include topic_id if provided
       if (topicId != null) {
