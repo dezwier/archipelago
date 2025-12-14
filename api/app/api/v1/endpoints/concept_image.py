@@ -1,7 +1,7 @@
 """
 Endpoint for generating images for concepts.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 from typing import Optional
@@ -30,6 +30,13 @@ class GenerateImageRequest(BaseModel):
     description: Optional[str] = Field(None, description="The concept description (will use concept.description if not provided)")
     topic_id: Optional[int] = Field(None, description="The topic ID (will use concept.topic_id if not provided)")
     topic_description: Optional[str] = Field(None, description="The topic description (will use topic.description if not provided)")
+
+
+class GenerateImagePreviewRequest(BaseModel):
+    """Request schema for generating an image preview without a concept."""
+    term: str = Field(..., description="The term or phrase")
+    description: Optional[str] = Field(None, description="The description")
+    topic_description: Optional[str] = Field(None, description="The topic description")
 
 
 def crop_to_square_and_resize(img: PILImage.Image, target_size: int = 300) -> PILImage.Image:
@@ -656,6 +663,77 @@ async def upload_concept_image_with_id(
         path=str(image_path),
         media_type="image/jpeg",
         filename=image_filename
+    )
+
+
+@router.post("/generate-preview")
+async def generate_image_preview(
+    request: GenerateImagePreviewRequest,
+):
+    """
+    Generate an image preview without requiring a concept.
+    
+    This endpoint:
+    1. Takes the term, description (if present), and topic description
+    2. Builds a prompt according to the specified format
+    3. Generates an image using Gemini
+    4. Returns the image bytes directly (does not save to database)
+    
+    Args:
+        request: GenerateImagePreviewRequest with term, description, topic_description
+        
+    Returns:
+        The generated image file as bytes
+    """
+    # Validate term is not empty
+    term = request.term.strip() if request.term else ""
+    if not term:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Term is required"
+        )
+    
+    # Build the prompt
+    prompt = build_image_prompt(
+        term=term,
+        description=request.description,
+        topic_description=request.topic_description
+    )
+    
+    logger.info(f"Generating image preview for term '{term}' with prompt: {prompt[:200]}...")
+    
+    # Generate the image using Gemini
+    image_bytes = None
+    try:
+        # Try Gemini first (preferred)
+        if settings.google_gemini_api_key:
+            image_bytes = generate_image_with_gemini(prompt)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No image generation API key configured. Please set GOOGLE_GEMINI_API_KEY environment variable."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate image: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate image: {str(e)}"
+        )
+    
+    if not image_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Image generation returned no data"
+        )
+    
+    # Return the image bytes directly
+    from fastapi.responses import Response
+    return Response(
+        content=image_bytes,
+        media_type="image/jpeg",
+        headers={"Content-Disposition": "inline; filename=generated-image.jpg"}
     )
 
 

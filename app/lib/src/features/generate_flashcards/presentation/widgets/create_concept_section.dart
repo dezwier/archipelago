@@ -69,6 +69,22 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
         });
       }
     });
+    
+    // Listen to text changes to update ImageSelectorWidget
+    _termController.addListener(() {
+      if (mounted) {
+        setState(() {
+          // Trigger rebuild to update ImageSelectorWidget with new term
+        });
+      }
+    });
+    _descriptionController.addListener(() {
+      if (mounted) {
+        setState(() {
+          // Trigger rebuild to update ImageSelectorWidget with new description
+        });
+      }
+    });
   }
 
   void _setDefaultLanguages() {
@@ -409,6 +425,11 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
                     _selectedImage = image;
                   });
                 },
+                term: _termController.text.trim(),
+                description: _descriptionController.text.trim().isNotEmpty 
+                    ? _descriptionController.text.trim() 
+                    : null,
+                topicDescription: _selectedTopic?.description,
               ),
               const SizedBox(height: 18),
 
@@ -424,7 +445,7 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
                   _termFocusNode.requestFocus();
                 },
                 decoration: InputDecoration(
-                  labelText: 'Word or Phrase',
+                  labelText: 'Concept',
                   hintText: 'Enter the word or phrase',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),

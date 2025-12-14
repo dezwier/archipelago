@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import '../../data/flashcard_service.dart';
 
 class ImageSelectorWidget extends StatefulWidget {
   final File? initialImage;
   final ValueChanged<File?>? onImageChanged;
+  final String? term;
+  final String? description;
+  final String? topicDescription;
 
   const ImageSelectorWidget({
     super.key,
     this.initialImage,
     this.onImageChanged,
+    this.term,
+    this.description,
+    this.topicDescription,
   });
 
   @override
@@ -19,6 +26,7 @@ class ImageSelectorWidget extends StatefulWidget {
 class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
   File? _selectedImage;
   final ImagePicker _imagePicker = ImagePicker();
+  bool _isGeneratingImage = false;
 
   @override
   void initState() {
@@ -101,29 +109,116 @@ class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
     widget.onImageChanged?.call(null);
   }
 
+  Future<void> _generateImageWithGemini() async {
+    // Check if term exists
+    final term = widget.term?.trim();
+    if (term == null || term.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a word or phrase first'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isGeneratingImage = true;
+    });
+
+    try {
+      final result = await FlashcardService.generateImagePreview(
+        term: term,
+        description: widget.description?.trim().isNotEmpty == true 
+            ? widget.description!.trim() 
+            : null,
+        topicDescription: widget.topicDescription?.trim().isNotEmpty == true
+            ? widget.topicDescription!.trim()
+            : null,
+      );
+
+      if (mounted) {
+        if (result['success'] == true && result['data'] != null) {
+          final generatedImage = result['data'] as File;
+          setState(() {
+            _selectedImage = generatedImage;
+          });
+          widget.onImageChanged?.call(generatedImage);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Image generated successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] as String? ?? 'Failed to generate image'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate image: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingImage = false;
+        });
+      }
+    }
+  }
+
   Widget _buildOverlayButton({
     required IconData icon,
     required VoidCallback? onTap,
     String? tooltip,
+    bool isEnabled = true,
+    bool isLoading = false,
   }) {
+    final isDisabled = !isEnabled || onTap == null || isLoading;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
+        onTap: isDisabled ? null : onTap,
         child: Tooltip(
           message: tooltip ?? '',
           child: Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.6),
+              color: isDisabled 
+                  ? Colors.black.withValues(alpha: 0.3)
+                  : Colors.black.withValues(alpha: 0.6),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 18,
-            ),
+            child: isLoading
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    color: isDisabled 
+                        ? Colors.white.withValues(alpha: 0.5)
+                        : Colors.white,
+                    size: 18,
+                  ),
           ),
         ),
       ),
@@ -192,6 +287,17 @@ class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
                         icon: Icons.camera_alt,
                         onTap: _pickImageFromCamera,
                         tooltip: 'Camera',
+                      ),
+                      const SizedBox(width: 4),
+                      // Gemini generate button
+                      _buildOverlayButton(
+                        icon: Icons.auto_awesome,
+                        onTap: _isGeneratingImage ? null : _generateImageWithGemini,
+                        tooltip: (widget.term?.trim().isEmpty ?? true) 
+                            ? 'Enter a word or phrase first'
+                            : 'Generate with Gemini',
+                        isEnabled: (widget.term?.trim().isNotEmpty ?? false) && !_isGeneratingImage,
+                        isLoading: _isGeneratingImage,
                       ),
                     ]
                   : [

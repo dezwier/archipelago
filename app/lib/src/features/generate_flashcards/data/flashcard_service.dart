@@ -857,9 +857,16 @@ class FlashcardService {
       };
     }
     
-    final term = conceptData?['term'] as String?;
-    final description = conceptData?['description'] as String?;
-    final partOfSpeech = conceptData?['part_of_speech'] as String?;
+    if (conceptData == null) {
+      return {
+        'success': false,
+        'message': 'Concept data is missing',
+      };
+    }
+    
+    final term = conceptData['term'] as String?;
+    final description = conceptData['description'] as String?;
+    final partOfSpeech = conceptData['part_of_speech'] as String?;
     
     if (term == null || term.isEmpty) {
       return {
@@ -1003,6 +1010,87 @@ class FlashcardService {
       
       final errorStr = e.toString();
       if (errorStr.contains('Failed host lookup') ||
+          errorStr.contains('SocketException')) {
+        final baseUrl = ApiConfig.baseUrl;
+        errorMessage = 'Cannot connect to server at $baseUrl.\n\n'
+            'Please ensure:\n'
+            '• The API server is running\n'
+            '• You are using the correct API URL for your platform';
+      }
+      
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
+
+  /// Generate an image preview using Gemini without creating a concept.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'message': String
+  /// - 'data': File? (if successful, contains the generated image file)
+  static Future<Map<String, dynamic>> generateImagePreview({
+    required String term,
+    String? description,
+    String? topicDescription,
+  }) async {
+    // Validate term is not empty
+    final trimmedTerm = term.trim();
+    if (trimmedTerm.isEmpty) {
+      return {
+        'success': false,
+        'message': 'Term cannot be empty',
+      };
+    }
+    
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concept-image/generate-preview');
+    
+    try {
+      final body = <String, dynamic>{
+        'term': trimmedTerm,
+      };
+      
+      if (description != null && description.trim().isNotEmpty) {
+        body['description'] = description.trim();
+      }
+      
+      if (topicDescription != null && topicDescription.trim().isNotEmpty) {
+        body['topic_description'] = topicDescription.trim();
+      }
+      
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        // Save the image bytes to a temporary file
+        final tempDir = Directory.systemTemp;
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final tempFile = File('${tempDir.path}/generated_image_$timestamp.jpg');
+        await tempFile.writeAsBytes(response.bodyBytes);
+        
+        return {
+          'success': true,
+          'message': 'Image generated successfully',
+          'data': tempFile,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to generate image',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error: ${e.toString()}';
+      
+      final errorStr = e.toString();
+      if (errorStr.contains('Connection refused') || 
+          errorStr.contains('Failed host lookup') ||
           errorStr.contains('SocketException')) {
         final baseUrl = ApiConfig.baseUrl;
         errorMessage = 'Cannot connect to server at $baseUrl.\n\n'
