@@ -12,7 +12,7 @@ from app.core.database import init_db
 from app.models import models  # noqa: F401
 
 # Import routers
-from app.api.v1.endpoints import auth, languages, dictionary, concepts, lemma, topics, lemma_generation, concept_image
+from app.api.v1.endpoints import auth, languages, dictionary, concepts, lemma, topics, lemma_generation, concept_image, flashcard_export
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,7 @@ app.include_router(lemma.router, prefix=settings.api_v1_prefix)
 app.include_router(topics.router, prefix=settings.api_v1_prefix)
 app.include_router(lemma_generation.router, prefix=settings.api_v1_prefix)
 app.include_router(concept_image.router, prefix=settings.api_v1_prefix)
+app.include_router(flashcard_export.router, prefix=settings.api_v1_prefix)
 
 # Mount static files for assets
 # Use ASSETS_PATH if configured (Railway volumes), otherwise use api/assets

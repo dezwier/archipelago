@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/common_widgets/language_selection_widget.dart';
+import 'package:archipelago/src/features/dictionary/data/flashcard_export_service.dart';
 
 /// Bottom drawer widget for exporting completed concepts as flashcards
 class ExportFlashcardsDrawer extends StatefulWidget {
+  final List<int> conceptIds;
   final int completedConceptsCount;
   final List<Language> availableLanguages;
   final List<String> visibleLanguageCodes;
 
   const ExportFlashcardsDrawer({
     super.key,
+    required this.conceptIds,
     required this.completedConceptsCount,
     required this.availableLanguages,
     required this.visibleLanguageCodes,
@@ -22,6 +25,7 @@ class ExportFlashcardsDrawer extends StatefulWidget {
 class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
   List<String> _frontLanguageCodes = [];
   List<String> _backLanguageCodes = [];
+  bool _isExporting = false;
 
   @override
   void initState() {
@@ -122,13 +126,66 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
     });
   }
 
-  void _onExportPressed() {
-    // TODO: Implement export functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Export functionality coming soon'),
-      ),
-    );
+  Future<void> _onExportPressed() async {
+    if (widget.conceptIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No concepts to export'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isExporting = true;
+    });
+
+    try {
+      final result = await FlashcardExportService.exportFlashcardsPdf(
+        conceptIds: widget.conceptIds,
+        languagesFront: _frontLanguageCodes,
+        languagesBack: _backLanguageCodes,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isExporting = false;
+      });
+
+      if (result['success'] == true) {
+        // Close the drawer
+        Navigator.of(context).pop();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Flashcards exported successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] as String? ?? 'Failed to export flashcards'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      
+      setState(() {
+        _isExporting = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -231,7 +288,9 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: (_frontLanguageCodes.isNotEmpty && _backLanguageCodes.isNotEmpty)
+                      onPressed: (_frontLanguageCodes.isNotEmpty && 
+                                  _backLanguageCodes.isNotEmpty && 
+                                  !_isExporting)
                           ? _onExportPressed
                           : null,
                       style: ElevatedButton.styleFrom(
@@ -240,10 +299,19 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text(
-                        'Export',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
+                      child: _isExporting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Text(
+                              'Export',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            ),
                     ),
                   ),
                   // Bottom padding
@@ -261,6 +329,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
 /// Helper function to show the export flashcards bottom drawer
 void showExportFlashcardsDrawer({
   required BuildContext context,
+  required List<int> conceptIds,
   required int completedConceptsCount,
   required List<Language> availableLanguages,
   required List<String> visibleLanguageCodes,
@@ -272,6 +341,7 @@ void showExportFlashcardsDrawer({
     isDismissible: true,
     enableDrag: true,
     builder: (context) => ExportFlashcardsDrawer(
+      conceptIds: conceptIds,
       completedConceptsCount: completedConceptsCount,
       availableLanguages: availableLanguages,
       visibleLanguageCodes: visibleLanguageCodes,

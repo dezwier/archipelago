@@ -396,8 +396,14 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     final completedCount = _controller.conceptsWithAllVisibleLanguages ?? 0;
     final visibleLanguageCodes = _languageVisibilityManager.getVisibleLanguageCodes();
     
+    // Get concept IDs from filtered items
+    final conceptIds = _controller.filteredItems
+        .map((item) => item.conceptId)
+        .toList();
+    
     showExportFlashcardsDrawer(
       context: context,
+      conceptIds: conceptIds,
       completedConceptsCount: completedCount,
       availableLanguages: _allLanguages,
       visibleLanguageCodes: visibleLanguageCodes,
