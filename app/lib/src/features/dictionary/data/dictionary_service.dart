@@ -465,17 +465,26 @@ class DictionaryService {
   }
 
   /// Fallback method to get concept by ID by fetching concept and lemmas separately
+  /// Optimized to make parallel requests instead of sequential
   static Future<Map<String, dynamic>> _getConceptByIdFallback(
     int conceptId,
     List<String> visibleLanguageCodes,
   ) async {
     try {
-      // Fetch concept
+      // Fetch concept and lemmas in parallel for better performance
       final conceptUrl = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/$conceptId');
-      final conceptResponse = await http.get(
-        conceptUrl,
-        headers: {'Content-Type': 'application/json'},
-      );
+      final lemmasUrl = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/concept/$conceptId');
+      
+      final headers = {'Content-Type': 'application/json'};
+      
+      // Make both requests in parallel
+      final responses = await Future.wait([
+        http.get(conceptUrl, headers: headers),
+        http.get(lemmasUrl, headers: headers),
+      ]);
+      
+      final conceptResponse = responses[0];
+      final lemmasResponse = responses[1];
 
       if (conceptResponse.statusCode != 200) {
         try {
@@ -492,15 +501,6 @@ class DictionaryService {
         }
       }
 
-      final conceptData = jsonDecode(conceptResponse.body) as Map<String, dynamic>;
-
-      // Fetch lemmas
-      final lemmasUrl = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/concept/$conceptId');
-      final lemmasResponse = await http.get(
-        lemmasUrl,
-        headers: {'Content-Type': 'application/json'},
-      );
-
       if (lemmasResponse.statusCode != 200) {
         try {
           final error = jsonDecode(lemmasResponse.body) as Map<String, dynamic>;
@@ -516,6 +516,7 @@ class DictionaryService {
         }
       }
 
+      final conceptData = jsonDecode(conceptResponse.body) as Map<String, dynamic>;
       final lemmasData = jsonDecode(lemmasResponse.body) as List<dynamic>;
       
       // Filter lemmas by visible languages if provided
@@ -527,7 +528,7 @@ class DictionaryService {
         }).toList();
       }
 
-      // Fetch topic information if topic_id is present
+      // Fetch topic information if topic_id is present (non-blocking, can fail silently)
       String? topicName;
       String? topicDescription;
       String? topicIcon;
@@ -538,7 +539,7 @@ class DictionaryService {
           final topicUrl = Uri.parse('${ApiConfig.apiBaseUrl}/topics/$topicId');
           final topicResponse = await http.get(
             topicUrl,
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
           );
           
           if (topicResponse.statusCode == 200) {

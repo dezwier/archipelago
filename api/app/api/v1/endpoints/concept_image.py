@@ -8,6 +8,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 import requests
 import logging
+import traceback
 import base64
 from pathlib import Path
 from datetime import datetime, timezone
@@ -142,20 +143,73 @@ def generate_image_with_gemini(prompt: str) -> bytes:
     
     try:
         logger.info(f"Generating image with Gemini Imagen model: {model_name}")
+        logger.debug(f"Request URL: {base_url}")
+        logger.debug(f"Request payload: {payload}")
+        # Use Authorization header (required for OpenAI-compatible endpoint)
         response = requests.post(
-            f"{base_url}?key={api_key}",
+            base_url,
             json=payload,
             headers=headers,
             timeout=60
         )
+        logger.info(f"Response status code: {response.status_code}")
+        if response.status_code != 200:
+            logger.error(f"Non-200 response: {response.status_code}, Response text: {response.text[:500]}")
         response.raise_for_status()
-        data = response.json()
+        
+        # Try to parse JSON response
+        try:
+            data = response.json()
+        except ValueError as e:
+            logger.error(f"Failed to parse JSON response: {str(e)}, Response text: {response.text[:500]}")
+            raise Exception(f"Invalid JSON response from Gemini API: {str(e)}")
+        
+        # Check for error in response
+        if "error" in data:
+            error_info = data["error"]
+            error_msg = error_info.get("message", "Unknown error") if isinstance(error_info, dict) else str(error_info)
+            logger.error(f"Gemini API returned error: {error_msg}")
+            raise Exception(f"Gemini API error: {error_msg}")
+        
+        # Log the response structure for debugging
+        logger.info(f"Gemini API response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+        logger.debug(f"Gemini API response: {data}")
         
         # Extract base64 encoded image
-        if "data" not in data or len(data["data"]) == 0:
-            raise Exception("No image data in response")
+        # Handle different possible response structures
+        image_b64 = None
         
-        image_b64 = data["data"][0]["b64_json"]
+        # Try OpenAI-compatible format first: data[0].b64_json
+        if "data" in data and isinstance(data["data"], list) and len(data["data"]) > 0:
+            if "b64_json" in data["data"][0]:
+                image_b64 = data["data"][0]["b64_json"]
+            elif "url" in data["data"][0]:
+                # If URL is returned instead, fetch it
+                image_url = data["data"][0]["url"]
+                logger.info(f"Image URL returned, fetching: {image_url}")
+                img_response = requests.get(image_url, timeout=30)
+                img_response.raise_for_status()
+                image_bytes = img_response.content
+                # Skip base64 decoding and go straight to image processing
+                img = PILImage.open(io.BytesIO(image_bytes))
+                img = crop_to_square_and_resize(img, target_size=300)
+                output = io.BytesIO()
+                img.save(output, format="JPEG", quality=95)
+                return output.getvalue()
+        
+        # Try alternative response structure (direct b64_json field)
+        if image_b64 is None and "b64_json" in data:
+            image_b64 = data["b64_json"]
+        
+        # Try alternative response structure (images array)
+        if image_b64 is None and "images" in data and isinstance(data["images"], list) and len(data["images"]) > 0:
+            if "b64_json" in data["images"][0]:
+                image_b64 = data["images"][0]["b64_json"]
+        
+        if image_b64 is None:
+            logger.error(f"No image data found in response. Response structure: {data}")
+            raise Exception(f"No image data in response. Response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+        
         image_bytes = base64.b64decode(image_b64)
         
         # Crop to square and resize to 300x300
@@ -175,16 +229,26 @@ def generate_image_with_gemini(prompt: str) -> bytes:
                 error_msg += f" - {error_data}"
             except:
                 error_msg += f" - Status: {e.response.status_code}"
-        logger.error(error_msg)
+        logger.exception(f"Gemini API request exception: {error_msg}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate image with Gemini: {error_msg}"
         )
     except Exception as e:
-        logger.error(f"Failed to process Gemini image response: {str(e)}")
+        error_detail = str(e)
+        # If we have the response, try to include it in the error
+        if 'response' in locals() and response is not None:
+            try:
+                response_text = response.text[:500] if hasattr(response, 'text') else str(response.content[:500])
+                logger.exception(f"Failed to process Gemini image response: {error_detail}. Response: {response_text}")
+                error_detail += f". API response: {response_text}"
+            except:
+                logger.exception(f"Failed to process Gemini image response: {error_detail}")
+        else:
+            logger.exception(f"Failed to process Gemini image response: {error_detail}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate image: {str(e)}"
+            detail=f"Failed to generate image: {error_detail}"
         )
 
 
@@ -289,7 +353,7 @@ async def generate_concept_image(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to generate image: {str(e)}")
+        logger.exception(f"Failed to generate image for concept {request.concept_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate image: {str(e)}"
@@ -343,18 +407,30 @@ async def generate_concept_image(
                 logger.warning(f"Failed to delete existing image file {existing_image_path}: {str(e)}")
     
     # Update concept with new image URL
-    concept.image_url = image_url
-    concept.updated_at = datetime.now(timezone.utc)
-    session.add(concept)
-    session.commit()
-    session.refresh(concept)
+    try:
+        concept.image_url = image_url
+        concept.updated_at = datetime.now(timezone.utc)
+        session.add(concept)
+        session.commit()
+        session.refresh(concept)
+    except Exception as e:
+        logger.exception(f"Failed to update concept {request.concept_id} with image URL: {str(e)}")
+        # Don't fail the request if database update fails - image was already saved
+        logger.warning(f"Image saved to {image_path} but database update failed")
     
     # Return the image file
-    return FileResponse(
-        path=str(image_path),
-        media_type="image/jpeg",
-        filename=image_filename
-    )
+    try:
+        return FileResponse(
+            path=str(image_path),
+            media_type="image/jpeg",
+            filename=image_filename
+        )
+    except Exception as e:
+        logger.exception(f"Failed to return image file {image_path}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to return image file: {str(e)}"
+        )
 
 
 @router.post("/upload")

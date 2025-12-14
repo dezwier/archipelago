@@ -32,24 +32,40 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
   bool _isReloading = false;
   bool _showButtons = false;
   final ImagePicker _imagePicker = ImagePicker();
+  
+  // Cache the computed image URL to avoid recomputation on every build
+  String? _cachedImageUrl;
+  String? _cachedRawImageUrl; // Track the raw image URL to detect changes
 
-  /// Get the primary image URL from the item
+  /// Get the primary image URL from the item (cached)
   String? get _primaryImageUrl {
     // Use image_url or fallback to image_path_1 (for backward compatibility)
     final imageUrl = widget.item.imageUrl ?? widget.item.imagePath1;
+    
+    // Return cached value if the raw image URL hasn't changed
+    if (_cachedImageUrl != null && _cachedRawImageUrl == imageUrl) {
+      return _cachedImageUrl!.isEmpty ? null : _cachedImageUrl;
+    }
+    
+    // Cache the raw URL for comparison
+    _cachedRawImageUrl = imageUrl;
+    
     if (imageUrl == null || imageUrl.isEmpty) {
+      _cachedImageUrl = '';
       return null;
     }
     
     // If URL is already absolute, return as-is
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      _cachedImageUrl = imageUrl;
       return imageUrl;
     }
     
     // Otherwise, prepend the API base URL
     // Remove leading slash if present to avoid double slashes
     final cleanUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
-    return '${ApiConfig.baseUrl}/$cleanUrl';
+    _cachedImageUrl = '${ApiConfig.baseUrl}/$cleanUrl';
+    return _cachedImageUrl;
   }
 
   Future<void> _generateImage() async {
@@ -107,6 +123,11 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
+        // Clear image cache to force reload of new image
+        setState(() {
+          _cachedImageUrl = null;
+          _cachedRawImageUrl = null;
+        });
         // Image generated successfully - refresh the item
         widget.onItemUpdated?.call(widget.item);
         // Hide edit buttons after successful generation
@@ -164,7 +185,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       // Pick image from gallery
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 85,
+        imageQuality: 100, // Maximum quality
       );
       
       if (image == null) {
@@ -185,6 +206,11 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       if (!mounted) return;
 
       if (uploadResult['success'] == true) {
+        // Clear image cache to force reload of new image
+        setState(() {
+          _cachedImageUrl = null;
+          _cachedRawImageUrl = null;
+        });
         // Image uploaded successfully - refresh the item
         widget.onItemUpdated?.call(widget.item);
         // Hide edit buttons after successful upload
@@ -234,7 +260,7 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       // Pick image from camera
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 85,
+        imageQuality: 100, // Maximum quality
       );
       
       if (image == null) {
@@ -255,6 +281,11 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
       if (!mounted) return;
 
       if (uploadResult['success'] == true) {
+        // Clear image cache to force reload of new image
+        setState(() {
+          _cachedImageUrl = null;
+          _cachedRawImageUrl = null;
+        });
         // Image uploaded successfully - refresh the item
         widget.onItemUpdated?.call(widget.item);
         // Hide edit buttons after successful upload
@@ -380,6 +411,10 @@ class _ConceptImageWidgetState extends State<ConceptImageWidget> {
                   fit: BoxFit.cover,
                   width: double.infinity,
                   height: double.infinity,
+                  // Use 2x resolution for retina displays, or remove cache constraints for full quality
+                  cacheWidth: (size * 2).toInt(),
+                  cacheHeight: (size * 2).toInt(),
+                  filterQuality: FilterQuality.high,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,

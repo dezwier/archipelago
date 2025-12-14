@@ -40,28 +40,59 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
   String? _errorMessage;
   bool _isEditing = false;
   final Set<String> _retrievingLanguages = {};
+  
+  // Cached computed values to avoid recomputation on every build
+  Map<String, bool>? _cachedLanguageVisibility;
+  List<String>? _cachedLanguagesToShow;
+  List<Widget>? _cachedLanguageSections;
 
   // Default language visibility - show all languages if not provided
   Map<String, bool> _getLanguageVisibility() {
+    // Return cached value if item hasn't changed
+    if (_cachedLanguageVisibility != null && _item != null) {
+      return _cachedLanguageVisibility!;
+    }
+    
     if (widget.languageVisibility != null) {
-      return widget.languageVisibility!;
+      _cachedLanguageVisibility = widget.languageVisibility!;
+      return _cachedLanguageVisibility!;
     }
     // Default: show all languages that have cards
-    if (_item == null) return {};
+    if (_item == null) {
+      _cachedLanguageVisibility = {};
+      return {};
+    }
     final langCodes = _item!.cards.map((c) => c.languageCode).toSet().toList();
-    return {
+    _cachedLanguageVisibility = {
       for (var langCode in langCodes) langCode: true
     };
+    return _cachedLanguageVisibility!;
   }
 
   // Default languages to show - use all languages from item if not provided
   List<String> _getLanguagesToShow() {
+    // Return cached value if item hasn't changed
+    if (_cachedLanguagesToShow != null && _item != null) {
+      return _cachedLanguagesToShow!;
+    }
+    
     if (widget.languagesToShow != null) {
-      return widget.languagesToShow!;
+      _cachedLanguagesToShow = widget.languagesToShow!;
+      return _cachedLanguagesToShow!;
     }
     // Default: show all languages that have cards, in order
-    if (_item == null) return [];
-    return _item!.cards.map((c) => c.languageCode).toList();
+    if (_item == null) {
+      _cachedLanguagesToShow = [];
+      return [];
+    }
+    _cachedLanguagesToShow = _item!.cards.map((c) => c.languageCode).toList();
+    return _cachedLanguagesToShow!;
+  }
+  
+  void _clearCache() {
+    _cachedLanguageVisibility = null;
+    _cachedLanguagesToShow = null;
+    _cachedLanguageSections = null;
   }
 
   @override
@@ -100,6 +131,8 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
         setState(() {
           _item = PairedDictionaryItem.fromJson(itemData);
           _isLoading = false;
+          // Clear cache when item changes
+          _clearCache();
         });
       } else {
         setState(() {
@@ -340,7 +373,15 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
   }
 
   List<Widget> _buildLanguageSections(BuildContext context) {
-    if (_item == null) return [];
+    if (_item == null) {
+      _cachedLanguageSections = [];
+      return [];
+    }
+
+    // Return cached sections if available and item hasn't changed
+    if (_cachedLanguageSections != null) {
+      return _cachedLanguageSections!;
+    }
 
     final languageVisibility = _getLanguageVisibility();
     final languagesToShow = _getLanguagesToShow();
@@ -396,6 +437,8 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
       }
     }
 
+    // Cache the result
+    _cachedLanguageSections = widgets;
     return widgets;
   }
 
@@ -630,6 +673,7 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
 
       if (result['success'] == true) {
         // Reload the concept to get the updated data
+        _clearCache(); // Clear cache before reload
         await _loadConcept();
         widget.onItemUpdated?.call();
       } else {
