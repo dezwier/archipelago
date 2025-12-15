@@ -443,8 +443,20 @@ def draw_card_side(
     lemmas: List[Lemma],
     languages: List[str],
     topic: Optional[Topic] = None,
+    offset_x: float = 0,
+    offset_y: float = 0,
 ):
-    """Draw one side of a flashcard (A5 size: 148 x 210 mm)."""
+    """Draw one side of a flashcard (A5 size: 148 x 210 mm).
+    
+    Args:
+        c: Canvas to draw on
+        concept: Concept to draw
+        lemmas: List of lemmas for the concept
+        languages: List of language codes to display
+        topic: Optional topic
+        offset_x: X offset from top-left corner (for positioning on A4 page)
+        offset_y: Y offset from top-left corner (for positioning on A4 page)
+    """
     width, height = A5
     margin = 10 * mm
     
@@ -460,9 +472,9 @@ def draw_card_side(
         title_font, desc_font, ipa_font, unicode_font, emoji_font
     )
     
-    # Clear background
+    # Clear background (at offset position)
     c.setFillColor(HexColor("#FFFFFF"))
-    c.rect(0, 0, width, height, fill=1, stroke=0)
+    c.rect(offset_x, offset_y, width, height, fill=1, stroke=0)
     
     # Topic icon at top right (subtle) - use emoji font if available
     if topic and topic.icon:
@@ -473,8 +485,8 @@ def draw_card_side(
                 c.setFont(emoji_font, icon_size)
                 c.setFillColor(HexColor("#CCCCCC"))  # Subtle gray
                 icon_width = c.stringWidth(topic.icon, emoji_font, icon_size)
-                icon_x = width - margin - icon_width
-                icon_y = height - margin - icon_size
+                icon_x = offset_x + width - margin - icon_width
+                icon_y = offset_y + height - margin - icon_size
                 c.drawString(icon_x, icon_y, topic.icon)
                 icon_drawn = True
             except Exception as e:
@@ -485,13 +497,13 @@ def draw_card_side(
                 c.setFont(unicode_font, icon_size)
                 c.setFillColor(HexColor("#CCCCCC"))  # Subtle gray
                 icon_width = c.stringWidth(topic.icon, unicode_font, icon_size)
-                icon_x = width - margin - icon_width
-                icon_y = height - margin - icon_size
+                icon_x = offset_x + width - margin - icon_width
+                icon_y = offset_y + height - margin - icon_size
                 c.drawString(icon_x, icon_y, topic.icon)
             except Exception as e:
                 logger.debug("Failed to draw topic icon with unicode font: %s", str(e))
     
-    y = height - margin
+    y = offset_y + height - margin
     
     # Image at the top (centered) - with more spacing
     image_height = 60 * mm
@@ -555,7 +567,7 @@ def draw_card_side(
                 img_buffer.seek(0)
                 
                 # Draw image centered (rounded corners are already applied via mask)
-                img_x = (width - new_width) / 2
+                img_x = offset_x + (width - new_width) / 2
                 img_y = y - new_height
                 # mask='auto' ensures the PNG alpha (rounded corners) is respected by reportlab
                 c.drawImage(ImageReader(img_buffer), img_x, img_y, width=new_width, height=new_height, mask='auto')
@@ -576,8 +588,8 @@ def draw_card_side(
         if not lemma:
             continue
         
-        if y < margin + 30 * mm:  # Not enough space
-            break
+        #if y < offset_y + margin + 30 * mm:  # Not enough space
+        #    break
         
         # Translation (main term) - centered
         # Load language flag image and draw it before title text
@@ -648,7 +660,7 @@ def draw_card_side(
         
         # Draw translation lines with flag image prefix
         for line_idx, line in enumerate(lines):
-            if y < margin + 20 * mm:
+            if y < offset_y + margin + 20 * mm:
                 break
             
             # Calculate total width (flag + space + text)
@@ -656,7 +668,7 @@ def draw_card_side(
             total_width = flag_width + flag_spacing + text_width if flag_image_data else text_width
             
             # Center the entire line (flag + text)
-            line_x = (width - total_width) / 2
+            line_x = offset_x + (width - total_width) / 2
             
             # Draw flag image (only on first line)
             if line_idx == 0 and flag_image_data:
@@ -684,7 +696,7 @@ def draw_card_side(
         y -= 1  # Less extra spacing before IPA
         
         # IPA - centered, using Unicode font, same size as description
-        if lemma.ipa and y > margin + 15 * mm:
+        if lemma.ipa and y > offset_y + margin + 15 * mm:
             ipa_text = f"/{decode_html_entities(lemma.ipa)}/"
             ipa_drawn = False
             ipa_font_to_use = ipa_font or unicode_font
@@ -693,7 +705,7 @@ def draw_card_side(
                     c.setFont(ipa_font_to_use, desc_font_size)
                     c.setFillColor(HexColor("#aaaaaa"))
                     ipa_width = c.stringWidth(ipa_text, ipa_font_to_use, desc_font_size)
-                    ipa_x = (width - ipa_width) / 2
+                    ipa_x = offset_x + (width - ipa_width) / 2
                     c.drawString(ipa_x, y, ipa_text)
                     ipa_drawn = True
                 except Exception as e:
@@ -705,20 +717,20 @@ def draw_card_side(
                     c.setFont("Helvetica", desc_font_size)
                     c.setFillColor(HexColor("#aaaaaa"))
                     ipa_width = c.stringWidth(ipa_text, "Helvetica", desc_font_size)
-                    ipa_x = (width - ipa_width) / 2
+                    ipa_x = offset_x + (width - ipa_width) / 2
                     c.drawString(ipa_x, y, ipa_text)
                 except Exception as e:
                     logger.debug("Failed to draw IPA with Helvetica: %s", str(e))
             y -= desc_font_size + 10  # More space before description
         
         # Description - wrapped in container for better text wrapping
-        if lemma.description and y > margin + 10 * mm:
+        if lemma.description and y > offset_y + margin + 10 * mm:
             desc = decode_html_entities(lemma.description)
             c.setFont(desc_font, desc_font_size)
             c.setFillColor(HexColor("#999999"))  # Grey color
             
             # Use narrower width for description container (80% of available width)
-            desc_container_width = (width - 2 * margin) * 0.6
+            desc_container_width = (width - 2 * margin) * 0.7
             
             # Word wrap description within container
             words = desc.split()
@@ -738,13 +750,13 @@ def draw_card_side(
                 desc_lines.append(current_line)
             
             # Draw description lines (centered within container, limit to available space)
-            max_desc_lines = int((y - margin) / (desc_font_size + 2))
+            max_desc_lines = int((y - offset_y - margin) / (desc_font_size + 2))
             for line in desc_lines[:max_desc_lines]:
-                if y < margin + 5 * mm:
+                if y < offset_y + margin + 5 * mm:
                     break
                 line_width = c.stringWidth(line, desc_font, desc_font_size)
-                line_x = (width - line_width) / 2
+                line_x = offset_x + (width - line_width) / 2
                 c.drawString(line_x, y, line)
                 y -= desc_font_size + 2
         
-        y -= 32  # More spacing between languages
+        y -= 28  # More spacing between languages
