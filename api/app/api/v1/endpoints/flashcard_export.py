@@ -478,14 +478,19 @@ def draw_card_side(
                     new_height = max_height
                     new_width = max_height * aspect_ratio
                 
-                # Only resize if necessary to maintain quality
-                # Calculate target size in pixels (ReportLab uses points, 1 point = 1/72 inch)
+                # Calculate target display size in pixels (ReportLab uses points, 1 point = 1/72 inch)
                 target_width_px = int(new_width)
                 target_height_px = int(new_height)
                 
-                # Resize with high-quality resampling only if needed
-                if pil_image.size != (target_width_px, target_height_px):
-                    pil_image = pil_image.resize((target_width_px, target_height_px), Image.Resampling.LANCZOS)
+                # Supersample for sharper output: render at 3x resolution and let PDF scale down
+                # This improves quality without making the image bigger visually
+                supersample_factor = 3
+                render_width_px = max(int(target_width_px * supersample_factor), 1)
+                render_height_px = max(int(target_height_px * supersample_factor), 1)
+                
+                # Resize with high-quality resampling to supersampled size
+                if pil_image.size != (render_width_px, render_height_px):
+                    pil_image = pil_image.resize((render_width_px, render_height_px), Image.Resampling.LANCZOS)
                 
                 # Convert to RGBA to support transparency for rounded corners
                 if pil_image.mode != "RGBA":
@@ -493,13 +498,14 @@ def draw_card_side(
                 
                 # Add rounded corners using a mask
                 # Convert 8mm to pixels: 8mm as a proportion of the page width, then scale to image pixels
-                corner_radius_px = int((8 * mm / width) * new_width)
-                # Ensure reasonable radius (8-30 pixels typically)
-                min_dimension = min(target_width_px, target_height_px)
-                corner_radius_px = max(8, min(corner_radius_px, 30))
+                # Scale corner radius by supersample factor to match the supersampled image
+                corner_radius_px = int((8 * mm / width) * new_width * supersample_factor)
+                # Ensure reasonable radius (scaled appropriately for supersampled image)
+                corner_radius_px = max(8 * supersample_factor, min(corner_radius_px, 30 * supersample_factor))
                 
                 # Create mask for rounded corners using a simple, reliable method
-                mask = Image.new("L", (target_width_px, target_height_px), 0)
+                # Mask must match the supersampled image size
+                mask = Image.new("L", (render_width_px, render_height_px), 0)
                 draw = ImageDraw.Draw(mask)
                 
                 # Draw rounded rectangle - try the modern method first
@@ -507,7 +513,7 @@ def draw_card_side(
                     # PIL 9.0.0+ has rounded_rectangle
                     if hasattr(draw, 'rounded_rectangle'):
                         draw.rounded_rectangle(
-                            [(0, 0), (target_width_px - 1, target_height_px - 1)],
+                            [(0, 0), (render_width_px - 1, render_height_px - 1)],
                             radius=corner_radius_px,
                             fill=255
                         )
@@ -517,19 +523,19 @@ def draw_card_side(
                     # Fallback: create rounded rectangle manually
                     # Fill main rectangle (excluding corners)
                     draw.rectangle(
-                        [corner_radius_px, 0, target_width_px - corner_radius_px, target_height_px],
+                        [corner_radius_px, 0, render_width_px - corner_radius_px, render_height_px],
                         fill=255
                     )
                     draw.rectangle(
-                        [0, corner_radius_px, target_width_px, target_height_px - corner_radius_px],
+                        [0, corner_radius_px, render_width_px, render_height_px - corner_radius_px],
                         fill=255
                     )
                     # Draw corner circles
                     for x, y in [
                         (corner_radius_px, corner_radius_px),  # top-left
-                        (target_width_px - corner_radius_px, corner_radius_px),  # top-right
-                        (corner_radius_px, target_height_px - corner_radius_px),  # bottom-left
-                        (target_width_px - corner_radius_px, target_height_px - corner_radius_px)  # bottom-right
+                        (render_width_px - corner_radius_px, corner_radius_px),  # top-right
+                        (corner_radius_px, render_height_px - corner_radius_px),  # bottom-left
+                        (render_width_px - corner_radius_px, render_height_px - corner_radius_px)  # bottom-right
                     ]:
                         draw.ellipse(
                             [x - corner_radius_px, y - corner_radius_px,
@@ -578,8 +584,8 @@ def draw_card_side(
         flag_image_path = get_language_flag_image_path(lang_code)
         flag_image_data = None
         flag_width = 0
-        # Make flag larger for better quality - use 1.5x font size instead of 1.1x
-        flag_height = title_font_size * 1
+        # Keep flag height close to text; improve quality via supersampling
+        flag_height = title_font_size * .85
         
         if flag_image_path and flag_image_path.exists():
             try:
@@ -591,11 +597,9 @@ def draw_card_side(
                 flag_aspect = pil_flag.width / pil_flag.height
                 flag_width = flag_height * flag_aspect
                 logger.debug("Flag image will be rendered at %fx%f points", flag_width, flag_height)
-                # Resize with high-quality resampling for better quality
-                # Convert points to pixels (1 point = 1/72 inch, assume 72 DPI for PDF)
-                target_width_px = int(flag_width)
-                target_height_px = int(flag_height)
-                # Resize with LANCZOS resampling for best quality
+                # Supersample for sharper output: render at 3x target and let PDF scale down
+                target_width_px = max(int(flag_width * 3), 1)
+                target_height_px = max(int(flag_height * 3), 1)
                 if pil_flag.size != (target_width_px, target_height_px):
                     pil_flag = pil_flag.resize((target_width_px, target_height_px), Image.Resampling.LANCZOS)
                 # Convert to RGBA if needed
@@ -650,11 +654,11 @@ def draw_card_side(
             # Draw flag image (only on first line)
             if line_idx == 0 and flag_image_data:
                 try:
-                    # Align flag to the top of the text (cap height) instead of centering
-                    # This makes the flag appear higher and aligned with the top of the title text
+                    # Align flag slightly below the top of the text (cap height) for better visual alignment
                     ascent = pdfmetrics.getAscent(title_font) * title_font_size / 1000.0
-                    # Position flag so its top aligns with the cap height of the text
-                    flag_y = y + ascent - flag_height
+                    # Position flag slightly lower - offset by a small amount (about 10% of font size)
+                    offset = title_font_size * 0.22
+                    flag_y = y + ascent - flag_height - offset
                     c.drawImage(ImageReader(flag_image_data), line_x, flag_y, width=flag_width, height=flag_height, mask='auto')
                     logger.debug(
                         "Drew flag image for %s at (%.2f, %.2f) with size (%.2f, %.2f) | ascent=%.2f",
