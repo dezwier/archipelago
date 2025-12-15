@@ -17,6 +17,7 @@ sys.path.insert(0, str(api_dir))
 
 from app.core.database import engine
 from app.models.models import Concept, Lemma, Language
+from app.api.v1.endpoints.utils import normalize_lemma_term
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -115,10 +116,12 @@ def create_english_cards(concepts: list[Concept]) -> tuple[int, int]:
                     continue
                 
                 # Create new lemma with same term, description, and part_of_speech info
+                # Normalize the term (trim dots and whitespace)
+                normalized_term = normalize_lemma_term(concept.term) if concept.term else None
                 lemma = Lemma(
                     concept_id=concept.id,
                     language_code='en',
-                    term=concept.term,
+                    term=normalized_term,
                     description=concept.description,
                     # Note: Lemma model doesn't have part_of_speech field, it's on Concept
                 )

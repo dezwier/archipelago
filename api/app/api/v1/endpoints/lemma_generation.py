@@ -23,6 +23,7 @@ from app.api.v1.endpoints.prompt_helpers import (
     generate_lemma_system_instruction,
     generate_lemma_user_prompt
 )
+from app.api.v1.endpoints.utils import normalize_lemma_term
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +132,10 @@ async def generate_lemma(
                     detail=f"Concept with id {request.concept_id} not found"
                 )
             
-            # Normalize term (trim whitespace)
+            # Normalize term (trim dots and whitespace)
             term = llm_data.get('term')
             if term:
-                term = term.strip()
+                term = normalize_lemma_term(term)
             
             # Delete all existing lemmas for this concept_id and language_code
             # This ensures we replace any existing lemma for this language when generating a new one
@@ -318,10 +319,10 @@ async def generate_lemmas_batch(
             # If concept_id is provided, create/update the lemma in the database
             if request.concept_id is not None:
                 try:
-                    # Normalize term (trim whitespace)
+                    # Normalize term (trim dots and whitespace)
                     term = llm_data.get('term')
                     if term:
-                        term = term.strip()
+                        term = normalize_lemma_term(term)
                     
                     # Delete all existing lemmas for this concept_id and language_code
                     # This ensures we replace any existing lemma for this language when generating a new one

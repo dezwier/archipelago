@@ -21,7 +21,7 @@ from app.schemas.concept import (
     GenerateLemmasForConceptsRequest,
     GenerateLemmasForConceptsResponse
 )
-from app.api.v1.endpoints.utils import ensure_capitalized
+from app.api.v1.endpoints.utils import ensure_capitalized, normalize_lemma_term
 from app.api.v1.endpoints.llm_helpers import call_gemini_api
 from app.api.v1.endpoints.prompt_helpers import (
     generate_lemma_system_instruction,
@@ -290,10 +290,10 @@ async def generate_lemmas_for_concept(
                     errors.append(f"Invalid register value for {lang_code}: {llm_data['register']}")
                     continue
             
-            # Normalize term (trim whitespace)
+            # Normalize term (trim dots and whitespace)
             term = llm_data.get('term')
             if term:
-                term = term.strip()
+                term = normalize_lemma_term(term)
             
             # Check for existing lemmas with same concept_id, language_code, and term (case-insensitive)
             # This prevents duplicates and ensures the unique constraint is respected
@@ -520,10 +520,10 @@ async def _generate_lemmas_for_concepts_list(
                             errors.append(f"Concept {concept.id}, {lang_code}: Invalid register value")
                             continue
                     
-                    # Normalize term (trim whitespace)
+                    # Normalize term (trim dots and whitespace)
                     term = llm_data.get('term')
                     if term:
-                        term = term.strip()
+                        term = normalize_lemma_term(term)
                     
                     # Check for existing lemmas with same concept_id, language_code, and term (case-insensitive)
                     # This prevents duplicates and ensures the unique constraint is respected
@@ -665,7 +665,8 @@ async def update_lemma(
     
     # Check if translation update would create a duplicate
     if request.translation is not None:
-        new_term = ensure_capitalized(request.translation.strip())
+        new_term = normalize_lemma_term(request.translation)
+        new_term = ensure_capitalized(new_term)
         
         # Check if another lemma with same concept_id, language_code, and term already exists
         existing_lemma = session.exec(
