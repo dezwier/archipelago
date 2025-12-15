@@ -290,6 +290,7 @@ async def generate_lemmas_batch(
     total_prompt_tokens = 0
     total_output_tokens = 0
     total_cost_usd = 0.0
+    model_name = None  # Will be set from first successful API call
     
     for target_language_code in target_language_codes:
         try:
@@ -306,6 +307,10 @@ async def generate_lemmas_batch(
             total_prompt_tokens += token_usage.get('prompt_tokens', 0)
             total_output_tokens += token_usage.get('output_tokens', 0)
             total_cost_usd += token_usage.get('cost_usd', 0.0)
+            
+            # Set model_name from first successful call
+            if model_name is None:
+                model_name = token_usage.get('model_name', 'gemini-2.5-pro')
             
             # Validate LLM output
             if not isinstance(llm_data, dict):
@@ -421,7 +426,7 @@ async def generate_lemmas_batch(
             'output_tokens': total_output_tokens,
             'total_tokens': total_prompt_tokens + total_output_tokens,
             'cost_usd': total_cost_usd,
-            'model_name': 'gemini-2.5-flash'
+            'model_name': model_name or 'gemini-2.5-pro'
         }
     )
 

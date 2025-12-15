@@ -49,7 +49,7 @@ When given a target language, you must:
 1. Translate the term accurately to the target language (for phrases/sentences, translate naturally, not word-for-word)
 2. Generate a description in the target language:
    - For single words: Provide a lemma definition (what the word means)
-   - For phrases/sentences: Describe the action, situation, or meaning being expressed
+   - For phrases/sentences: Describe the action, situation, or meaning being expressed in SIMPLE TERMS in the target language. CRITICAL: Do NOT mention or repeat the important words from the sentence in the description. Instead, describe what the sentence means or expresses using different, simpler words.
    - Write naturally in the target language, do NOT translate word-for-word from English
 3. Provide IPA pronunciation using standard IPA symbols
 4. Include language-specific fields ONLY when applicable:
@@ -69,7 +69,8 @@ Rules:
 3. For phrases/sentences: Translate naturally and idiomatically, preserving the meaning
 4. Fields "term", "description", and "ipa" are REQUIRED and cannot be null or empty
 5. For phrases/sentences: Set gender, article, plural_form, verb_type, and auxiliary_verb to null
-6. The description should explain what the term means or what action/situation it expresses"""
+6. The description should explain what the term means or what action/situation it expresses
+7. For sentences: The description must be written in simple terms in the target language and MUST NOT mention or repeat the important words from the sentence. Use different, simpler words to describe the meaning."""
     
     return system_instruction
 
@@ -90,7 +91,7 @@ def generate_lemma_user_prompt(target_language: str) -> str:
 {{
   "term": "string (the translation in {target_language.upper()}. For single words that are verbs, use infinitive form. For phrases/sentences, translate naturally and idiomatically)",
   "ipa": "string or null (pronunciation in standard IPA symbols)",
-  "description": "string (REQUIRED - generate a description in {target_language.upper()}, do NOT translate from English, write naturally in {target_language.upper()}. For single words: provide a definition. For phrases/sentences: describe the action or meaning being expressed)",
+  "description": "string (REQUIRED - generate a description in {target_language.upper()}, do NOT translate from English, write naturally in {target_language.upper()}. For single words: provide a definition. For phrases/sentences: describe the action or meaning being expressed in SIMPLE TERMS without mentioning or repeating the important words from the sentence)",
   "gender": "masculine | feminine | neuter | null (ONLY for single words in languages with gender, null for phrases/sentences)",
   "article": "string or null (ONLY for single words in languages with articles, null for phrases/sentences)",
   "plural_form": "string or null (ONLY for single-word nouns, null for phrases/sentences)",

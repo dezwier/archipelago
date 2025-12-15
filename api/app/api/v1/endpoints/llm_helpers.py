@@ -63,7 +63,7 @@ def call_gemini_api(prompt: str, system_instruction: Optional[str] = None) -> tu
     if not api_key:
         raise Exception("Google Gemini API key not configured")
     
-    model_name = "gemini-2.5-flash"
+    model_name = "gemini-2.5-pro"
     base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
     
     payload = {
