@@ -8,12 +8,12 @@ import 'package:archipelago/src/common_widgets/concept_drawer/concept_delete.dar
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_filter_sheet.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_search_bar.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_filter_menu.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_fab_buttons.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_empty_search_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/export_flashcards_drawer.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
+import 'package:archipelago/src/features/dictionary/presentation/widgets/visibility_options_sheet.dart';
 import 'package:archipelago/src/features/dictionary/presentation/screens/edit_concept_screen.dart';
 import 'package:archipelago/src/features/profile/data/language_service.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
@@ -411,62 +411,31 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
 
   void _showFilterMenu(BuildContext context) {
-    final RenderBox? button = _filterButtonKey.currentContext?.findRenderObject() as RenderBox?;
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    
-    RelativeRect position;
-    if (button != null) {
-      position = RelativeRect.fromRect(
-        Rect.fromPoints(
-          button.localToGlobal(Offset.zero, ancestor: overlay),
-          button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
-        ),
-        Offset.zero & overlay.size,
-      );
-    } else {
-      // Fallback: position menu near bottom right where the button should be
-      final screenSize = MediaQuery.of(context).size;
-      position = RelativeRect.fromLTRB(
-        screenSize.width - 200,
-        screenSize.height - 200,
-        screenSize.width - 16,
-        screenSize.height - 16,
-      );
-    }
-
-    showMenu<void>(
+    showVisibilityOptionsSheet(
       context: context,
-      position: position,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      items: DictionaryFilterMenu.buildMenuItems(
-        context: context,
-        allLanguages: _allLanguages,
-        languageVisibility: _languageVisibilityManager.languageVisibility,
-        languagesToShow: _languageVisibilityManager.languagesToShow,
-        showDescription: _showDescription,
-        showExtraInfo: _showExtraInfo,
-        onLanguageVisibilityToggled: (languageCode) {
-          setState(() {
-            _languageVisibilityManager.toggleLanguageVisibility(languageCode);
-            // Update language filter for search (concepts are no longer filtered by visibility)
-            _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-            // Update visible languages - this will refresh dictionary and counts
-            _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-          });
-        },
-        onShowDescriptionChanged: (value) {
-          setState(() {
-            _showDescription = value;
-          });
-        },
-        onShowExtraInfoChanged: (value) {
-          setState(() {
-            _showExtraInfo = value;
-          });
-        },
-      ),
+      allLanguages: _allLanguages,
+      languageVisibility: _languageVisibilityManager.languageVisibility,
+      showDescription: _showDescription,
+      showExtraInfo: _showExtraInfo,
+      onLanguageVisibilityToggled: (languageCode) {
+        setState(() {
+          _languageVisibilityManager.toggleLanguageVisibility(languageCode);
+          // Update language filter for search (concepts are no longer filtered by visibility)
+          _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
+          // Update visible languages - this will refresh dictionary and counts
+          _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
+        });
+      },
+      onShowDescriptionChanged: (value) {
+        setState(() {
+          _showDescription = value;
+        });
+      },
+      onShowExtraInfoChanged: (value) {
+        setState(() {
+          _showExtraInfo = value;
+        });
+      },
     );
   }
 
