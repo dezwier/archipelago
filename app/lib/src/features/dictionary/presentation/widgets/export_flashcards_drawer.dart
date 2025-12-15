@@ -137,6 +137,8 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
       return;
     }
 
+    if (_isExporting) return; // Prevent multiple simultaneous exports
+
     setState(() {
       _isExporting = true;
     });
@@ -150,20 +152,25 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
 
       if (!mounted) return;
 
+      // Always reset the exporting state before closing drawer or showing messages
       setState(() {
         _isExporting = false;
       });
 
       if (result['success'] == true) {
-        // Close the drawer
-        Navigator.of(context).pop();
-        
+        // Show success message first
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Flashcards exported successfully'),
             backgroundColor: Colors.green,
           ),
         );
+        
+        // Close the drawer after a brief delay to ensure state is updated
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

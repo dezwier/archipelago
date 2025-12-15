@@ -21,7 +21,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.lib.colors import HexColor
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from PIL import Image
+from PIL import Image, ImageDraw
 import requests
 from pathlib import Path
 import html
@@ -56,6 +56,42 @@ _unicode_font_registered = False
 _unicode_font_name = "Helvetica"  # Fallback
 _emoji_font_registered = False
 _emoji_font_name = None
+
+# Custom display fonts for flashcard PDF export
+_custom_fonts_registered = False
+_title_font_name = "Helvetica-Bold"
+_description_font_name = "Helvetica"
+_ipa_font_name = None
+
+def _build_font_search_paths():
+    """Common font search paths (bundled first, then system)."""
+    api_root = Path(__file__).parent.parent.parent.parent.parent
+    bundled_fonts_dir = api_root / "fonts"
+    
+    alternative_paths = [
+        Path("/app/assets/fonts"),  # Common Docker path
+        Path("/app/fonts"),  # Common Docker path
+        Path("./fonts"),  # Current directory
+        Path("fonts"),  # Relative to current working directory
+    ]
+    
+    search_paths = [
+        str(bundled_fonts_dir),  # Check bundled fonts first
+        "/System/Library/Fonts/Supplemental",
+        "/Library/Fonts",
+        "/usr/share/fonts/truetype/dejavu",
+        "/usr/share/fonts/TTF",
+        "/usr/share/fonts/truetype/noto",
+        "/usr/share/fonts/opentype/noto",
+        "/usr/share/fonts/truetype/liberation",
+        "C:/Windows/Fonts",
+    ]
+    
+    for alt_path in alternative_paths:
+        if alt_path.exists() and str(alt_path) not in search_paths:
+            search_paths.insert(1, str(alt_path))  # Insert after bundled_fonts_dir
+    
+    return search_paths
 
 def find_font_files(search_paths, patterns):
     """Find font files matching patterns in search paths."""
@@ -96,35 +132,7 @@ def register_unicode_fonts():
     if _unicode_font_registered:
         return _unicode_font_name, _emoji_font_name
     
-    # First, check for bundled fonts in the api/fonts directory
-    # Try multiple path resolution strategies for different deployment environments
-    api_root = Path(__file__).parent.parent.parent.parent.parent
-    bundled_fonts_dir = api_root / "fonts"
-    
-    # Also check if we're in a Docker/deployed environment (common paths)
-    alternative_paths = [
-        Path("/app/fonts"),  # Common Docker path
-        Path("./fonts"),  # Current directory
-        Path("fonts"),  # Relative to current working directory
-    ]
-    
-    # Search paths for fonts (bundled fonts first, then system fonts)
-    search_paths = [
-        str(bundled_fonts_dir),  # Check bundled fonts first
-        "/System/Library/Fonts/Supplemental",
-        "/Library/Fonts",
-        "/usr/share/fonts/truetype/dejavu",
-        "/usr/share/fonts/TTF",
-        "/usr/share/fonts/truetype/noto",
-        "/usr/share/fonts/opentype/noto",
-        "/usr/share/fonts/truetype/liberation",
-        "C:/Windows/Fonts",
-    ]
-    
-    # Add alternative paths to search (for Docker/deployment environments)
-    for alt_path in alternative_paths:
-        if alt_path.exists() and str(alt_path) not in search_paths:
-            search_paths.insert(1, str(alt_path))  # Insert after bundled_fonts_dir
+    search_paths = _build_font_search_paths()
     
     # Try to find Unicode-supporting fonts
     unicode_patterns = [
@@ -199,6 +207,104 @@ def register_unicode_fonts():
     return _unicode_font_name, _emoji_font_name
 
 
+def register_flashcard_fonts():
+    """
+    Register display fonts for title/description (Ramillas) and IPA (Monoscript).
+    Falls back to Helvetica/Unicode font if custom fonts are unavailable.
+    """
+    global _custom_fonts_registered, _title_font_name, _description_font_name, _ipa_font_name
+    
+    if _custom_fonts_registered:
+        return _title_font_name, _description_font_name, _ipa_font_name
+    
+    search_paths = _build_font_search_paths()
+    
+    # Target fonts: Ramillas for display, Monoscript for IPA
+    ramillas_candidates = find_font_files(
+        search_paths,
+        [
+            "TT Ramillas*",  # bundled trial fonts inside fonts/tt_ramillas
+            "Ramillas*", 
+            "Ramillas"
+        ]
+    )
+    monoscript_candidates = find_font_files(search_paths, ["Monoscript*", "Monoscript"])
+    
+    def _register_first_available(candidates, registered_name):
+        for font_path in candidates:
+            if not os.path.exists(font_path):
+                continue
+            try:
+                font_size = os.path.getsize(font_path)
+                if font_size < 10000:
+                    logger.warning("Font file too small (%d bytes), may be corrupted: %s", font_size, font_path)
+                    continue
+                pdfmetrics.registerFont(TTFont(registered_name, font_path))
+                logger.info("Registered custom font %s from %s", registered_name, font_path)
+                return registered_name
+            except Exception as e:
+                logger.warning("Failed to register font %s: %s", font_path, str(e))
+        return None
+    
+    def _prioritize_ramillas(candidates, weight_keywords, exact_match=None):
+        # First, check for exact match if specified (check filename, not full path)
+        if exact_match:
+            exact_match_lower = exact_match.lower()
+            for path in candidates:
+                path_filename = Path(path).name.lower()
+                if path_filename == exact_match_lower:
+                    return [path]  # Return exact match first
+        
+        # Keep files that contain any desired keyword, prefer non-outline/initial/decor variants
+        filtered = []
+        for path in candidates:
+            lower_path = path.lower()
+            if "outline" in lower_path or "decor" in lower_path or "initials" in lower_path:
+                continue
+            for weight in weight_keywords:
+                if weight in lower_path:
+                    filtered.append((weight_keywords.index(weight), path))
+                    break
+        # If nothing matched keywords, keep all as fallback
+        if not filtered:
+            filtered = [(len(weight_keywords), p) for p in candidates]
+        # Sort by priority then path length (shorter often Regular vs Variable)
+        filtered.sort(key=lambda x: (x[0], len(x[1])))
+        return [p for _, p in filtered]
+    
+    # Choose best Ramillas files for title (Medium) and description (Light)
+    # Prioritize exact font files: "TT Ramillas Trial Medium.ttf" for title, "TT Ramillas Trial Light.ttf" for description
+    ramillas_title_candidates = _prioritize_ramillas(
+        ramillas_candidates,
+        ["medium", "bold", "black", "extrabold", "regular"],
+        exact_match="TT Ramillas Trial Medium.ttf"
+    )
+    ramillas_body_candidates = _prioritize_ramillas(
+        ramillas_candidates,
+        ["light", "regular", "medium"],
+        exact_match="TT Ramillas Trial Light.ttf"
+    )
+    
+    ramillas_title_font = _register_first_available(ramillas_title_candidates, "RamillasTitleFont")
+    ramillas_body_font = _register_first_available(ramillas_body_candidates, "RamillasBodyFont")
+    monoscript_font = _register_first_available(monoscript_candidates, "MonoscriptFont")
+    
+    if ramillas_title_font:
+        _title_font_name = ramillas_title_font
+    if ramillas_body_font:
+        _description_font_name = ramillas_body_font
+    if not ramillas_title_font and not ramillas_body_font:
+        logger.info("Ramillas font not found; falling back to Helvetica/Helvetica-Bold.")
+    
+    if monoscript_font:
+        _ipa_font_name = monoscript_font
+    else:
+        logger.info("Monoscript font not found; IPA will use Unicode/Helvetica fallback.")
+    
+    _custom_fonts_registered = True
+    return _title_font_name, _description_font_name, _ipa_font_name
+
+
 class FlashcardExportRequest(BaseModel):
     """Request schema for flashcard PDF export."""
     concept_ids: List[int] = Field(..., description="List of concept IDs to export")
@@ -231,6 +337,34 @@ def get_image_path(image_url: Optional[str]) -> Optional[Path]:
         if image_path.exists():
             return image_path
     
+    return None
+
+
+def get_language_flag_image_path(language_code: str) -> Optional[Path]:
+    """Get local file path for a language flag image."""
+    # Try multiple possible locations
+    possible_paths = []
+    
+    # 1. Check configured assets_path (for production/Docker)
+    if settings.assets_path:
+        possible_paths.append(Path(settings.assets_path) / "images" / "languages" / f"{language_code.lower()}.png")
+    
+    # 2. Check local development path (relative to this file)
+    api_root = Path(__file__).parent.parent.parent.parent.parent
+    possible_paths.append(api_root / "assets" / "images" / "languages" / f"{language_code.lower()}.png")
+    
+    # 3. Check alternative local paths
+    possible_paths.append(Path("./assets") / "images" / "languages" / f"{language_code.lower()}.png")
+    possible_paths.append(Path("../assets") / "images" / "languages" / f"{language_code.lower()}.png")
+    
+    # Try each path until we find one that exists
+    for flag_path in possible_paths:
+        logger.debug("Checking flag image at: %s (exists: %s)", flag_path, flag_path.exists())
+        if flag_path.exists():
+            logger.info("Found flag image for %s at: %s", language_code, flag_path)
+            return flag_path
+    
+    logger.warning("Flag image not found for %s in any of the checked paths", language_code)
     return None
 
 
@@ -270,11 +404,15 @@ def draw_card_side(
     
     # Register Unicode fonts for IPA symbols and emojis
     unicode_font, emoji_font = register_unicode_fonts()
+    title_font, desc_font, ipa_font = register_flashcard_fonts()
     
     # Log registered fonts for debugging
     registered_fonts = pdfmetrics.getRegisteredFontNames()
     logger.debug("Available fonts: %s", registered_fonts)
-    logger.info("Using Unicode font: %s, Emoji font: %s", unicode_font, emoji_font)
+    logger.info(
+        "Using fonts - Title: %s, Description: %s, IPA: %s, Unicode: %s, Emoji: %s",
+        title_font, desc_font, ipa_font, unicode_font, emoji_font
+    )
     
     # Clear background
     c.setFillColor(HexColor("#FFFFFF"))
@@ -308,12 +446,11 @@ def draw_card_side(
                 logger.debug("Failed to draw topic icon with unicode font: %s", str(e))
     
     y = height - margin
-    x = margin
     
     # Image at the top (centered) - with more spacing
     image_height = 60 * mm
     image_margin_top = 10 * mm  # Increased spacing above image
-    image_margin_bottom = 10 * mm  # Increased spacing below image
+    image_margin_bottom = 20 * mm  # Increased spacing below image
     
     # Add space above image
     y -= image_margin_top
@@ -341,19 +478,75 @@ def draw_card_side(
                     new_height = max_height
                     new_width = max_height * aspect_ratio
                 
-                # Resize image
-                pil_image = pil_image.resize((int(new_width), int(new_height)), Image.Resampling.LANCZOS)
+                # Only resize if necessary to maintain quality
+                # Calculate target size in pixels (ReportLab uses points, 1 point = 1/72 inch)
+                target_width_px = int(new_width)
+                target_height_px = int(new_height)
                 
-                # Convert to RGB if necessary
-                if pil_image.mode != "RGB":
-                    pil_image = pil_image.convert("RGB")
+                # Resize with high-quality resampling only if needed
+                if pil_image.size != (target_width_px, target_height_px):
+                    pil_image = pil_image.resize((target_width_px, target_height_px), Image.Resampling.LANCZOS)
                 
-                # Save to BytesIO
+                # Convert to RGBA to support transparency for rounded corners
+                if pil_image.mode != "RGBA":
+                    pil_image = pil_image.convert("RGBA")
+                
+                # Add rounded corners using a mask
+                # Convert 8mm to pixels: 8mm as a proportion of the page width, then scale to image pixels
+                corner_radius_px = int((8 * mm / width) * new_width)
+                # Ensure reasonable radius (8-30 pixels typically)
+                min_dimension = min(target_width_px, target_height_px)
+                corner_radius_px = max(8, min(corner_radius_px, 30))
+                
+                # Create mask for rounded corners using a simple, reliable method
+                mask = Image.new("L", (target_width_px, target_height_px), 0)
+                draw = ImageDraw.Draw(mask)
+                
+                # Draw rounded rectangle - try the modern method first
+                try:
+                    # PIL 9.0.0+ has rounded_rectangle
+                    if hasattr(draw, 'rounded_rectangle'):
+                        draw.rounded_rectangle(
+                            [(0, 0), (target_width_px - 1, target_height_px - 1)],
+                            radius=corner_radius_px,
+                            fill=255
+                        )
+                    else:
+                        raise AttributeError("rounded_rectangle not available")
+                except (AttributeError, TypeError):
+                    # Fallback: create rounded rectangle manually
+                    # Fill main rectangle (excluding corners)
+                    draw.rectangle(
+                        [corner_radius_px, 0, target_width_px - corner_radius_px, target_height_px],
+                        fill=255
+                    )
+                    draw.rectangle(
+                        [0, corner_radius_px, target_width_px, target_height_px - corner_radius_px],
+                        fill=255
+                    )
+                    # Draw corner circles
+                    for x, y in [
+                        (corner_radius_px, corner_radius_px),  # top-left
+                        (target_width_px - corner_radius_px, corner_radius_px),  # top-right
+                        (corner_radius_px, target_height_px - corner_radius_px),  # bottom-left
+                        (target_width_px - corner_radius_px, target_height_px - corner_radius_px)  # bottom-right
+                    ]:
+                        draw.ellipse(
+                            [x - corner_radius_px, y - corner_radius_px,
+                             x + corner_radius_px, y + corner_radius_px],
+                            fill=255
+                        )
+                
+                # Apply mask to image alpha channel
+                pil_image.putalpha(mask)
+                
+                # Save to BytesIO with full quality (PNG for transparency support)
                 img_buffer = BytesIO()
-                pil_image.save(img_buffer, format="JPEG", quality=85)
+                # Save with no compression for maximum quality
+                pil_image.save(img_buffer, format="PNG", compress_level=0, optimize=False)
                 img_buffer.seek(0)
                 
-                # Draw image centered
+                # Draw image centered (rounded corners are already applied via mask)
                 img_x = (width - new_width) / 2
                 img_y = y - new_height
                 c.drawImage(ImageReader(img_buffer), img_x, img_y, width=new_width, height=new_height)
@@ -364,10 +557,8 @@ def draw_card_side(
     
     # Language lemmas below
     # Calculate font sizes
-    title_font_size = 16  # Reduced from 20
-    body_font_size = 11
-    small_font_size = 9
-    desc_font_size = 8  # Smaller font for description
+    title_font_size = 14  # Reduced from 20
+    desc_font_size = 8  # Smaller font for description and IPA
     
     # Draw lemmas for each language
     for lang_code in languages:
@@ -379,55 +570,62 @@ def draw_card_side(
         if y < margin + 30 * mm:  # Not enough space
             break
         
-        # Language flag emoji - use emoji font if available, then unicode font
-        lang_emoji = get_language_emoji(lang_code)
-        emoji_drawn = False
-        if emoji_font and emoji_font in pdfmetrics.getRegisteredFontNames():
-            try:
-                c.setFont(emoji_font, small_font_size)
-                c.setFillColor(HexColor("#666666"))
-                emoji_width = c.stringWidth(lang_emoji, emoji_font, small_font_size)
-                emoji_x = (width - emoji_width) / 2
-                c.drawString(emoji_x, y, lang_emoji)
-                emoji_drawn = True
-            except Exception as e:
-                logger.debug("Failed to draw emoji with emoji font: %s", str(e))
-        
-        if not emoji_drawn and unicode_font and unicode_font in pdfmetrics.getRegisteredFontNames():
-            try:
-                c.setFont(unicode_font, small_font_size)
-                c.setFillColor(HexColor("#666666"))
-                emoji_width = c.stringWidth(lang_emoji, unicode_font, small_font_size)
-                emoji_x = (width - emoji_width) / 2
-                c.drawString(emoji_x, y, lang_emoji)
-                emoji_drawn = True
-            except Exception as e:
-                logger.debug("Failed to draw emoji with unicode font: %s", str(e))
-        
-        if not emoji_drawn:
-            # Fallback to text if emoji fails
-            c.setFont("Helvetica", small_font_size)
-            c.setFillColor(HexColor("#666666"))
-            lang_text = f"[{lang_code.upper()}]"
-            text_width = c.stringWidth(lang_text, "Helvetica", small_font_size)
-            text_x = (width - text_width) / 2
-            c.drawString(text_x, y, lang_text)
-        y -= small_font_size + 4
-        
         # Translation (main term) - centered
-        translation = decode_html_entities(lemma.term)
-        c.setFont("Helvetica-Bold", title_font_size)
-        c.setFillColor(HexColor("#000000"))
+        # Load language flag image and draw it before title text
+        translation_text = decode_html_entities(lemma.term)
         
-        # Word wrap for long translations
-        words = translation.split()
+        # Get language flag image
+        flag_image_path = get_language_flag_image_path(lang_code)
+        flag_image_data = None
+        flag_width = 0
+        # Make flag larger for better quality - use 1.5x font size instead of 1.1x
+        flag_height = title_font_size * 1
+        
+        if flag_image_path and flag_image_path.exists():
+            try:
+                logger.debug("Loading flag image for %s from %s", lang_code, flag_image_path)
+                # Open image directly from path with PIL
+                pil_flag = Image.open(flag_image_path)
+                logger.debug("Flag image loaded: %dx%d pixels", pil_flag.width, pil_flag.height)
+                # Maintain aspect ratio, scale to match desired height
+                flag_aspect = pil_flag.width / pil_flag.height
+                flag_width = flag_height * flag_aspect
+                logger.debug("Flag image will be rendered at %fx%f points", flag_width, flag_height)
+                # Resize with high-quality resampling for better quality
+                # Convert points to pixels (1 point = 1/72 inch, assume 72 DPI for PDF)
+                target_width_px = int(flag_width)
+                target_height_px = int(flag_height)
+                # Resize with LANCZOS resampling for best quality
+                if pil_flag.size != (target_width_px, target_height_px):
+                    pil_flag = pil_flag.resize((target_width_px, target_height_px), Image.Resampling.LANCZOS)
+                # Convert to RGBA if needed
+                if pil_flag.mode != "RGBA":
+                    pil_flag = pil_flag.convert("RGBA")
+                # Save to buffer with high quality (no compression)
+                flag_buffer = BytesIO()
+                pil_flag.save(flag_buffer, format="PNG", compress_level=0, optimize=False)
+                flag_buffer.seek(0)
+                flag_image_data = flag_buffer
+                logger.debug("Flag image processed and ready for rendering")
+            except Exception as e:
+                logger.warning("Failed to load language flag image for %s from %s: %s", lang_code, flag_image_path, str(e))
+                import traceback
+                logger.debug("Traceback: %s", traceback.format_exc())
+                flag_image_data = None
+        else:
+            logger.warning("Language flag image not found for %s (checked path: %s)", lang_code, flag_image_path)
+        
+        # Word wrap for translation text (accounting for flag image)
+        c.setFont(title_font, title_font_size)
+        words = translation_text.split()
         lines = []
         current_line = ""
-        max_width_text = width - 2 * margin
+        flag_spacing = 8 if flag_image_data else 0  # Extra spacing for clarity
+        max_width_text = width - 2 * margin - flag_width - flag_spacing
         
         for word in words:
             test_line = f"{current_line} {word}".strip()
-            if c.stringWidth(test_line, "Helvetica-Bold", title_font_size) <= max_width_text:
+            if c.stringWidth(test_line, title_font, title_font_size) <= max_width_text:
                 current_line = test_line
             else:
                 if current_line:
@@ -437,100 +635,88 @@ def draw_card_side(
         if current_line:
             lines.append(current_line)
         
-        # Draw translation lines (centered)
-        for line in lines:
+        # Draw translation lines with flag image prefix
+        for line_idx, line in enumerate(lines):
             if y < margin + 20 * mm:
                 break
-            line_width = c.stringWidth(line, "Helvetica-Bold", title_font_size)
-            line_x = (width - line_width) / 2
-            c.drawString(line_x, y, line)
-            y -= title_font_size + 3
+            
+            # Calculate total width (flag + space + text)
+            text_width = c.stringWidth(line, title_font, title_font_size)
+            total_width = flag_width + flag_spacing + text_width if flag_image_data else text_width
+            
+            # Center the entire line (flag + text)
+            line_x = (width - total_width) / 2
+            
+            # Draw flag image (only on first line)
+            if line_idx == 0 and flag_image_data:
+                try:
+                    # Align flag to the top of the text (cap height) instead of centering
+                    # This makes the flag appear higher and aligned with the top of the title text
+                    ascent = pdfmetrics.getAscent(title_font) * title_font_size / 1000.0
+                    # Position flag so its top aligns with the cap height of the text
+                    flag_y = y + ascent - flag_height
+                    c.drawImage(ImageReader(flag_image_data), line_x, flag_y, width=flag_width, height=flag_height, mask='auto')
+                    logger.debug(
+                        "Drew flag image for %s at (%.2f, %.2f) with size (%.2f, %.2f) | ascent=%.2f",
+                        lang_code, line_x, flag_y, flag_width, flag_height, ascent
+                    )
+                except Exception as e:
+                    logger.warning("Failed to draw language flag image: %s", str(e))
+            
+            # Draw text
+            c.setFont(title_font, title_font_size)
+            c.setFillColor(HexColor("#000000"))
+            text_x = line_x + flag_width + flag_spacing if (line_idx == 0 and flag_image_data) else line_x
+            c.drawString(text_x, y, line)
+            y -= title_font_size + 2  # Slightly tighter spacing under each line
+
+        y -= 1  # Less extra spacing before IPA
         
-        y -= 3  # Extra spacing
-        
-        # IPA - centered, using Unicode font
+        # IPA - centered, using Unicode font, same size as description
         if lemma.ipa and y > margin + 15 * mm:
             ipa_text = f"/{decode_html_entities(lemma.ipa)}/"
             ipa_drawn = False
-            if unicode_font and unicode_font in pdfmetrics.getRegisteredFontNames():
+            ipa_font_to_use = ipa_font or unicode_font
+            if ipa_font_to_use and ipa_font_to_use in pdfmetrics.getRegisteredFontNames():
                 try:
-                    c.setFont(unicode_font, body_font_size)
-                    c.setFillColor(HexColor("#666666"))
-                    ipa_width = c.stringWidth(ipa_text, unicode_font, body_font_size)
+                    c.setFont(ipa_font_to_use, desc_font_size)
+                    c.setFillColor(HexColor("#aaaaaa"))
+                    ipa_width = c.stringWidth(ipa_text, ipa_font_to_use, desc_font_size)
                     ipa_x = (width - ipa_width) / 2
                     c.drawString(ipa_x, y, ipa_text)
                     ipa_drawn = True
                 except Exception as e:
-                    logger.debug("Failed to draw IPA with unicode font: %s", str(e))
+                    logger.debug("Failed to draw IPA with custom/unicode font: %s", str(e))
             
             if not ipa_drawn:
                 # Fallback if Unicode font doesn't support the IPA characters
                 try:
-                    c.setFont("Helvetica", body_font_size)
-                    c.setFillColor(HexColor("#666666"))
-                    ipa_width = c.stringWidth(ipa_text, "Helvetica", body_font_size)
+                    c.setFont("Helvetica", desc_font_size)
+                    c.setFillColor(HexColor("#aaaaaa"))
+                    ipa_width = c.stringWidth(ipa_text, "Helvetica", desc_font_size)
                     ipa_x = (width - ipa_width) / 2
                     c.drawString(ipa_x, y, ipa_text)
                 except Exception as e:
                     logger.debug("Failed to draw IPA with Helvetica: %s", str(e))
-            y -= body_font_size + 4
+            y -= desc_font_size + 10  # More space before description
         
-        # Tags (part of speech, article, plural, formality)
-        tags = []
-        if concept.part_of_speech:
-            tags.append(concept.part_of_speech)
-        if lemma.article:
-            tags.append(lemma.article)
-        if lemma.plural_form:
-            tags.append(f"pl. {lemma.plural_form}")
-        if lemma.formality_register and lemma.formality_register.lower() != "neutral":
-            tags.append(lemma.formality_register)
-        
-        if tags and y > margin + 10 * mm:
-            c.setFont("Helvetica", small_font_size)
-            c.setFillColor(HexColor("#666666"))
-            tags_text = " • ".join(tags)
-            # Word wrap tags if needed
-            if c.stringWidth(tags_text, "Helvetica", small_font_size) > max_width_text:
-                # Split tags across lines
-                tag_lines = []
-                current_tag_line = ""
-                for tag in tags:
-                    test_tag_line = f"{current_tag_line} • {tag}".strip()
-                    if test_tag_line.startswith(" • "):
-                        test_tag_line = test_tag_line[3:]
-                    if c.stringWidth(test_tag_line, "Helvetica", small_font_size) <= max_width_text:
-                        current_tag_line = test_tag_line
-                    else:
-                        if current_tag_line:
-                            tag_lines.append(current_tag_line)
-                        current_tag_line = tag
-                if current_tag_line:
-                    tag_lines.append(current_tag_line)
-                
-                for tag_line in tag_lines:
-                    if y < margin + 10 * mm:
-                        break
-                    c.drawString(x, y, tag_line)
-                    y -= small_font_size + 1
-            else:
-                c.drawString(x, y, tags_text)
-                y -= small_font_size + 2
-        
-        # Description - centered, smaller and grey
+        # Description - wrapped in container for better text wrapping
         if lemma.description and y > margin + 10 * mm:
             desc = decode_html_entities(lemma.description)
-            c.setFont("Helvetica", desc_font_size)
-            c.setFillColor(HexColor("#666666"))  # Grey color
+            c.setFont(desc_font, desc_font_size)
+            c.setFillColor(HexColor("#999999"))  # Grey color
             
-            # Word wrap description
+            # Use narrower width for description container (80% of available width)
+            desc_container_width = (width - 2 * margin) * 0.6
+            
+            # Word wrap description within container
             words = desc.split()
             desc_lines = []
             current_line = ""
             
             for word in words:
                 test_line = f"{current_line} {word}".strip()
-                if c.stringWidth(test_line, "Helvetica", desc_font_size) <= max_width_text:
+                if c.stringWidth(test_line, desc_font, desc_font_size) <= desc_container_width:
                     current_line = test_line
                 else:
                     if current_line:
@@ -540,47 +726,17 @@ def draw_card_side(
             if current_line:
                 desc_lines.append(current_line)
             
-            # Draw description lines (centered, limit to available space)
+            # Draw description lines (centered within container, limit to available space)
             max_desc_lines = int((y - margin) / (desc_font_size + 2))
             for line in desc_lines[:max_desc_lines]:
                 if y < margin + 5 * mm:
                     break
-                line_width = c.stringWidth(line, "Helvetica", desc_font_size)
+                line_width = c.stringWidth(line, desc_font, desc_font_size)
                 line_x = (width - line_width) / 2
                 c.drawString(line_x, y, line)
                 y -= desc_font_size + 2
         
-        # Notes
-        if lemma.notes and y > margin + 5 * mm:
-            notes = decode_html_entities(lemma.notes)
-            c.setFont("Helvetica-Oblique", small_font_size)
-            c.setFillColor(HexColor("#666666"))
-            
-            # Word wrap notes
-            words = notes.split()
-            notes_lines = []
-            current_line = ""
-            
-            for word in words:
-                test_line = f"{current_line} {word}".strip()
-                if c.stringWidth(test_line, "Helvetica-Oblique", small_font_size) <= max_width_text:
-                    current_line = test_line
-                else:
-                    if current_line:
-                        notes_lines.append(current_line)
-                    current_line = word
-            
-            if current_line:
-                notes_lines.append(current_line)
-            
-            # Draw notes (limit to 2-3 lines)
-            for line in notes_lines[:3]:
-                if y < margin:
-                    break
-                c.drawString(x, y, line)
-                y -= small_font_size + 1
-        
-        y -= 12  # More spacing between languages
+        y -= 24  # More spacing between languages
 
 
 @router.post("/pdf")
