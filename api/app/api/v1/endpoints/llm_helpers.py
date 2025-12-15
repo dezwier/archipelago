@@ -10,7 +10,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
-def calculate_gemini_cost(prompt_tokens: int, output_tokens: int, model_name: str = "gemini-2.5-flash") -> float:
+def calculate_gemini_cost(prompt_tokens: int, output_tokens: int, model_name: str = "gemini-2.5-pro") -> float:
     """
     Calculate cost for Gemini API call based on token usage.
     

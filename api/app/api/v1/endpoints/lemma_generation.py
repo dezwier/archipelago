@@ -7,7 +7,6 @@ Lemma generation endpoint - unified endpoint for generating translations.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func
 from app.core.database import get_session
 from app.models.models import Language, Concept, Lemma
 from app.schemas.lemma import (
@@ -137,36 +136,20 @@ async def generate_lemma(
             if term:
                 term = term.strip()
             
-            # Check for existing lemmas with same concept_id, language_code, and term (case-insensitive)
-            # This prevents duplicates and ensures the unique constraint is respected
-            if term:
-                existing_lemmas = session.exec(
-                    select(Lemma).where(
-                        Lemma.concept_id == request.concept_id,
-                        Lemma.language_code == target_language_code,
-                        func.lower(func.trim(Lemma.term)) == term.lower()
-                    )
-                ).all()
-                
-                # Delete all matching lemmas to avoid unique constraint issues
-                lemma_updated = len(existing_lemmas) > 0
-                for existing_lemma in existing_lemmas:
-                    session.delete(existing_lemma)
-                if existing_lemmas:
-                    session.flush()
-            else:
-                # If no term, check by concept_id and language_code only
-                existing_lemma = session.exec(
-                    select(Lemma).where(
-                        Lemma.concept_id == request.concept_id,
-                        Lemma.language_code == target_language_code
-                    )
-                ).first()
-                
-                if existing_lemma:
-                    session.delete(existing_lemma)
-                    session.flush()
-                    lemma_updated = True
+            # Delete all existing lemmas for this concept_id and language_code
+            # This ensures we replace any existing lemma for this language when generating a new one
+            existing_lemmas = session.exec(
+                select(Lemma).where(
+                    Lemma.concept_id == request.concept_id,
+                    Lemma.language_code == target_language_code
+                )
+            ).all()
+            
+            lemma_updated = len(existing_lemmas) > 0
+            for existing_lemma in existing_lemmas:
+                session.delete(existing_lemma)
+            if existing_lemmas:
+                session.flush()
             
             # Create new lemma (or recreate if we just deleted one)
             lemma = Lemma(
@@ -340,34 +323,19 @@ async def generate_lemmas_batch(
                     if term:
                         term = term.strip()
                     
-                    # Check for existing lemmas with same concept_id, language_code, and term (case-insensitive)
-                    # This prevents duplicates and ensures the unique constraint is respected
-                    if term:
-                        existing_lemmas = session.exec(
-                            select(Lemma).where(
-                                Lemma.concept_id == request.concept_id,
-                                Lemma.language_code == target_language_code,
-                                func.lower(func.trim(Lemma.term)) == term.lower()
-                            )
-                        ).all()
-                        
-                        # Delete all matching lemmas to avoid unique constraint issues
-                        for existing_lemma in existing_lemmas:
-                            session.delete(existing_lemma)
-                        if existing_lemmas:
-                            session.flush()
-                    else:
-                        # If no term, check by concept_id and language_code only
-                        existing_lemma = session.exec(
-                            select(Lemma).where(
-                                Lemma.concept_id == request.concept_id,
-                                Lemma.language_code == target_language_code
-                            )
-                        ).first()
-                        
-                        if existing_lemma:
-                            session.delete(existing_lemma)
-                            session.flush()
+                    # Delete all existing lemmas for this concept_id and language_code
+                    # This ensures we replace any existing lemma for this language when generating a new one
+                    existing_lemmas = session.exec(
+                        select(Lemma).where(
+                            Lemma.concept_id == request.concept_id,
+                            Lemma.language_code == target_language_code
+                        )
+                    ).all()
+                    
+                    for existing_lemma in existing_lemmas:
+                        session.delete(existing_lemma)
+                    if existing_lemmas:
+                        session.flush()
                     
                     # Create new lemma (or recreate if we just deleted one)
                     lemma = Lemma(

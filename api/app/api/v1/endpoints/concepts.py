@@ -292,8 +292,32 @@ async def delete_concept(
         else:
             logger.warning(f"Image file not found: {image_path}")
     
+    # Get all images for this concept and delete them
+    from app.models.models import Image, Lemma, UserCard
+    images = session.exec(
+        select(Image).where(Image.concept_id == concept_id)
+    ).all()
+    
+    # Delete image files from assets directory for each image record
+    for image in images:
+        if image.url and image.url.startswith("/assets/"):
+            assets_dir = _get_assets_directory()
+            image_filename = image.url.replace("/assets/", "")
+            image_path = assets_dir / image_filename
+            
+            # Delete the image file if it exists
+            if image_path.exists():
+                try:
+                    image_path.unlink()
+                    logger.info(f"Deleted image file: {image_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete image file {image_path}: {str(e)}")
+    
+    # Delete all image records
+    for image in images:
+        session.delete(image)
+    
     # Get all lemmas for this concept
-    from app.models.models import Lemma, UserCard
     lemmas = session.exec(
         select(Lemma).where(Lemma.concept_id == concept_id)
     ).all()
