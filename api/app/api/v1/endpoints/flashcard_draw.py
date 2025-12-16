@@ -3,7 +3,7 @@ PDF drawing utilities for flashcard export.
 """
 import logging
 from io import BytesIO
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from PIL import Image
 from reportlab.lib.pagesizes import A5
 from reportlab.lib.units import mm
@@ -41,8 +41,9 @@ def draw_card_side(
     include_title: bool = True,
     include_ipa: bool = True,
     include_description: bool = True,
+    page_size: Optional[Tuple[float, float]] = None,
 ):
-    """Draw one side of a flashcard (A5 size: 148 x 210 mm).
+    """Draw one side of a flashcard (supports A5 or A6 size).
     
     Args:
         c: Canvas to draw on
@@ -56,9 +57,55 @@ def draw_card_side(
         include_title: Whether to include the lemma title (term) for each language
         include_ipa: Whether to include IPA pronunciation for each lemma
         include_description: Whether to include description for each lemma
+        page_size: Optional page size tuple (width, height) in points. If not provided, 
+                   will be determined from canvas pagesize.
     """
-    width, height = A5
-    margin = 10 * mm
+    # Get canvas pagesize to determine card dimensions
+    # Use provided page_size or try to get from canvas, fallback to A5
+    if page_size is not None:
+        width, height = page_size
+    else:
+        try:
+            # Canvas has pagesize as a property (protected member, but necessary to get page dimensions)
+            pagesize = c._pagesize  # pyright: ignore[reportAttributeAccessIssue, reportPrivateUsage]
+            width, height = pagesize
+        except (AttributeError, TypeError):
+            # Fallback to A5 if pagesize cannot be determined
+            width, height = A5
+    
+    # Use A5 as reference size for scaling calculations
+    # A5 dimensions: 148mm x 210mm = 419.53 x 595.28 points (at 72 DPI)
+    ref_width, _ = A5
+    
+    # Calculate scale factor based on width ratio (width is primary dimension for scaling)
+    scale_factor = width / ref_width
+    
+    # Scale all dimensions proportionally
+    # Base values (for A5 reference size)
+    base_margin = 10 * mm
+    base_title_font_size = 14
+    base_desc_font_size = 8
+    base_icon_size = 16
+    base_image_margin_top = 10 * mm
+    base_image_margin_bottom = 20 * mm
+    base_flag_spacing = 8
+    base_line_spacing = 2
+    base_language_spacing = 28
+    base_corner_radius = 6 * mm
+    
+    # Scaled values
+    margin = base_margin * scale_factor
+    title_font_size = base_title_font_size * scale_factor
+    desc_font_size = base_desc_font_size * scale_factor
+    icon_size = base_icon_size * scale_factor
+    image_margin_top = base_image_margin_top * scale_factor
+    image_margin_bottom = base_image_margin_bottom * scale_factor
+    flag_spacing = base_flag_spacing * scale_factor
+    line_spacing = base_line_spacing * scale_factor
+    language_spacing = base_language_spacing * scale_factor
+    
+    # Image width is 40% of page width
+    image_width = width * 0.4
     
     # Register Unicode fonts for IPA symbols and emojis
     unicode_font, emoji_font = register_unicode_fonts()
@@ -78,7 +125,6 @@ def draw_card_side(
     
     # Topic icon at top right (subtle) - use emoji font if available
     if topic and topic.icon:
-        icon_size = 16
         icon_drawn = False
         if emoji_font and emoji_font in pdfmetrics.getRegisteredFontNames():
             try:
@@ -105,10 +151,9 @@ def draw_card_side(
     
     y = offset_y + height - margin
     
-    # Image at the top (centered) - with more spacing
-    image_height = 60 * mm
-    image_margin_top = 10 * mm  # Increased spacing above image
-    image_margin_bottom = 20 * mm  # Increased spacing below image
+    # Image at the top (centered) - width is 50% of page width
+    # Calculate height based on aspect ratio, but limit to reasonable maximum
+    max_image_height = height * 0.4  # Max 40% of page height
     
     # Add space above image (only if image will be drawn)
     if include_image:
@@ -120,22 +165,21 @@ def draw_card_side(
             try:
                 # Open with PIL to resize
                 pil_image = Image.open(image_data)
-                # Calculate size to fit
-                max_width = width - 2 * margin
-                max_height = image_height
+                # Image width is 50% of page width (as requested)
+                max_width = image_width
                 
                 # Maintain aspect ratio
                 img_width, img_height = pil_image.size
                 aspect_ratio = img_width / img_height
                 
-                if aspect_ratio > (max_width / max_height):
-                    # Width is limiting
-                    new_width = max_width
-                    new_height = max_width / aspect_ratio
-                else:
-                    # Height is limiting
-                    new_height = max_height
-                    new_width = max_height * aspect_ratio
+                # Calculate dimensions: width is fixed at 50% of page, height scales
+                new_width = max_width
+                new_height = max_width / aspect_ratio
+                
+                # Limit height if too tall
+                if new_height > max_image_height:
+                    new_height = max_image_height
+                    new_width = max_image_height * aspect_ratio
                 
                 # Calculate target display size in pixels (ReportLab uses points, 1 point = 1/72 inch)
                 target_width_px = int(new_width)
@@ -152,11 +196,14 @@ def draw_card_side(
                     pil_image = pil_image.resize((render_width_px, render_height_px), Image.Resampling.LANCZOS)
                 
                 # Add rounded corners using a mask
-                # Convert 8mm to pixels: 8mm as a proportion of the page width, then scale to image pixels
-                # Scale corner radius by supersample factor to match the supersampled image
-                corner_radius_px = int((6 * mm / width) * new_width * supersample_factor)
+                # Scale corner radius proportionally with page size
+                corner_radius_scaled = base_corner_radius * scale_factor
+                # Convert to pixels for the supersampled image
+                corner_radius_px = int((corner_radius_scaled / width) * new_width * supersample_factor)
                 # Ensure reasonable radius (scaled appropriately for supersampled image)
-                corner_radius_px = max(6 * supersample_factor, min(corner_radius_px, 30 * supersample_factor))
+                min_radius = 6 * supersample_factor
+                max_radius = 30 * supersample_factor * scale_factor
+                corner_radius_px = max(min_radius, min(corner_radius_px, max_radius))
                 
                 # Apply rounded corners using the helper function
                 pil_image = apply_rounded_corners(pil_image, corner_radius_px)
@@ -175,12 +222,9 @@ def draw_card_side(
                 y = img_y - image_margin_bottom  # More spacing below image
             except Exception as e:
                 logger.warning("Failed to draw image for concept %d: %s", concept.id, str(e))
-                y -= image_height + image_margin_bottom  # Reserve space even if image fails
-    
-    # Language lemmas below
-    # Calculate font sizes
-    title_font_size = 14  # Reduced from 20
-    desc_font_size = 8  # Smaller font for description and IPA
+                # Reserve space even if image fails (use estimated height)
+                estimated_image_height = image_width / 1.5  # Assume 1.5:1 aspect ratio
+                y -= estimated_image_height + image_margin_bottom
     
     # Draw lemmas for each language
     for lang_code in languages:
@@ -201,8 +245,8 @@ def draw_card_side(
             flag_image_path = get_language_flag_image_path(lang_code)
             flag_image_data = None
             flag_width = 0
-            # Keep flag height close to text; improve quality via supersampling
-            flag_height = title_font_size * .85
+            # Keep flag height proportional to title font size
+            flag_height = title_font_size * 0.85
             
             if flag_image_path and flag_image_path.exists():
                 try:
@@ -245,8 +289,8 @@ def draw_card_side(
             words = translation_text.split()
             lines = []
             current_line = ""
-            flag_spacing = 8 if flag_image_data else 0  # Extra spacing for clarity
-            max_width_text = width - 2 * margin - flag_width - flag_spacing
+            current_flag_spacing = flag_spacing if flag_image_data else 0
+            max_width_text = width - 2 * margin - flag_width - current_flag_spacing
             
             for word in words:
                 test_line = f"{current_line} {word}".strip()
@@ -261,13 +305,14 @@ def draw_card_side(
                 lines.append(current_line)
             
             # Draw translation lines with flag image prefix
+            min_y_threshold = offset_y + margin + (20 * mm * scale_factor)
             for line_idx, line in enumerate(lines):
-                if y < offset_y + margin + 20 * mm:
+                if y < min_y_threshold:
                     break
                 
                 # Calculate total width (flag + space + text)
                 text_width = c.stringWidth(line, title_font, title_font_size)
-                total_width = flag_width + flag_spacing + text_width if flag_image_data else text_width
+                total_width = flag_width + current_flag_spacing + text_width if flag_image_data else text_width
                 
                 # Center the entire line (flag + text)
                 line_x = offset_x + (width - total_width) / 2
@@ -277,7 +322,7 @@ def draw_card_side(
                     try:
                         # Align flag slightly below the top of the text (cap height) for better visual alignment
                         ascent = pdfmetrics.getAscent(title_font) * title_font_size / 1000.0
-                        # Position flag slightly lower - offset by a small amount (about 10% of font size)
+                        # Position flag slightly lower - offset by a small amount (scaled with font size)
                         offset = title_font_size * 0.22
                         flag_y = y + ascent - flag_height - offset
                         c.drawImage(ImageReader(flag_image_data), line_x, flag_y, width=flag_width, height=flag_height, mask='auto')
@@ -291,17 +336,18 @@ def draw_card_side(
                 # Draw text
                 c.setFont(title_font, title_font_size)
                 c.setFillColor(HexColor("#000000"))
-                text_x = line_x + flag_width + flag_spacing if (line_idx == 0 and flag_image_data) else line_x
+                text_x = line_x + flag_width + current_flag_spacing if (line_idx == 0 and flag_image_data) else line_x
                 c.drawString(text_x, y, line)
-                y -= title_font_size + 2  # Slightly tighter spacing under each line
+                y -= title_font_size + line_spacing  # Scaled spacing under each line
 
-            y -= 1  # Less extra spacing before IPA
+            y -= line_spacing  # Scaled spacing before IPA
         elif not include_title and (include_ipa or include_description):
             # Add some spacing if title is not included but other elements will be
-            y -= 5
+            y -= 5 * scale_factor
         
         # IPA - centered, using Unicode font, same size as description
-        if include_ipa and lemma.ipa and y > offset_y + margin + 15 * mm:
+        min_y_for_ipa = offset_y + margin + (15 * mm * scale_factor)
+        if include_ipa and lemma.ipa and y > min_y_for_ipa:
             ipa_text = f"/{decode_html_entities(lemma.ipa)}/"
             ipa_drawn = False
             ipa_font_to_use = ipa_font or unicode_font
@@ -326,10 +372,11 @@ def draw_card_side(
                     c.drawString(ipa_x, y, ipa_text)
                 except Exception as e:
                     logger.debug("Failed to draw IPA with Helvetica: %s", str(e))
-            y -= desc_font_size + 10  # More space before description
+            y -= desc_font_size + (10 * scale_factor)  # Scaled space before description
         
         # Description - wrapped in container for better text wrapping
-        if include_description and lemma.description and y > offset_y + margin + 10 * mm:
+        min_y_for_desc = offset_y + margin + (10 * mm * scale_factor)
+        if include_description and lemma.description and y > min_y_for_desc:
             desc = decode_html_entities(lemma.description)
             
             # If title is not included, show flag and use black color but keep smaller font
@@ -369,15 +416,17 @@ def draw_card_side(
                 else:
                     logger.warning("Language flag image not found for %s (checked path: %s)", lang_code, flag_image_path)
                 
+                # Set flag spacing after flag image is loaded
+                desc_flag_spacing = flag_spacing if flag_image_data else 0
+                
                 # Use description font size but black color when title is not included
                 c.setFont(desc_font, desc_font_size)
                 c.setFillColor(HexColor("#000000"))  # Black color, same as title
                 
                 # Use 80% width container (same as normal description)
                 desc_container_width = (width - 2 * margin) * 0.8
-                flag_spacing = 8 if flag_image_data else 0
                 # Account for flag in the 80% width
-                max_width_text = desc_container_width - flag_width - flag_spacing
+                max_width_text = desc_container_width - flag_width - desc_flag_spacing
                 
                 words = desc.split()
                 desc_lines = []
@@ -396,14 +445,15 @@ def draw_card_side(
                     desc_lines.append(current_line)
                 
                 # Draw description lines with flag image prefix
-                max_desc_lines = int((y - offset_y - margin) / (desc_font_size + 2))
+                max_desc_lines = int((y - offset_y - margin) / (desc_font_size + line_spacing))
+                min_y_for_desc_lines = offset_y + margin + (5 * mm * scale_factor)
                 for line_idx, line in enumerate(desc_lines[:max_desc_lines]):
-                    if y < offset_y + margin + 5 * mm:
+                    if y < min_y_for_desc_lines:
                         break
                     
                     # Calculate total width (flag + space + text) within 80% container
                     text_width = c.stringWidth(line, desc_font, desc_font_size)
-                    total_width = flag_width + flag_spacing + text_width if flag_image_data else text_width
+                    total_width = flag_width + desc_flag_spacing + text_width if flag_image_data else text_width
                     
                     # Center the entire line (flag + text) within the 80% container
                     container_x = offset_x + (width - desc_container_width) / 2
@@ -426,9 +476,9 @@ def draw_card_side(
                     # Draw text
                     c.setFont(desc_font, desc_font_size)
                     c.setFillColor(HexColor("#000000"))
-                    text_x = line_x + flag_width + flag_spacing if (line_idx == 0 and flag_image_data) else line_x
+                    text_x = line_x + flag_width + desc_flag_spacing if (line_idx == 0 and flag_image_data) else line_x
                     c.drawString(text_x, y, line)
-                    y -= desc_font_size + 2
+                    y -= desc_font_size + line_spacing
             else:
                 # Title is included, use normal description styling
                 c.setFont(desc_font, desc_font_size)
@@ -455,13 +505,14 @@ def draw_card_side(
                     desc_lines.append(current_line)
                 
                 # Draw description lines (centered within container, limit to available space)
-                max_desc_lines = int((y - offset_y - margin) / (desc_font_size + 2))
+                max_desc_lines = int((y - offset_y - margin) / (desc_font_size + line_spacing))
+                min_y_for_desc_lines = offset_y + margin + (5 * mm * scale_factor)
                 for line in desc_lines[:max_desc_lines]:
-                    if y < offset_y + margin + 5 * mm:
+                    if y < min_y_for_desc_lines:
                         break
                     line_width = c.stringWidth(line, desc_font, desc_font_size)
                     line_x = offset_x + (width - line_width) / 2
                     c.drawString(line_x, y, line)
-                    y -= desc_font_size + 2
+                    y -= desc_font_size + line_spacing
         
-        y -= 28  # More spacing between languages
+        y -= language_spacing  # Scaled spacing between languages

@@ -27,6 +27,9 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
   List<String> _backLanguageCodes = [];
   bool _isExporting = false;
   
+  // Layout selection: 'a4' or 'a6'
+  String _layout = 'a4';
+  
   // Front side options
   bool _includeImageFront = true;
   bool _includePhraseFront = true;
@@ -112,6 +115,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
         conceptIds: widget.conceptIds,
         languagesFront: _frontLanguageCodes,
         languagesBack: _backLanguageCodes,
+        layout: _layout,
         includeImageFront: _includeImageFront,
         includePhraseFront: _includePhraseFront,
         includeIpaFront: _includeIpaFront,
@@ -231,6 +235,126 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // Layout selection buttons
+                  Text(
+                    'Layout',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      // A4 button
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _layout = 'a4';
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _layout == 'a4'
+                                  ? Theme.of(context).colorScheme.primaryContainer
+                                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _layout == 'a4'
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              'A4',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _layout == 'a4'
+                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // A6 button
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _layout = 'a6';
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _layout == 'a6'
+                                  ? Theme.of(context).colorScheme.primaryContainer
+                                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _layout == 'a6'
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              'A6',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _layout == 'a6'
+                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // A8 button
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _layout = 'a8';
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _layout == 'a8'
+                                  ? Theme.of(context).colorScheme.primaryContainer
+                                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _layout == 'a8'
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              'A8',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _layout == 'a8'
+                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
                   // Front language selector
                   Text(
                     'Front Side',
