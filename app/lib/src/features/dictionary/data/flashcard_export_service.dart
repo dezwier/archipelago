@@ -16,6 +16,7 @@ class FlashcardExportService {
     required List<String> languagesFront,
     required List<String> languagesBack,
     String layout = 'a4',
+    bool fitToA4 = false,
     bool includeImageFront = true,
     bool includePhraseFront = true,
     bool includeIpaFront = true,
@@ -33,6 +34,7 @@ class FlashcardExportService {
         'languages_front': languagesFront,
         'languages_back': languagesBack,
         'layout': layout,
+        'fit_to_a4': fitToA4,
         'include_image_front': includeImageFront,
         'include_text_front': includePhraseFront, // Phrase is the term/title
         'include_ipa_front': includeIpaFront,

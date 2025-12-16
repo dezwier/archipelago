@@ -17,7 +17,7 @@ from app.core.database import get_session
 from app.models.models import Concept, Lemma, Topic
 import logging
 
-from .flashcard_layouts import generate_pdf
+from .flashcard_layouts import generate_pdf, generate_pdf_a4_layout
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,7 @@ class FlashcardExportRequest(BaseModel):
     languages_front: List[str] = Field(..., description="Language codes for front side")
     languages_back: List[str] = Field(..., description="Language codes for back side")
     layout: str = Field('a6', description="Page format: 'a4', 'a5', 'a6', or 'a8' (default: 'a6')")
+    fit_to_a4: bool = Field(False, description="Whether to fit multiple cards into A4 pages (only valid for A6 and A8)")
     include_image_front: bool = Field(True, description="Whether to include image on front side")
     include_text_front: bool = Field(True, description="Whether to include text (title/term) on front side")
     include_ipa_front: bool = Field(True, description="Whether to include IPA on front side")
@@ -119,31 +120,56 @@ async def export_flashcards_pdf(
             detail="No valid concepts found"
         )
     
-    logger.info("Exporting %d concepts to PDF with format: %s", len(concepts), request.layout)
+    logger.info("Exporting %d concepts to PDF with format: %s (fit_to_a4: %s)", 
+                len(concepts), request.layout, request.fit_to_a4)
     
     # Get page format from layout string
     pagesize = get_page_format(request.layout)
     
-    # Create PDF buffer with appropriate pagesize
+    # Create PDF buffer - always use A4 pagesize when fit_to_a4 is enabled
     buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=pagesize)
-    
-    # Always use generate_pdf with the specified page format
-    total_cards_drawn = generate_pdf(
-        c=c,
-        concepts=concepts,
-        languages_front=request.languages_front,
-        languages_back=request.languages_back,
-        include_image_front=request.include_image_front,
-        include_text_front=request.include_text_front,
-        include_ipa_front=request.include_ipa_front,
-        include_description_front=request.include_description_front,
-        include_image_back=request.include_image_back,
-        include_text_back=request.include_text_back,
-        include_ipa_back=request.include_ipa_back,
-        include_description_back=request.include_description_back,
-        page_format=pagesize,
-    )
+    if request.fit_to_a4 and request.layout.lower() in ['a6', 'a8']:
+        # Use A4 pagesize when fitting cards to A4
+        c = canvas.Canvas(buffer, pagesize=A4)
+        
+        # Get card format (A6 or A8)
+        card_format = get_page_format(request.layout)
+        
+        # Use generate_pdf_a4_layout to fit multiple cards on A4 pages
+        total_cards_drawn = generate_pdf_a4_layout(
+            c=c,
+            concepts=concepts,
+            languages_front=request.languages_front,
+            languages_back=request.languages_back,
+            include_image_front=request.include_image_front,
+            include_text_front=request.include_text_front,
+            include_ipa_front=request.include_ipa_front,
+            include_description_front=request.include_description_front,
+            include_image_back=request.include_image_back,
+            include_text_back=request.include_text_back,
+            include_ipa_back=request.include_ipa_back,
+            include_description_back=request.include_description_back,
+            card_format=card_format,
+        )
+    else:
+        # Use normal generate_pdf with the specified page format
+        c = canvas.Canvas(buffer, pagesize=pagesize)
+        
+        total_cards_drawn = generate_pdf(
+            c=c,
+            concepts=concepts,
+            languages_front=request.languages_front,
+            languages_back=request.languages_back,
+            include_image_front=request.include_image_front,
+            include_text_front=request.include_text_front,
+            include_ipa_front=request.include_ipa_front,
+            include_description_front=request.include_description_front,
+            include_image_back=request.include_image_back,
+            include_text_back=request.include_text_back,
+            include_ipa_back=request.include_ipa_back,
+            include_description_back=request.include_description_back,
+            page_format=pagesize,
+        )
     logger.info("Total cards drawn: %d", total_cards_drawn)
     
     # Save PDF

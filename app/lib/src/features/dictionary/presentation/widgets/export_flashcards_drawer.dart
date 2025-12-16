@@ -27,8 +27,11 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
   List<String> _backLanguageCodes = [];
   bool _isExporting = false;
   
-  // Layout selection: 'a4' or 'a6'
+  // Layout selection: 'a4', 'a6', or 'a8'
   String _layout = 'a4';
+  
+  // Fit to A4 toggle (only enabled for A6 and A8)
+  bool _fitToA4 = true;
   
   // Front side options
   bool _includeImageFront = true;
@@ -116,6 +119,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
         languagesFront: _frontLanguageCodes,
         languagesBack: _backLanguageCodes,
         layout: _layout,
+        fitToA4: _fitToA4,
         includeImageFront: _includeImageFront,
         includePhraseFront: _includePhraseFront,
         includeIpaFront: _includeIpaFront,
@@ -251,6 +255,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                           onTap: () {
                             setState(() {
                               _layout = 'a4';
+                              _fitToA4 = false; // Reset toggle when A4 is selected
                             });
                           },
                           child: Container(
@@ -351,6 +356,49 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                             ),
                           ),
                         ),
+                      ),
+                    ],
+                  ),
+                  // Fit to A4 toggle (always shown, disabled for A4)
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
+                            String gridSize;
+                            switch (_layout) {
+                              case 'a4':
+                                gridSize = '1x1';
+                                break;
+                              case 'a6':
+                                gridSize = '2x2';
+                                break;
+                              case 'a8':
+                                gridSize = '4x4';
+                                break;
+                              default:
+                                gridSize = '1x1';
+                            }
+                            return Text(
+                              'Fit to A4 page ($gridSize)',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w500,
+                                color: _layout == 'a4'
+                                    ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)
+                                    : null,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      Switch(
+                        value: _fitToA4,
+                        onChanged: _layout == 'a4' ? null : (value) {
+                          setState(() {
+                            _fitToA4 = value;
+                          });
+                        },
                       ),
                     ],
                   ),
