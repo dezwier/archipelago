@@ -26,6 +26,18 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
   List<String> _frontLanguageCodes = [];
   List<String> _backLanguageCodes = [];
   bool _isExporting = false;
+  
+  // Front side options
+  bool _includeImageFront = true;
+  bool _includePhraseFront = true;
+  bool _includeIpaFront = true;
+  bool _includeDescriptionFront = true;
+  
+  // Back side options
+  bool _includeImageBack = true;
+  bool _includePhraseBack = true;
+  bool _includeIpaBack = true;
+  bool _includeDescriptionBack = true;
 
   @override
   void initState() {
@@ -48,18 +60,14 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
         .toList();
   }
 
-  // Get languages available for front side (exclude back side selections)
+  // Get languages available for front side (all visible languages)
   List<Language> get _frontAvailableLanguages {
-    return _visibleLanguages
-        .where((lang) => !_backLanguageCodes.contains(lang.code))
-        .toList();
+    return _visibleLanguages;
   }
 
-  // Get languages available for back side (exclude front side selections)
+  // Get languages available for back side (all visible languages)
   List<Language> get _backAvailableLanguages {
-    return _visibleLanguages
-        .where((lang) => !_frontLanguageCodes.contains(lang.code))
-        .toList();
+    return _visibleLanguages;
   }
 
   void _onFrontLanguageChanged(List<String> selectedLanguages) {
@@ -68,28 +76,6 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
       if (selectedLanguages.isEmpty) {
         return; // Prevent empty selection
       }
-      
-      // Remove any languages that are now selected on front from back side
-      final newBackCodes = _backLanguageCodes
-          .where((code) => !selectedLanguages.contains(code))
-          .toList();
-      
-      // If removing languages from back would leave it empty, find a replacement
-      if (newBackCodes.isEmpty) {
-        // Find first available language for back that's not in front selection
-        final availableForBack = _visibleLanguages
-            .where((lang) => !selectedLanguages.contains(lang.code))
-            .toList();
-        if (availableForBack.isNotEmpty) {
-          _backLanguageCodes = [availableForBack.first.code];
-        } else {
-          // If no replacement available, prevent the change
-          return;
-        }
-      } else {
-        _backLanguageCodes = newBackCodes;
-      }
-      
       _frontLanguageCodes = selectedLanguages;
     });
   }
@@ -100,28 +86,6 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
       if (selectedLanguages.isEmpty) {
         return; // Prevent empty selection
       }
-      
-      // Remove any languages that are now selected on back from front side
-      final newFrontCodes = _frontLanguageCodes
-          .where((code) => !selectedLanguages.contains(code))
-          .toList();
-      
-      // If removing languages from front would leave it empty, find a replacement
-      if (newFrontCodes.isEmpty) {
-        // Find first available language for front that's not in back selection
-        final availableForFront = _visibleLanguages
-            .where((lang) => !selectedLanguages.contains(lang.code))
-            .toList();
-        if (availableForFront.isNotEmpty) {
-          _frontLanguageCodes = [availableForFront.first.code];
-        } else {
-          // If no replacement available, prevent the change
-          return;
-        }
-      } else {
-        _frontLanguageCodes = newFrontCodes;
-      }
-      
       _backLanguageCodes = selectedLanguages;
     });
   }
@@ -148,6 +112,14 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
         conceptIds: widget.conceptIds,
         languagesFront: _frontLanguageCodes,
         languagesBack: _backLanguageCodes,
+        includeImageFront: _includeImageFront,
+        includePhraseFront: _includePhraseFront,
+        includeIpaFront: _includeIpaFront,
+        includeDescriptionFront: _includeDescriptionFront,
+        includeImageBack: _includeImageBack,
+        includePhraseBack: _includePhraseBack,
+        includeIpaBack: _includeIpaBack,
+        includeDescriptionBack: _includeDescriptionBack,
       );
 
       if (!mounted) return;
@@ -261,7 +233,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                   const SizedBox(height: 16),
                   // Front language selector
                   Text(
-                    'Front Side Language',
+                    'Front Side',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -274,10 +246,142 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                     onSelectionChanged: _onFrontLanguageChanged,
                     itemsPerRow: 8,
                   ),
+                  const SizedBox(height: 16),
+                  // Front side options
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      // Image button
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _includeImageFront = !_includeImageFront;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _includeImageFront
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _includeImageFront
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'Image',
+                            style: TextStyle(
+                              color: _includeImageFront
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Phrase button
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _includePhraseFront = !_includePhraseFront;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _includePhraseFront
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _includePhraseFront
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'Phrase',
+                            style: TextStyle(
+                              color: _includePhraseFront
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // IPA button
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _includeIpaFront = !_includeIpaFront;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _includeIpaFront
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _includeIpaFront
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'IPA',
+                            style: TextStyle(
+                              color: _includeIpaFront
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Description button
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _includeDescriptionFront = !_includeDescriptionFront;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _includeDescriptionFront
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _includeDescriptionFront
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'Description',
+                            style: TextStyle(
+                              color: _includeDescriptionFront
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 24),
                   // Back language selector
                   Text(
-                    'Back Side Language',
+                    'Back Side',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -289,6 +393,138 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                     isLoading: false,
                     onSelectionChanged: _onBackLanguageChanged,
                     itemsPerRow: 8,
+                  ),
+                  const SizedBox(height: 16),
+                  // Back side options
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      // Image button
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _includeImageBack = !_includeImageBack;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _includeImageBack
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _includeImageBack
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'Image',
+                            style: TextStyle(
+                              color: _includeImageBack
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Phrase button
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _includePhraseBack = !_includePhraseBack;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _includePhraseBack
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _includePhraseBack
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'Phrase',
+                            style: TextStyle(
+                              color: _includePhraseBack
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // IPA button
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _includeIpaBack = !_includeIpaBack;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _includeIpaBack
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _includeIpaBack
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'IPA',
+                            style: TextStyle(
+                              color: _includeIpaBack
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Description button
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _includeDescriptionBack = !_includeDescriptionBack;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _includeDescriptionBack
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _includeDescriptionBack
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            'Description',
+                            style: TextStyle(
+                              color: _includeDescriptionBack
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 32),
                   // Export button

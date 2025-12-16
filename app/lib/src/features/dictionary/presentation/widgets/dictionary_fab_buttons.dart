@@ -6,6 +6,7 @@ class DictionaryFabButtons extends StatelessWidget {
   final VoidCallback? onGenerateLemmasPressed;
   final VoidCallback? onExportPressed;
   final bool isLoadingConcepts;
+  final bool isLoadingExport;
   final Key? filterButtonKey;
 
   const DictionaryFabButtons({
@@ -15,6 +16,7 @@ class DictionaryFabButtons extends StatelessWidget {
     this.onGenerateLemmasPressed,
     this.onExportPressed,
     this.isLoadingConcepts = false,
+    this.isLoadingExport = false,
     this.filterButtonKey,
   });
 
@@ -42,17 +44,26 @@ class DictionaryFabButtons extends StatelessWidget {
           tooltip: 'Generate Lemmas',
         ),
         const SizedBox(height: 8),
-        // Filtering button
+        // Export button
         FloatingActionButton.small(
-          heroTag: 'filtering_fab',
-          onPressed: onFilteringPressed,
+          heroTag: 'export_fab',
+          onPressed: (isLoadingConcepts || isLoadingExport) ? null : onExportPressed,
           backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
           foregroundColor: Theme.of(context).colorScheme.onSurface,
-          child: const Icon(Icons.filter_list),
-          tooltip: 'Filter',
+          child: isLoadingExport
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Icon(Icons.file_download),
+          tooltip: 'Export Flashcards',
         ),
         const SizedBox(height: 8),
-        // Filter button
+        // Visibility button
         FloatingActionButton.small(
           key: filterButtonKey,
           heroTag: 'filter_fab',
@@ -63,14 +74,14 @@ class DictionaryFabButtons extends StatelessWidget {
           tooltip: 'Show/Hide',
         ),
         const SizedBox(height: 8),
-        // Export button
+        // Filtering button
         FloatingActionButton.small(
-          heroTag: 'export_fab',
-          onPressed: onExportPressed,
+          heroTag: 'filtering_fab',
+          onPressed: onFilteringPressed,
           backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
           foregroundColor: Theme.of(context).colorScheme.onSurface,
-          child: const Icon(Icons.picture_as_pdf),
-          tooltip: 'Export Flashcards',
+          child: const Icon(Icons.filter_list),
+          tooltip: 'Filter',
         ),
       ],
     );

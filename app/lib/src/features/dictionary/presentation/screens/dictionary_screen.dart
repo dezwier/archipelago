@@ -11,6 +11,7 @@ import 'package:archipelago/src/features/dictionary/presentation/widgets/diction
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_fab_buttons.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_empty_search_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/export_flashcards_drawer.dart';
+import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/visibility_options_sheet.dart';
@@ -49,6 +50,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   List<Topic> _allTopics = [];
   bool _isLoadingTopics = false;
   bool _isLoadingConcepts = false; // Loading state for the button
+  bool _isLoadingExport = false; // Loading state for export
 
   @override
   void initState() {
@@ -354,6 +356,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                   onGenerateLemmasPressed: () => _handleGenerateLemmas(context),
                   onExportPressed: () => _showExportDrawer(context),
                   isLoadingConcepts: _isLoadingConcepts,
+                  isLoadingExport: _isLoadingExport,
                 ),
               ),
             ],
@@ -392,22 +395,159 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     );
   }
 
-  void _showExportDrawer(BuildContext context) {
-    final completedCount = _controller.conceptsWithAllVisibleLanguages ?? 0;
-    final visibleLanguageCodes = _languageVisibilityManager.getVisibleLanguageCodes();
+  Future<void> _showExportDrawer(BuildContext context) async {
+    if (_isLoadingExport) return; // Prevent multiple simultaneous exports
     
-    // Get concept IDs from filtered items
-    final conceptIds = _controller.filteredItems
-        .map((item) => item.conceptId)
-        .toList();
+    setState(() {
+      _isLoadingExport = true;
+    });
     
-    showExportFlashcardsDrawer(
-      context: context,
-      conceptIds: conceptIds,
-      completedConceptsCount: completedCount,
-      availableLanguages: _allLanguages,
-      visibleLanguageCodes: visibleLanguageCodes,
-    );
+    try {
+      final completedCount = _controller.conceptsWithAllVisibleLanguages ?? 0;
+      final visibleLanguageCodes = _languageVisibilityManager.getVisibleLanguageCodes();
+      
+      print('🔵 [Export] Starting export - completedCount: $completedCount, visibleLanguages: $visibleLanguageCodes');
+      
+      // Fetch ALL concept IDs that match the current filters (not just visible ones)
+      // Use the EXACT same parameters as the controller uses
+      // Loop through all pages to get all results
+      
+      // Calculate ownUserId the same way the controller does
+      final ownUserIdForApi = (_controller.includePrivate && _controller.currentUser != null) || 
+                              (_controller.ownLemmasFilter && _controller.currentUser != null) 
+                              ? _controller.currentUser!.id 
+                              : null;
+      
+      final Set<int> conceptIdSet = {};
+      int currentPage = 1;
+      bool hasMorePages = true;
+      int totalPagesFetched = 0;
+      
+      // Use the same helper methods as the controller
+      final effectiveTopicIds = _controller.getEffectiveTopicIds();
+      final effectiveLevels = _controller.getEffectiveLevels();
+      final effectivePartOfSpeech = _controller.getEffectivePartOfSpeech();
+      
+      print('🔵 [Export] Starting to fetch pages with filters...');
+      print('🔵 [Export] Using same parameters as controller:');
+      print('  - userId: ${_controller.currentUser?.id}');
+      print('  - visibleLanguageCodes: $visibleLanguageCodes');
+      print('  - ownUserId: $ownUserIdForApi');
+      print('  - includePublic: ${_controller.includePublic}');
+      print('  - includePrivate: ${_controller.includePrivate}');
+      print('  - search: ${_controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null}');
+      print('  - topicIds: $effectiveTopicIds');
+      print('  - includeWithoutTopic: ${_controller.showLemmasWithoutTopic}');
+      print('  - levels: $effectiveLevels');
+      print('  - partOfSpeech: $effectivePartOfSpeech');
+      
+      while (hasMorePages) {
+        print('🔵 [Export] Fetching page $currentPage...');
+        final result = await DictionaryService.getDictionary(
+          userId: _controller.currentUser?.id,
+          page: currentPage,
+          pageSize: 100, // Maximum allowed page size
+          sortBy: _controller.sortOption == SortOption.alphabetical 
+              ? 'alphabetical' 
+              : (_controller.sortOption == SortOption.timeCreatedRecentFirst ? 'recent' : 'random'),
+          search: _controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null,
+          visibleLanguageCodes: visibleLanguageCodes,
+          ownUserId: ownUserIdForApi, // Use same logic as controller
+          includePublic: _controller.includePublic,
+          includePrivate: _controller.includePrivate,
+          topicIds: effectiveTopicIds, // Use helper method
+          includeWithoutTopic: _controller.showLemmasWithoutTopic,
+          levels: effectiveLevels, // Use helper method
+          partOfSpeech: effectivePartOfSpeech, // Use helper method
+        );
+        
+        print('🔵 [Export] Page $currentPage result - success: ${result['success']}, items: ${(result['items'] as List?)?.length ?? 0}');
+        
+        if (result['success'] == true) {
+          final List<dynamic> itemsData = result['items'] as List<dynamic>;
+          print('🔵 [Export] Page $currentPage has ${itemsData.length} items');
+          
+          // Extract unique concept IDs from items
+          for (final item in itemsData) {
+            final conceptId = (item as Map<String, dynamic>)['concept_id'] as int?;
+            if (conceptId != null) {
+              conceptIdSet.add(conceptId);
+            }
+          }
+          
+          print('🔵 [Export] Total unique concept IDs so far: ${conceptIdSet.length}');
+          
+          // Check if there are more pages
+          hasMorePages = result['has_next'] as bool? ?? false;
+          totalPagesFetched++;
+          currentPage++;
+          
+          print('🔵 [Export] Has more pages: $hasMorePages');
+        } else {
+          // Error occurred, break the loop
+          final errorMsg = result['message'] as String? ?? 'Failed to load concepts for export';
+          print('🔴 [Export] Error on page $currentPage: $errorMsg');
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(errorMsg),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          break;
+        }
+      }
+      
+      print('🔵 [Export] Finished fetching. Total pages: $totalPagesFetched, Total concept IDs: ${conceptIdSet.length}');
+      
+      if (!context.mounted) {
+        print('🔴 [Export] Context not mounted, cannot show drawer');
+        return;
+      }
+      
+      if (conceptIdSet.isEmpty) {
+        print('🔴 [Export] No concept IDs found!');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No concepts found to export with current filters'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+      
+      final conceptIds = conceptIdSet.toList();
+      print('🔵 [Export] Opening export drawer with ${conceptIds.length} concept IDs');
+      
+      showExportFlashcardsDrawer(
+        context: context,
+        conceptIds: conceptIds,
+        completedConceptsCount: completedCount,
+        availableLanguages: _allLanguages,
+        visibleLanguageCodes: visibleLanguageCodes,
+      );
+      
+      print('🔵 [Export] Export drawer opened successfully');
+    } catch (e, stackTrace) {
+      print('🔴 [Export] Exception occurred: $e');
+      print('🔴 [Export] Stack trace: $stackTrace');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading concepts: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingExport = false;
+        });
+        print('🔵 [Export] Loading state reset');
+      }
+    }
   }
 
   void _showFilterMenu(BuildContext context) {

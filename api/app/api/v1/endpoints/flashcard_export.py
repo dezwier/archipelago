@@ -19,7 +19,7 @@ from app.core.database import get_session
 from app.models.models import Concept, Lemma, Topic
 import logging
 
-from .flashcard_export_helpers import draw_card_side
+from .flashcard_draw import draw_card_side
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,14 @@ class FlashcardExportRequest(BaseModel):
     concept_ids: List[int] = Field(..., description="List of concept IDs to export")
     languages_front: List[str] = Field(..., description="Language codes for front side")
     languages_back: List[str] = Field(..., description="Language codes for back side")
+    include_image_front: bool = Field(True, description="Whether to include image on front side")
+    include_text_front: bool = Field(True, description="Whether to include text (title/term) on front side")
+    include_ipa_front: bool = Field(True, description="Whether to include IPA on front side")
+    include_description_front: bool = Field(True, description="Whether to include description on front side")
+    include_image_back: bool = Field(True, description="Whether to include image on back side")
+    include_text_back: bool = Field(True, description="Whether to include text (title/term) on back side")
+    include_ipa_back: bool = Field(True, description="Whether to include IPA on back side")
+    include_description_back: bool = Field(True, description="Whether to include description on back side")
 
 
 @router.post("/pdf")
@@ -48,10 +56,17 @@ async def export_flashcards_pdf(
             detail="concept_ids cannot be empty"
         )
     
-    if not request.languages_front or not request.languages_back:
+    # Validate languages are provided if any text-related fields are enabled
+    if (request.include_text_front or request.include_ipa_front or request.include_description_front) and not request.languages_front:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="languages_front and languages_back cannot be empty"
+            detail="languages_front cannot be empty when text, IPA, or description is enabled on front side"
+        )
+    
+    if (request.include_text_back or request.include_ipa_back or request.include_description_back) and not request.languages_back:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="languages_back cannot be empty when text, IPA, or description is enabled on back side"
         )
     
     # Create PDF buffer with A4 pages
@@ -66,9 +81,14 @@ async def export_flashcards_pdf(
             logger.warning("Concept %d not found, skipping", concept_id)
             continue
         
-        # Get lemmas for this concept
+        # Get ALL lemmas for this concept (no limit, no pagination - we need every single one)
+        # Explicitly avoid any limits by using .all() which returns all results
         statement = select(Lemma).where(Lemma.concept_id == concept_id)
+        # Execute without any offset/limit to ensure we get all results
         lemmas = list(session.exec(statement).all())
+        logger.info("Loaded %d lemmas for concept %d (IDs: %s)", 
+                   len(lemmas), concept_id, 
+                   [l.id for l in lemmas[:10]] + (["..."] if len(lemmas) > 10 else []))
         
         # Get topic if available
         topic = None
@@ -82,6 +102,8 @@ async def export_flashcards_pdf(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No valid concepts found"
         )
+    
+    logger.info("Exporting %d concepts to PDF", len(concepts))
     
     # A4 dimensions
     a4_width, a4_height = A4
@@ -131,27 +153,32 @@ async def export_flashcards_pdf(
         (margin_x, a4_height - margin_y - card_height * 2),  # Bottom-left (Card 4 back)
     ]
     
-    def draw_cutting_lines(canvas, page_width, page_height, card_width, card_height, margin_x, margin_y):
+    def draw_cutting_lines(canvas_obj, page_width, page_height, card_width, card_height, margin_x, margin_y):
         """Draw very subtle cutting lines to separate A5 cards on A4 page."""
         # Use a very light gray color for subtle cutting lines
-        canvas.setStrokeColor(HexColor("#E9E9E9"))
-        canvas.setLineWidth(0.5)  # Very thin line
+        canvas_obj.setStrokeColor(HexColor("#F3F3F3"))
+        canvas_obj.setLineWidth(0.5)  # Very thin line
         
         # Vertical line down the middle (separates left and right cards)
         vertical_x = margin_x + card_width
-        canvas.line(vertical_x, margin_y, vertical_x, page_height - margin_y)
+        canvas_obj.line(vertical_x, margin_y, vertical_x, page_height - margin_y)
         
         # Horizontal line across the middle (separates top and bottom cards)
         horizontal_y = page_height - margin_y - card_height
-        canvas.line(margin_x, horizontal_y, page_width - margin_x, horizontal_y)
+        canvas_obj.line(margin_x, horizontal_y, page_width - margin_x, horizontal_y)
     
     # Generate pages in pairs: front page, then back page for each group of 4 cards
     # This creates the correct order for double-sided printing: front, back, front, back, etc.
     
     # Process concepts in groups of 4
+    total_cards_drawn = 0
     for group_start in range(0, len(concepts), 4):
         # Get the 4 concepts for this group (or fewer if it's the last group)
         group_concepts = concepts[group_start:group_start + 4]
+        group_num = (group_start // 4) + 1
+        
+        logger.info("Processing group %d: %d concepts (indices %d-%d)", 
+                   group_num, len(group_concepts), group_start, group_start + len(group_concepts) - 1)
         
         # Initialize front page with white background
         if group_start > 0:
@@ -164,12 +191,22 @@ async def export_flashcards_pdf(
             # Get position for this card (front side)
             offset_x, offset_y = positions_front[card_in_group]
             
+            logger.debug("Drawing front of concept %d at position %d in group", concept.id, card_in_group)
+            
             # Save state, translate and scale, draw card, restore
             c.saveState()
             c.translate(offset_x, offset_y)
             c.scale(scale, scale)
-            draw_card_side(c, concept, lemmas, request.languages_front, topic, offset_x=0, offset_y=0)
+            draw_card_side(
+                c, concept, lemmas, request.languages_front, topic,
+                offset_x=0, offset_y=0,
+                include_image=request.include_image_front,
+                include_title=request.include_text_front,
+                include_ipa=request.include_ipa_front,
+                include_description=request.include_description_front
+            )
             c.restoreState()
+            total_cards_drawn += 1
         
         # Draw cutting lines on front page
         draw_cutting_lines(c, a4_width, a4_height, card_width, card_height, margin_x, margin_y)
@@ -184,15 +221,26 @@ async def export_flashcards_pdf(
             # Get position for this card (back side - mirrored for double-sided printing)
             offset_x, offset_y = positions_back[card_in_group]
             
+            logger.debug("Drawing back of concept %d at position %d in group", concept.id, card_in_group)
+            
             # Save state, translate and scale, draw card, restore
             c.saveState()
             c.translate(offset_x, offset_y)
             c.scale(scale, scale)
-            draw_card_side(c, concept, lemmas, request.languages_back, topic, offset_x=0, offset_y=0)
+            draw_card_side(
+                c, concept, lemmas, request.languages_back, topic,
+                offset_x=0, offset_y=0,
+                include_image=request.include_image_back,
+                include_title=request.include_text_back,
+                include_ipa=request.include_ipa_back,
+                include_description=request.include_description_back
+            )
             c.restoreState()
         
         # Draw cutting lines on back page
         draw_cutting_lines(c, a4_width, a4_height, card_width, card_height, margin_x, margin_y)
+    
+    logger.info("Finished exporting: %d cards drawn from %d concepts", total_cards_drawn, len(concepts))
     
     # Save PDF
     c.save()

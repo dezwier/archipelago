@@ -15,6 +15,14 @@ class FlashcardExportService {
     required List<int> conceptIds,
     required List<String> languagesFront,
     required List<String> languagesBack,
+    bool includeImageFront = true,
+    bool includePhraseFront = true,
+    bool includeIpaFront = true,
+    bool includeDescriptionFront = true,
+    bool includeImageBack = true,
+    bool includePhraseBack = true,
+    bool includeIpaBack = true,
+    bool includeDescriptionBack = true,
   }) async {
     try {
       final url = Uri.parse('${ApiConfig.apiBaseUrl}/flashcard-export/pdf');
@@ -23,6 +31,14 @@ class FlashcardExportService {
         'concept_ids': conceptIds,
         'languages_front': languagesFront,
         'languages_back': languagesBack,
+        'include_image_front': includeImageFront,
+        'include_text_front': includePhraseFront, // Phrase is the term/title
+        'include_ipa_front': includeIpaFront,
+        'include_description_front': includeDescriptionFront,
+        'include_image_back': includeImageBack,
+        'include_text_back': includePhraseBack, // Phrase is the term/title
+        'include_ipa_back': includeIpaBack,
+        'include_description_back': includeDescriptionBack,
       };
       
       final response = await http.post(

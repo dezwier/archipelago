@@ -32,3 +32,4 @@ def downgrade() -> None:
     # The data has been lost (converted to NULL)
     pass
 
+
