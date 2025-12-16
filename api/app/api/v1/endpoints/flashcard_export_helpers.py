@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 # Font registration state
 _unicode_font_registered = False
 _unicode_font_name = "Helvetica"  # Fallback
+_arabic_font_registered = False
+_arabic_font_name = None  # Separate font for Arabic text
 _emoji_font_registered = False
 _emoji_font_name = None
 _custom_fonts_registered = False
@@ -42,8 +44,10 @@ def _build_font_search_paths():
     """Common font search paths (bundled first, then system)."""
     api_root = Path(__file__).parent.parent.parent.parent.parent
     bundled_fonts_dir = api_root / "fonts"
+    assets_fonts_dir = api_root / "assets" / "fonts"
     
     alternative_paths = [
+        assets_fonts_dir,  # Check assets/fonts directory
         Path("/app/assets/fonts"),  # Common Docker path
         Path("/app/fonts"),  # Common Docker path
         Path("./fonts"),  # Current directory
@@ -88,10 +92,13 @@ def find_font_files(search_paths, patterns):
                         if '*' in pattern:
                             # Use fnmatch for wildcard matching (font_name already has extension)
                             # Try pattern with extension, pattern with wildcard+extension, or just pattern
+                            # Also try pattern without extension (since font_name includes extension)
+                            font_name_no_ext = font_name.rsplit('.', 1)[0] if '.' in font_name else font_name
                             if (fnmatch.fnmatch(font_name, pattern + ext) or 
                                 fnmatch.fnmatch(font_name, pattern + '*' + ext) or 
                                 fnmatch.fnmatch(font_name, pattern + ext.replace('.', '')) or
-                                fnmatch.fnmatch(font_name, pattern)):
+                                fnmatch.fnmatch(font_name, pattern) or
+                                fnmatch.fnmatch(font_name_no_ext, pattern.rstrip('*'))):
                                 found_fonts.append(str(font_file))
                                 break
                         else:
@@ -104,15 +111,73 @@ def find_font_files(search_paths, patterns):
 
 def register_unicode_fonts():
     """Register Unicode-supporting fonts if available."""
-    global _unicode_font_registered, _unicode_font_name, _emoji_font_registered, _emoji_font_name
+    global _unicode_font_registered, _unicode_font_name, _arabic_font_registered, _arabic_font_name, _emoji_font_registered, _emoji_font_name
+    
+    # Always try to register Arabic font if not already registered
+    if not _arabic_font_registered:
+        search_paths = _build_font_search_paths()
+        logger.debug("Searching for Arabic font in paths: %s", search_paths)
+        
+        # Search specifically for Arabic fonts first
+        arabic_patterns = [
+            "NotoSansArabic*",
+            "NotoSans*Arabic*",
+            "*Arabic*",
+        ]
+        
+        arabic_fonts = find_font_files(search_paths, arabic_patterns)
+        logger.info("Found Arabic font candidates: %s", arabic_fonts)
+        
+        # Also check for exact filename match in common locations
+        api_root = Path(__file__).parent.parent.parent.parent.parent
+        exact_paths = [
+            api_root / "assets" / "fonts" / "NotoSansArabic-Regular.ttf",
+            api_root / "fonts" / "NotoSansArabic-Regular.ttf",
+            Path("/app/assets/fonts/NotoSansArabic-Regular.ttf"),
+            Path("/app/fonts/NotoSansArabic-Regular.ttf"),
+        ]
+        
+        for exact_path in exact_paths:
+            if exact_path.exists() and str(exact_path) not in arabic_fonts:
+                arabic_fonts.insert(0, str(exact_path))
+                logger.info("Found Arabic font at exact path: %s", exact_path)
+        
+        # Register Arabic font if found
+        for font_path in arabic_fonts:
+            if not os.path.exists(font_path):
+                logger.debug("Arabic font path does not exist: %s", font_path)
+                continue
+            try:
+                font_size = os.path.getsize(font_path)
+                if font_size < 10000:
+                    logger.warning("Arabic font file too small (%d bytes), skipping: %s", font_size, font_path)
+                    continue
+                # Check if font is already registered with this name
+                if "ArabicFont" in pdfmetrics.getRegisteredFontNames():
+                    logger.info("ArabicFont already registered, skipping")
+                    _arabic_font_name = "ArabicFont"
+                    _arabic_font_registered = True
+                    break
+                pdfmetrics.registerFont(TTFont("ArabicFont", font_path))
+                _arabic_font_name = "ArabicFont"
+                _arabic_font_registered = True
+                logger.info("Successfully registered Arabic font: %s (size: %d KB)", font_path, font_size // 1024)
+                break
+            except Exception as e:
+                logger.warning("Failed to register Arabic font %s: %s", font_path, str(e))
+                import traceback
+                logger.debug("Traceback: %s", traceback.format_exc())
+                continue
     
     if _unicode_font_registered:
         return _unicode_font_name, _emoji_font_name
     
     search_paths = _build_font_search_paths()
     
-    # Try to find Unicode-supporting fonts
+    # Try to find Unicode-supporting fonts (prioritize Arabic-supporting fonts)
     unicode_patterns = [
+        "NotoSansArabic*",  # Prioritize Arabic-specific fonts
+        "NotoSans*Arabic*",
         "Arial Unicode",
         "ArialUni",
         "NotoSans*",
@@ -129,14 +194,40 @@ def register_unicode_fonts():
     
     # Find and try Unicode fonts
     unicode_fonts = find_font_files(search_paths, unicode_patterns)
-    # Prioritize: Arial Unicode first (most common), then Noto, then DejaVu
-    unicode_fonts.sort(key=lambda x: (
+    logger.debug("Found Unicode font candidates: %s", unicode_fonts)
+    
+    # Separate Arabic fonts from general Unicode fonts
+    arabic_fonts = [f for f in unicode_fonts if 'Arabic' in f and 'Noto' in f]
+    general_unicode_fonts = [f for f in unicode_fonts if 'Arabic' not in f]
+    
+    # Prioritize general Unicode fonts: Arial Unicode first, then Noto, then DejaVu
+    general_unicode_fonts.sort(key=lambda x: (
         0 if 'Arial Unicode' in x or 'ArialUni' in x else
         1 if 'Noto' in x else
         2 if 'DejaVu' in x else 3
     ))
     
-    for font_path in unicode_fonts:
+    # Register Arabic font separately if available (if not already registered above)
+    if not _arabic_font_registered and arabic_fonts:
+        for font_path in arabic_fonts:
+            if not os.path.exists(font_path):
+                continue
+            try:
+                font_size = os.path.getsize(font_path)
+                if font_size < 10000:
+                    logger.warning("Arabic font file too small (%d bytes), skipping: %s", font_size, font_path)
+                    continue
+                pdfmetrics.registerFont(TTFont("ArabicFont", font_path))
+                _arabic_font_name = "ArabicFont"
+                _arabic_font_registered = True
+                logger.info("Successfully registered Arabic font: %s (size: %d KB)", font_path, font_size // 1024)
+                break
+            except Exception as e:
+                logger.warning("Failed to register Arabic font %s: %s", font_path, str(e))
+                continue
+    
+    # Register general Unicode font for IPA and other Unicode text
+    for font_path in general_unicode_fonts:
         if not os.path.exists(font_path):
             logger.debug("Font file does not exist: %s", font_path)
             continue
@@ -158,6 +249,12 @@ def register_unicode_fonts():
             if hasattr(e, 'args') and e.args:
                 logger.debug("Font registration error details: %s", e.args)
             continue
+    
+    # If no general Unicode font found but we have Arabic font, use it as fallback
+    if not _unicode_font_registered and _arabic_font_registered:
+        _unicode_font_name = _arabic_font_name
+        _unicode_font_registered = True
+        logger.info("Using Arabic font as Unicode font fallback")
     
     # Find and try emoji fonts
     emoji_fonts = find_font_files(search_paths, emoji_patterns)
@@ -291,6 +388,61 @@ def decode_html_entities(text: str) -> str:
     if not text:
         return ""
     return html.unescape(text)
+
+
+def contains_arabic_characters(text: str) -> bool:
+    """Check if text contains Arabic characters."""
+    if not text:
+        return False
+    # Arabic Unicode range: U+0600 to U+06FF
+    return any('\u0600' <= char <= '\u06FF' for char in text)
+
+
+def is_arabic_language(lang_code: str) -> bool:
+    """Check if language code is Arabic."""
+    return lang_code.lower() == 'ar'
+
+
+def should_use_unicode_font(lang_code: str, text: str) -> bool:
+    """Determine if Unicode font should be used for this text."""
+    return is_arabic_language(lang_code) or contains_arabic_characters(text)
+
+
+def process_arabic_text(text: str) -> str:
+    """
+    Process Arabic text for proper rendering in PDF.
+    Reshapes Arabic characters and applies bidirectional text algorithm.
+    
+    Args:
+        text: Arabic text to process
+    
+    Returns:
+        Processed text ready for PDF rendering
+    """
+    if not text:
+        return text
+    
+    # Only process if text contains Arabic characters
+    if not contains_arabic_characters(text):
+        return text
+    
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+        
+        # Reshape Arabic text (handles character forms based on position)
+        reshaped_text = arabic_reshaper.reshape(text)
+        # Apply bidirectional algorithm for RTL display
+        bidi_text = get_display(reshaped_text)
+        logger.debug("Processed Arabic text: '%s' -> '%s'", text[:50], bidi_text[:50])
+        return bidi_text
+    except ImportError:
+        logger.warning("arabic-reshaper or python-bidi not installed. Arabic text may not render correctly.")
+        logger.warning("Install with: pip install arabic-reshaper python-bidi")
+        return text
+    except Exception as e:
+        logger.warning("Failed to process Arabic text: %s", str(e))
+        return text
 
 
 # ============================================================================
@@ -433,330 +585,3 @@ def apply_rounded_corners(image: Image.Image, corner_radius_px: int) -> Image.Im
     return image
 
 
-# ============================================================================
-# PDF Drawing Utilities
-# ============================================================================
-
-def draw_card_side(
-    c: canvas.Canvas,
-    concept: Concept,
-    lemmas: List[Lemma],
-    languages: List[str],
-    topic: Optional[Topic] = None,
-    offset_x: float = 0,
-    offset_y: float = 0,
-):
-    """Draw one side of a flashcard (A5 size: 148 x 210 mm).
-    
-    Args:
-        c: Canvas to draw on
-        concept: Concept to draw
-        lemmas: List of lemmas for the concept
-        languages: List of language codes to display
-        topic: Optional topic
-        offset_x: X offset from top-left corner (for positioning on A4 page)
-        offset_y: Y offset from top-left corner (for positioning on A4 page)
-    """
-    width, height = A5
-    margin = 10 * mm
-    
-    # Register Unicode fonts for IPA symbols and emojis
-    unicode_font, emoji_font = register_unicode_fonts()
-    title_font, desc_font, ipa_font = register_flashcard_fonts()
-    
-    # Log registered fonts for debugging
-    registered_fonts = pdfmetrics.getRegisteredFontNames()
-    logger.debug("Available fonts: %s", registered_fonts)
-    logger.info(
-        "Using fonts - Title: %s, Description: %s, IPA: %s, Unicode: %s, Emoji: %s",
-        title_font, desc_font, ipa_font, unicode_font, emoji_font
-    )
-    
-    # Clear background (at offset position)
-    c.setFillColor(HexColor("#FFFFFF"))
-    c.rect(offset_x, offset_y, width, height, fill=1, stroke=0)
-    
-    # Topic icon at top right (subtle) - use emoji font if available
-    if topic and topic.icon:
-        icon_size = 16
-        icon_drawn = False
-        if emoji_font and emoji_font in pdfmetrics.getRegisteredFontNames():
-            try:
-                c.setFont(emoji_font, icon_size)
-                c.setFillColor(HexColor("#CCCCCC"))  # Subtle gray
-                icon_width = c.stringWidth(topic.icon, emoji_font, icon_size)
-                icon_x = offset_x + width - margin - icon_width
-                icon_y = offset_y + height - margin - icon_size
-                c.drawString(icon_x, icon_y, topic.icon)
-                icon_drawn = True
-            except Exception as e:
-                logger.debug("Failed to draw topic icon with emoji font: %s", str(e))
-        
-        if not icon_drawn and unicode_font and unicode_font in pdfmetrics.getRegisteredFontNames():
-            try:
-                c.setFont(unicode_font, icon_size)
-                c.setFillColor(HexColor("#CCCCCC"))  # Subtle gray
-                icon_width = c.stringWidth(topic.icon, unicode_font, icon_size)
-                icon_x = offset_x + width - margin - icon_width
-                icon_y = offset_y + height - margin - icon_size
-                c.drawString(icon_x, icon_y, topic.icon)
-            except Exception as e:
-                logger.debug("Failed to draw topic icon with unicode font: %s", str(e))
-    
-    y = offset_y + height - margin
-    
-    # Image at the top (centered) - with more spacing
-    image_height = 60 * mm
-    image_margin_top = 10 * mm  # Increased spacing above image
-    image_margin_bottom = 20 * mm  # Increased spacing below image
-    
-    # Add space above image
-    y -= image_margin_top
-    
-    if concept.image_url:
-        image_data = download_image(concept.image_url)
-        if image_data:
-            try:
-                # Open with PIL to resize
-                pil_image = Image.open(image_data)
-                # Calculate size to fit
-                max_width = width - 2 * margin
-                max_height = image_height
-                
-                # Maintain aspect ratio
-                img_width, img_height = pil_image.size
-                aspect_ratio = img_width / img_height
-                
-                if aspect_ratio > (max_width / max_height):
-                    # Width is limiting
-                    new_width = max_width
-                    new_height = max_width / aspect_ratio
-                else:
-                    # Height is limiting
-                    new_height = max_height
-                    new_width = max_height * aspect_ratio
-                
-                # Calculate target display size in pixels (ReportLab uses points, 1 point = 1/72 inch)
-                target_width_px = int(new_width)
-                target_height_px = int(new_height)
-                
-                # Supersample for sharper output: render at 3x resolution and let PDF scale down
-                # This improves quality without making the image bigger visually
-                supersample_factor = 3
-                render_width_px = max(int(target_width_px * supersample_factor), 1)
-                render_height_px = max(int(target_height_px * supersample_factor), 1)
-                
-                # Resize with high-quality resampling to supersampled size
-                if pil_image.size != (render_width_px, render_height_px):
-                    pil_image = pil_image.resize((render_width_px, render_height_px), Image.Resampling.LANCZOS)
-                
-                # Add rounded corners using a mask
-                # Convert 8mm to pixels: 8mm as a proportion of the page width, then scale to image pixels
-                # Scale corner radius by supersample factor to match the supersampled image
-                corner_radius_px = int((6 * mm / width) * new_width * supersample_factor)
-                # Ensure reasonable radius (scaled appropriately for supersampled image)
-                corner_radius_px = max(6 * supersample_factor, min(corner_radius_px, 30 * supersample_factor))
-                
-                # Apply rounded corners using the helper function
-                pil_image = apply_rounded_corners(pil_image, corner_radius_px)
-                
-                # Save to BytesIO with full quality (PNG for transparency support)
-                img_buffer = BytesIO()
-                # Save with no compression for maximum quality
-                pil_image.save(img_buffer, format="PNG", compress_level=0, optimize=False)
-                img_buffer.seek(0)
-                
-                # Draw image centered (rounded corners are already applied via mask)
-                img_x = offset_x + (width - new_width) / 2
-                img_y = y - new_height
-                # mask='auto' ensures the PNG alpha (rounded corners) is respected by reportlab
-                c.drawImage(ImageReader(img_buffer), img_x, img_y, width=new_width, height=new_height, mask='auto')
-                y = img_y - image_margin_bottom  # More spacing below image
-            except Exception as e:
-                logger.warning("Failed to draw image for concept %d: %s", concept.id, str(e))
-                y -= image_height + image_margin_bottom  # Reserve space even if image fails
-    
-    # Language lemmas below
-    # Calculate font sizes
-    title_font_size = 14  # Reduced from 20
-    desc_font_size = 8  # Smaller font for description and IPA
-    
-    # Draw lemmas for each language
-    for lang_code in languages:
-        # Find lemma for this language
-        lemma = next((l for l in lemmas if l.language_code.lower() == lang_code.lower()), None)
-        if not lemma:
-            continue
-        
-        #if y < offset_y + margin + 30 * mm:  # Not enough space
-        #    break
-        
-        # Translation (main term) - centered
-        # Load language flag image and draw it before title text
-        translation_text = decode_html_entities(lemma.term)
-        
-        # Get language flag image
-        flag_image_path = get_language_flag_image_path(lang_code)
-        flag_image_data = None
-        flag_width = 0
-        # Keep flag height close to text; improve quality via supersampling
-        flag_height = title_font_size * .85
-        
-        if flag_image_path and flag_image_path.exists():
-            try:
-                logger.debug("Loading flag image for %s from %s", lang_code, flag_image_path)
-                # Open image directly from path with PIL
-                pil_flag = Image.open(flag_image_path)
-                logger.debug("Flag image loaded: %dx%d pixels", pil_flag.width, pil_flag.height)
-                # Maintain aspect ratio, scale to match desired height
-                flag_aspect = pil_flag.width / pil_flag.height
-                flag_width = flag_height * flag_aspect
-                logger.debug("Flag image will be rendered at %fx%f points", flag_width, flag_height)
-                # Supersample for sharper output: render at 3x target and let PDF scale down
-                target_width_px = max(int(flag_width * 3), 1)
-                target_height_px = max(int(flag_height * 3), 1)
-                if pil_flag.size != (target_width_px, target_height_px):
-                    pil_flag = pil_flag.resize((target_width_px, target_height_px), Image.Resampling.LANCZOS)
-                
-                # Apply rounded corners to flag image
-                # Use a smaller corner radius for flags (scaled by supersample factor)
-                flag_corner_radius_px = max(2 * 3, min(int(flag_height * 0.15 * 3), 4 * 3))  # 15% of height, max 8px, scaled by 3x
-                logging.info(flag_corner_radius_px)
-                pil_flag = apply_rounded_corners(pil_flag, flag_corner_radius_px)
-                
-                # Save to buffer with high quality (no compression)
-                flag_buffer = BytesIO()
-                pil_flag.save(flag_buffer, format="PNG", compress_level=0, optimize=False)
-                flag_buffer.seek(0)
-                flag_image_data = flag_buffer
-                logger.debug("Flag image processed and ready for rendering")
-            except Exception as e:
-                logger.warning("Failed to load language flag image for %s from %s: %s", lang_code, flag_image_path, str(e))
-                import traceback
-                logger.debug("Traceback: %s", traceback.format_exc())
-                flag_image_data = None
-        else:
-            logger.warning("Language flag image not found for %s (checked path: %s)", lang_code, flag_image_path)
-        
-        # Word wrap for translation text (accounting for flag image)
-        c.setFont(title_font, title_font_size)
-        words = translation_text.split()
-        lines = []
-        current_line = ""
-        flag_spacing = 8 if flag_image_data else 0  # Extra spacing for clarity
-        max_width_text = width - 2 * margin - flag_width - flag_spacing
-        
-        for word in words:
-            test_line = f"{current_line} {word}".strip()
-            if c.stringWidth(test_line, title_font, title_font_size) <= max_width_text:
-                current_line = test_line
-            else:
-                if current_line:
-                    lines.append(current_line)
-                current_line = word
-        
-        if current_line:
-            lines.append(current_line)
-        
-        # Draw translation lines with flag image prefix
-        for line_idx, line in enumerate(lines):
-            if y < offset_y + margin + 20 * mm:
-                break
-            
-            # Calculate total width (flag + space + text)
-            text_width = c.stringWidth(line, title_font, title_font_size)
-            total_width = flag_width + flag_spacing + text_width if flag_image_data else text_width
-            
-            # Center the entire line (flag + text)
-            line_x = offset_x + (width - total_width) / 2
-            
-            # Draw flag image (only on first line)
-            if line_idx == 0 and flag_image_data:
-                try:
-                    # Align flag slightly below the top of the text (cap height) for better visual alignment
-                    ascent = pdfmetrics.getAscent(title_font) * title_font_size / 1000.0
-                    # Position flag slightly lower - offset by a small amount (about 10% of font size)
-                    offset = title_font_size * 0.22
-                    flag_y = y + ascent - flag_height - offset
-                    c.drawImage(ImageReader(flag_image_data), line_x, flag_y, width=flag_width, height=flag_height, mask='auto')
-                    logger.debug(
-                        "Drew flag image for %s at (%.2f, %.2f) with size (%.2f, %.2f) | ascent=%.2f",
-                        lang_code, line_x, flag_y, flag_width, flag_height, ascent
-                    )
-                except Exception as e:
-                    logger.warning("Failed to draw language flag image: %s", str(e))
-            
-            # Draw text
-            c.setFont(title_font, title_font_size)
-            c.setFillColor(HexColor("#000000"))
-            text_x = line_x + flag_width + flag_spacing if (line_idx == 0 and flag_image_data) else line_x
-            c.drawString(text_x, y, line)
-            y -= title_font_size + 2  # Slightly tighter spacing under each line
-
-        y -= 1  # Less extra spacing before IPA
-        
-        # IPA - centered, using Unicode font, same size as description
-        if lemma.ipa and y > offset_y + margin + 15 * mm:
-            ipa_text = f"/{decode_html_entities(lemma.ipa)}/"
-            ipa_drawn = False
-            ipa_font_to_use = ipa_font or unicode_font
-            if ipa_font_to_use and ipa_font_to_use in pdfmetrics.getRegisteredFontNames():
-                try:
-                    c.setFont(ipa_font_to_use, desc_font_size)
-                    c.setFillColor(HexColor("#aaaaaa"))
-                    ipa_width = c.stringWidth(ipa_text, ipa_font_to_use, desc_font_size)
-                    ipa_x = offset_x + (width - ipa_width) / 2
-                    c.drawString(ipa_x, y, ipa_text)
-                    ipa_drawn = True
-                except Exception as e:
-                    logger.debug("Failed to draw IPA with custom/unicode font: %s", str(e))
-            
-            if not ipa_drawn:
-                # Fallback if Unicode font doesn't support the IPA characters
-                try:
-                    c.setFont("Helvetica", desc_font_size)
-                    c.setFillColor(HexColor("#aaaaaa"))
-                    ipa_width = c.stringWidth(ipa_text, "Helvetica", desc_font_size)
-                    ipa_x = offset_x + (width - ipa_width) / 2
-                    c.drawString(ipa_x, y, ipa_text)
-                except Exception as e:
-                    logger.debug("Failed to draw IPA with Helvetica: %s", str(e))
-            y -= desc_font_size + 10  # More space before description
-        
-        # Description - wrapped in container for better text wrapping
-        if lemma.description and y > offset_y + margin + 10 * mm:
-            desc = decode_html_entities(lemma.description)
-            c.setFont(desc_font, desc_font_size)
-            c.setFillColor(HexColor("#999999"))  # Grey color
-            
-            # Use narrower width for description container (80% of available width)
-            desc_container_width = (width - 2 * margin) * 0.7
-            
-            # Word wrap description within container
-            words = desc.split()
-            desc_lines = []
-            current_line = ""
-            
-            for word in words:
-                test_line = f"{current_line} {word}".strip()
-                if c.stringWidth(test_line, desc_font, desc_font_size) <= desc_container_width:
-                    current_line = test_line
-                else:
-                    if current_line:
-                        desc_lines.append(current_line)
-                    current_line = word
-            
-            if current_line:
-                desc_lines.append(current_line)
-            
-            # Draw description lines (centered within container, limit to available space)
-            max_desc_lines = int((y - offset_y - margin) / (desc_font_size + 2))
-            for line in desc_lines[:max_desc_lines]:
-                if y < offset_y + margin + 5 * mm:
-                    break
-                line_width = c.stringWidth(line, desc_font, desc_font_size)
-                line_x = offset_x + (width - line_width) / 2
-                c.drawString(line_x, y, line)
-                y -= desc_font_size + 2
-        
-        y -= 28  # More spacing between languages

@@ -60,8 +60,9 @@ class FlashcardExportService {
         final file = File('${tempDir.path}/flashcards.pdf');
         await file.writeAsBytes(bytes);
         
-        // Share the file
-        await Share.shareXFiles(
+        // Share the file (don't await - let it open in background)
+        // This allows the UI to stop loading immediately
+        Share.shareXFiles(
           [XFile(file.path)],
           subject: 'Flashcards PDF',
         );

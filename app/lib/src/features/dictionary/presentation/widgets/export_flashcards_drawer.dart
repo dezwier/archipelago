@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/common_widgets/language_selection_widget.dart';
 import 'package:archipelago/src/features/dictionary/data/flashcard_export_service.dart';
@@ -48,14 +49,101 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
   @override
   void initState() {
     super.initState();
-    // Initialize with first two visible languages if available
-    if (widget.visibleLanguageCodes.isNotEmpty) {
-      _frontLanguageCodes = [widget.visibleLanguageCodes[0]];
-      if (widget.visibleLanguageCodes.length > 1) {
-        _backLanguageCodes = [widget.visibleLanguageCodes[1]];
-      } else {
-        _backLanguageCodes = [widget.visibleLanguageCodes[0]];
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Load layout
+      _layout = prefs.getString('export_layout') ?? 'a4';
+      _fitToA4 = prefs.getBool('export_fit_to_a4') ?? true;
+      
+      // Load front side options
+      _includeImageFront = prefs.getBool('export_include_image_front') ?? true;
+      _includePhraseFront = prefs.getBool('export_include_phrase_front') ?? true;
+      _includeIpaFront = prefs.getBool('export_include_ipa_front') ?? true;
+      _includeDescriptionFront = prefs.getBool('export_include_description_front') ?? true;
+      
+      // Load back side options
+      _includeImageBack = prefs.getBool('export_include_image_back') ?? true;
+      _includePhraseBack = prefs.getBool('export_include_phrase_back') ?? true;
+      _includeIpaBack = prefs.getBool('export_include_ipa_back') ?? true;
+      _includeDescriptionBack = prefs.getBool('export_include_description_back') ?? true;
+      
+      // Load language selections
+      final savedFrontLanguages = prefs.getStringList('export_front_languages');
+      final savedBackLanguages = prefs.getStringList('export_back_languages');
+      
+      // Validate saved languages against visible languages
+      if (savedFrontLanguages != null && savedFrontLanguages.isNotEmpty) {
+        _frontLanguageCodes = savedFrontLanguages
+            .where((code) => widget.visibleLanguageCodes.contains(code))
+            .toList();
       }
+      if (savedBackLanguages != null && savedBackLanguages.isNotEmpty) {
+        _backLanguageCodes = savedBackLanguages
+            .where((code) => widget.visibleLanguageCodes.contains(code))
+            .toList();
+      }
+      
+      // If no valid saved languages, use defaults
+      if (_frontLanguageCodes.isEmpty && widget.visibleLanguageCodes.isNotEmpty) {
+        _frontLanguageCodes = [widget.visibleLanguageCodes[0]];
+      }
+      if (_backLanguageCodes.isEmpty && widget.visibleLanguageCodes.isNotEmpty) {
+        if (widget.visibleLanguageCodes.length > 1) {
+          _backLanguageCodes = [widget.visibleLanguageCodes[1]];
+        } else {
+          _backLanguageCodes = [widget.visibleLanguageCodes[0]];
+        }
+      }
+      
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      // If loading fails, use defaults
+      if (widget.visibleLanguageCodes.isNotEmpty) {
+        _frontLanguageCodes = [widget.visibleLanguageCodes[0]];
+        if (widget.visibleLanguageCodes.length > 1) {
+          _backLanguageCodes = [widget.visibleLanguageCodes[1]];
+        } else {
+          _backLanguageCodes = [widget.visibleLanguageCodes[0]];
+        }
+      }
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Save layout
+      await prefs.setString('export_layout', _layout);
+      await prefs.setBool('export_fit_to_a4', _fitToA4);
+      
+      // Save front side options
+      await prefs.setBool('export_include_image_front', _includeImageFront);
+      await prefs.setBool('export_include_phrase_front', _includePhraseFront);
+      await prefs.setBool('export_include_ipa_front', _includeIpaFront);
+      await prefs.setBool('export_include_description_front', _includeDescriptionFront);
+      
+      // Save back side options
+      await prefs.setBool('export_include_image_back', _includeImageBack);
+      await prefs.setBool('export_include_phrase_back', _includePhraseBack);
+      await prefs.setBool('export_include_ipa_back', _includeIpaBack);
+      await prefs.setBool('export_include_description_back', _includeDescriptionBack);
+      
+      // Save language selections
+      await prefs.setStringList('export_front_languages', _frontLanguageCodes);
+      await prefs.setStringList('export_back_languages', _backLanguageCodes);
+    } catch (e) {
+      // Ignore save errors
     }
   }
 
@@ -83,6 +171,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
         return; // Prevent empty selection
       }
       _frontLanguageCodes = selectedLanguages;
+      _saveSettings();
     });
   }
 
@@ -93,6 +182,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
         return; // Prevent empty selection
       }
       _backLanguageCodes = selectedLanguages;
+      _saveSettings();
     });
   }
 
@@ -132,13 +222,13 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
 
       if (!mounted) return;
 
-      // Always reset the exporting state before closing drawer or showing messages
-      setState(() {
-        _isExporting = false;
-      });
-
       if (result['success'] == true) {
-        // Show success message first
+        // Stop loading immediately - the file is saved and share dialog is opening
+        setState(() {
+          _isExporting = false;
+        });
+        
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Flashcards exported successfully'),
@@ -146,12 +236,12 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
           ),
         );
         
-        // Close the drawer after a brief delay to ensure state is updated
-        await Future.delayed(const Duration(milliseconds: 100));
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
+        // Don't close the drawer - let user export again or close manually
       } else {
+        // Reset the exporting state on error
+        setState(() {
+          _isExporting = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result['message'] as String? ?? 'Failed to export flashcards'),
@@ -256,6 +346,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                             setState(() {
                               _layout = 'a4';
                               _fitToA4 = false; // Reset toggle when A4 is selected
+                              _saveSettings();
                             });
                           },
                           child: Container(
@@ -292,6 +383,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                           onTap: () {
                             setState(() {
                               _layout = 'a6';
+                              _saveSettings();
                             });
                           },
                           child: Container(
@@ -328,6 +420,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                           onTap: () {
                             setState(() {
                               _layout = 'a8';
+                              _saveSettings();
                             });
                           },
                           child: Container(
@@ -397,6 +490,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                         onChanged: _layout == 'a4' ? null : (value) {
                           setState(() {
                             _fitToA4 = value;
+                            _saveSettings();
                           });
                         },
                       ),
@@ -429,6 +523,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                         onTap: () {
                           setState(() {
                             _includeImageFront = !_includeImageFront;
+                            _saveSettings();
                           });
                         },
                         child: Container(
@@ -460,6 +555,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                         onTap: () {
                           setState(() {
                             _includePhraseFront = !_includePhraseFront;
+                            _saveSettings();
                           });
                         },
                         child: Container(
@@ -491,6 +587,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                         onTap: () {
                           setState(() {
                             _includeIpaFront = !_includeIpaFront;
+                            _saveSettings();
                           });
                         },
                         child: Container(
@@ -522,6 +619,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                         onTap: () {
                           setState(() {
                             _includeDescriptionFront = !_includeDescriptionFront;
+                            _saveSettings();
                           });
                         },
                         child: Container(
@@ -577,6 +675,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                         onTap: () {
                           setState(() {
                             _includeImageBack = !_includeImageBack;
+                            _saveSettings();
                           });
                         },
                         child: Container(
@@ -608,6 +707,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                         onTap: () {
                           setState(() {
                             _includePhraseBack = !_includePhraseBack;
+                            _saveSettings();
                           });
                         },
                         child: Container(
@@ -639,6 +739,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                         onTap: () {
                           setState(() {
                             _includeIpaBack = !_includeIpaBack;
+                            _saveSettings();
                           });
                         },
                         child: Container(
@@ -670,6 +771,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                         onTap: () {
                           setState(() {
                             _includeDescriptionBack = !_includeDescriptionBack;
+                            _saveSettings();
                           });
                         },
                         child: Container(

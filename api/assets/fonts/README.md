@@ -2,41 +2,70 @@
 
 This directory contains Unicode-supporting fonts for PDF generation.
 
-## Required Font
+## Required Fonts
+
+### Noto Sans (for IPA symbols and emojis)
 
 For proper rendering of IPA symbols and emojis in PDF exports, you need to download **Noto Sans** font.
 
-### Quick Setup
+#### Quick Setup
 
 Run this command from the project root:
 
 ```bash
-cd api/fonts
+cd api/assets/fonts
 curl -L -o NotoSans-Regular.ttf "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
 ```
 
 Or using Python:
 
 ```bash
-python3 api/fonts/download_font.py
+python3 api/assets/fonts/download_font.py
 ```
 
 Or using the shell script:
 
 ```bash
-./api/fonts/download_font.sh
+./api/assets/fonts/download_font.sh
+```
+
+### Noto Sans Arabic (for Arabic text)
+
+For proper rendering of Arabic text in PDF exports, you need to download **Noto Sans Arabic** font.
+
+#### Quick Setup
+
+Run this command from the project root:
+
+```bash
+cd api/assets/fonts
+python3 download_arabic_font.py
+```
+
+Or using the shell script:
+
+```bash
+./api/assets/fonts/download_arabic_font.sh
+```
+
+Or manually:
+
+```bash
+cd api/assets/fonts
+curl -L -o NotoSansArabic-Regular.ttf "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf"
 ```
 
 ### Manual Download
 
-1. Visit: https://fonts.google.com/noto/specimen/Noto+Sans
-2. Click "Download family"
-3. Extract the ZIP file
-4. Copy `NotoSans-Regular.ttf` to this `api/fonts/` directory
+1. **Noto Sans**: Visit https://fonts.google.com/noto/specimen/Noto+Sans
+2. **Noto Sans Arabic**: Visit https://fonts.google.com/noto/specimen/Noto+Sans+Arabic
+3. Click "Download family" for each
+4. Extract the ZIP files
+5. Copy `NotoSans-Regular.ttf` and `NotoSansArabic-Regular.ttf` to this `api/assets/fonts/` directory
 
 ## Font License
 
-Noto Sans is licensed under the SIL Open Font License (OFL), which allows free use, modification, and distribution.
+Noto Sans fonts are licensed under the SIL Open Font License (OFL), which allows free use, modification, and distribution.
 
 ## Alternative Fonts
 

@@ -11,6 +11,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.colors import HexColor
 from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfgen.textobject import PDFTextObject
 
 from app.models.models import Concept, Lemma, Topic
 from .flashcard_export_helpers import (
@@ -20,6 +21,9 @@ from .flashcard_export_helpers import (
     get_language_flag_image_path,
     decode_html_entities,
     apply_rounded_corners,
+    should_use_unicode_font,
+    process_arabic_text,
+    contains_arabic_characters,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,11 +117,15 @@ def draw_card_side(
     
     # Log registered fonts for debugging
     registered_fonts = pdfmetrics.getRegisteredFontNames()
-    logger.debug("Available fonts: %s", registered_fonts)
+    logger.info("All registered fonts: %s", registered_fonts)
     logger.info(
         "Using fonts - Title: %s, Description: %s, IPA: %s, Unicode: %s, Emoji: %s",
         title_font, desc_font, ipa_font, unicode_font, emoji_font
     )
+    if "ArabicFont" in registered_fonts:
+        logger.info("ArabicFont is available for Arabic text rendering")
+    else:
+        logger.warning("ArabicFont is NOT registered - Arabic text may not render correctly!")
     
     # Clear background (at offset position)
     c.setFillColor(HexColor("#FFFFFF"))
@@ -241,6 +249,10 @@ def draw_card_side(
             # Load language flag image and draw it before title text
             translation_text = decode_html_entities(lemma.term)
             
+            # Process Arabic text for proper rendering
+            if should_use_unicode_font(lang_code, translation_text):
+                translation_text = process_arabic_text(translation_text)
+            
             # Get language flag image
             flag_image_path = get_language_flag_image_path(lang_code)
             flag_image_data = None
@@ -284,8 +296,34 @@ def draw_card_side(
             else:
                 logger.warning("Language flag image not found for %s (checked path: %s)", lang_code, flag_image_path)
             
+            # Determine which font to use for this text (use Arabic font for Arabic, Unicode for others)
+            use_unicode_for_title = should_use_unicode_font(lang_code, translation_text)
+            if use_unicode_for_title:
+                # For Arabic, prefer Arabic font, then Unicode font, then fallback
+                registered_fonts = pdfmetrics.getRegisteredFontNames()
+                logger.debug("Registered fonts for Arabic text: %s", registered_fonts)
+                if "ArabicFont" in registered_fonts:
+                    title_font_to_use = "ArabicFont"
+                    logger.info("Using ArabicFont for Arabic text (lang: %s): %s", lang_code, translation_text[:50])
+                elif unicode_font and unicode_font in registered_fonts:
+                    title_font_to_use = unicode_font
+                    logger.warning("ArabicFont not found, using Unicode font '%s' for Arabic text (lang: %s): %s", 
+                                 unicode_font, lang_code, translation_text[:50])
+                else:
+                    # Fallback: try to use any registered Unicode-supporting font
+                    unicode_candidates = [f for f in registered_fonts if 'Unicode' in f or 'Noto' in f or 'Arial' in f or 'Arabic' in f]
+                    if unicode_candidates:
+                        title_font_to_use = unicode_candidates[0]
+                        logger.warning("Arabic font not found, using fallback: %s for Arabic text (lang: %s)", title_font_to_use, lang_code)
+                    else:
+                        title_font_to_use = title_font
+                        logger.error("No Unicode font available for Arabic text (lang: %s), using default font (may not render correctly): %s", 
+                                   lang_code, title_font_to_use)
+            else:
+                title_font_to_use = title_font
+            
             # Word wrap for translation text (accounting for flag image)
-            c.setFont(title_font, title_font_size)
+            c.setFont(title_font_to_use, title_font_size)
             words = translation_text.split()
             lines = []
             current_line = ""
@@ -294,7 +332,7 @@ def draw_card_side(
             
             for word in words:
                 test_line = f"{current_line} {word}".strip()
-                if c.stringWidth(test_line, title_font, title_font_size) <= max_width_text:
+                if c.stringWidth(test_line, title_font_to_use, title_font_size) <= max_width_text:
                     current_line = test_line
                 else:
                     if current_line:
@@ -311,7 +349,7 @@ def draw_card_side(
                     break
                 
                 # Calculate total width (flag + space + text)
-                text_width = c.stringWidth(line, title_font, title_font_size)
+                text_width = c.stringWidth(line, title_font_to_use, title_font_size)
                 total_width = flag_width + current_flag_spacing + text_width if flag_image_data else text_width
                 
                 # Center the entire line (flag + text)
@@ -321,7 +359,7 @@ def draw_card_side(
                 if line_idx == 0 and flag_image_data:
                     try:
                         # Align flag slightly below the top of the text (cap height) for better visual alignment
-                        ascent = pdfmetrics.getAscent(title_font) * title_font_size / 1000.0
+                        ascent = pdfmetrics.getAscent(title_font_to_use) * title_font_size / 1000.0
                         # Position flag slightly lower - offset by a small amount (scaled with font size)
                         offset = title_font_size * 0.22
                         flag_y = y + ascent - flag_height - offset
@@ -334,10 +372,41 @@ def draw_card_side(
                         logger.warning("Failed to draw language flag image: %s", str(e))
                 
                 # Draw text
-                c.setFont(title_font, title_font_size)
+                c.setFont(title_font_to_use, title_font_size)
                 c.setFillColor(HexColor("#000000"))
                 text_x = line_x + flag_width + current_flag_spacing if (line_idx == 0 and flag_image_data) else line_x
-                c.drawString(text_x, y, line)
+                
+                # For Arabic/RTL text, ensure font is set and use appropriate rendering method
+                if use_unicode_for_title and contains_arabic_characters(line):
+                    # Verify font is available
+                    if title_font_to_use not in pdfmetrics.getRegisteredFontNames() and title_font_to_use not in ["Helvetica", "Helvetica-Bold", "Times-Roman", "Courier"]:
+                        logger.error("Font '%s' not available for Arabic text! Available: %s", 
+                                   title_font_to_use, pdfmetrics.getRegisteredFontNames())
+                        # Fallback to Unicode font if available
+                        if unicode_font and unicode_font in pdfmetrics.getRegisteredFontNames():
+                            title_font_to_use = unicode_font
+                            logger.warning("Falling back to Unicode font: %s", unicode_font)
+                        else:
+                            logger.error("No suitable font found for Arabic text!")
+                    
+                    try:
+                        # Use drawString for Arabic - ReportLab handles it correctly with proper font
+                        c.setFont(title_font_to_use, title_font_size)
+                        c.setFillColor(HexColor("#000000"))
+                        c.drawString(text_x, y, line)
+                        logger.debug("Drew Arabic text with font '%s': %s", title_font_to_use, line[:30])
+                    except Exception as e:
+                        logger.error("Failed to draw Arabic text: %s", str(e))
+                        import traceback
+                        logger.debug("Traceback: %s", traceback.format_exc())
+                        # Last resort fallback
+                        try:
+                            c.setFont("Helvetica", title_font_size)
+                            c.drawString(text_x, y, line)
+                        except:
+                            pass
+                else:
+                    c.drawString(text_x, y, line)
                 y -= title_font_size + line_spacing  # Scaled spacing under each line
 
             y -= line_spacing  # Scaled spacing before IPA
@@ -350,34 +419,82 @@ def draw_card_side(
         if include_ipa and lemma.ipa and y > min_y_for_ipa:
             ipa_text = f"/{decode_html_entities(lemma.ipa)}/"
             ipa_drawn = False
-            ipa_font_to_use = ipa_font or unicode_font
-            if ipa_font_to_use and ipa_font_to_use in pdfmetrics.getRegisteredFontNames():
-                try:
-                    c.setFont(ipa_font_to_use, desc_font_size)
-                    c.setFillColor(HexColor("#aaaaaa"))
-                    ipa_width = c.stringWidth(ipa_text, ipa_font_to_use, desc_font_size)
-                    ipa_x = offset_x + (width - ipa_width) / 2
-                    c.drawString(ipa_x, y, ipa_text)
-                    ipa_drawn = True
-                except Exception as e:
-                    logger.debug("Failed to draw IPA with custom/unicode font: %s", str(e))
             
+            # Built-in fonts that are always available in ReportLab
+            builtin_fonts = ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
+                            "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
+                            "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"]
+            
+            ipa_font_to_use = ipa_font or unicode_font
+            
+            # Try to use the selected font (either registered TTF or built-in)
+            if ipa_font_to_use:
+                # Check if it's a registered font or a built-in font
+                is_registered = ipa_font_to_use in pdfmetrics.getRegisteredFontNames()
+                is_builtin = ipa_font_to_use in builtin_fonts
+                
+                if is_registered or is_builtin:
+                    try:
+                        c.setFont(ipa_font_to_use, desc_font_size)
+                        c.setFillColor(HexColor("#aaaaaa"))
+                        ipa_width = c.stringWidth(ipa_text, ipa_font_to_use, desc_font_size)
+                        ipa_x = offset_x + (width - ipa_width) / 2
+                        c.drawString(ipa_x, y, ipa_text)
+                        ipa_drawn = True
+                        logger.debug("Drew IPA with font: %s", ipa_font_to_use)
+                    except Exception as e:
+                        logger.debug("Failed to draw IPA with font %s: %s", ipa_font_to_use, str(e))
+            
+            # Fallback to Helvetica if the preferred font didn't work
             if not ipa_drawn:
-                # Fallback if Unicode font doesn't support the IPA characters
                 try:
                     c.setFont("Helvetica", desc_font_size)
                     c.setFillColor(HexColor("#aaaaaa"))
                     ipa_width = c.stringWidth(ipa_text, "Helvetica", desc_font_size)
                     ipa_x = offset_x + (width - ipa_width) / 2
                     c.drawString(ipa_x, y, ipa_text)
+                    ipa_drawn = True
+                    logger.debug("Drew IPA with Helvetica fallback")
                 except Exception as e:
-                    logger.debug("Failed to draw IPA with Helvetica: %s", str(e))
-            y -= desc_font_size + (10 * scale_factor)  # Scaled space before description
+                    logger.warning("Failed to draw IPA with Helvetica: %s", str(e))
+            
+            if ipa_drawn:
+                y -= desc_font_size + (10 * scale_factor)  # Scaled space before description
         
         # Description - wrapped in container for better text wrapping
         min_y_for_desc = offset_y + margin + (10 * mm * scale_factor)
         if include_description and lemma.description and y > min_y_for_desc:
             desc = decode_html_entities(lemma.description)
+            
+            # Process Arabic text for proper rendering
+            if should_use_unicode_font(lang_code, desc):
+                desc = process_arabic_text(desc)
+            
+            # Determine which font to use for description (use Arabic font for Arabic, Unicode for others)
+            use_unicode_for_desc = should_use_unicode_font(lang_code, desc)
+            if use_unicode_for_desc:
+                # For Arabic, prefer Arabic font, then Unicode font, then fallback
+                registered_fonts = pdfmetrics.getRegisteredFontNames()
+                logger.debug("Registered fonts for Arabic description: %s", registered_fonts)
+                if "ArabicFont" in registered_fonts:
+                    desc_font_to_use = "ArabicFont"
+                    logger.info("Using ArabicFont for Arabic description (lang: %s): %s", lang_code, desc[:50])
+                elif unicode_font and unicode_font in registered_fonts:
+                    desc_font_to_use = unicode_font
+                    logger.warning("ArabicFont not found, using Unicode font '%s' for Arabic description (lang: %s): %s", 
+                                 unicode_font, lang_code, desc[:50])
+                else:
+                    # Fallback: try to use any registered Unicode-supporting font
+                    unicode_candidates = [f for f in registered_fonts if 'Unicode' in f or 'Noto' in f or 'Arial' in f or 'Arabic' in f]
+                    if unicode_candidates:
+                        desc_font_to_use = unicode_candidates[0]
+                        logger.warning("Arabic font not found for description, using fallback: %s for Arabic text (lang: %s)", desc_font_to_use, lang_code)
+                    else:
+                        desc_font_to_use = desc_font
+                        logger.error("No Unicode font available for Arabic description (lang: %s), using default font (may not render correctly): %s", 
+                                   lang_code, desc_font_to_use)
+            else:
+                desc_font_to_use = desc_font
             
             # If title is not included, show flag and use black color but keep smaller font
             if not include_title:
@@ -420,7 +537,7 @@ def draw_card_side(
                 desc_flag_spacing = flag_spacing if flag_image_data else 0
                 
                 # Use description font size but black color when title is not included
-                c.setFont(desc_font, desc_font_size)
+                c.setFont(desc_font_to_use, desc_font_size)
                 c.setFillColor(HexColor("#000000"))  # Black color, same as title
                 
                 # Use 80% width container (same as normal description)
@@ -434,7 +551,7 @@ def draw_card_side(
                 
                 for word in words:
                     test_line = f"{current_line} {word}".strip()
-                    if c.stringWidth(test_line, desc_font, desc_font_size) <= max_width_text:
+                    if c.stringWidth(test_line, desc_font_to_use, desc_font_size) <= max_width_text:
                         current_line = test_line
                     else:
                         if current_line:
@@ -452,7 +569,7 @@ def draw_card_side(
                         break
                     
                     # Calculate total width (flag + space + text) within 80% container
-                    text_width = c.stringWidth(line, desc_font, desc_font_size)
+                    text_width = c.stringWidth(line, desc_font_to_use, desc_font_size)
                     total_width = flag_width + desc_flag_spacing + text_width if flag_image_data else text_width
                     
                     # Center the entire line (flag + text) within the 80% container
@@ -462,7 +579,7 @@ def draw_card_side(
                     # Draw flag image (only on first line)
                     if line_idx == 0 and flag_image_data:
                         try:
-                            ascent = pdfmetrics.getAscent(desc_font) * desc_font_size / 1000.0
+                            ascent = pdfmetrics.getAscent(desc_font_to_use) * desc_font_size / 1000.0
                             offset = desc_font_size * 0.22
                             flag_y = y + ascent - flag_height - offset
                             c.drawImage(ImageReader(flag_image_data), line_x, flag_y, width=flag_width, height=flag_height, mask='auto')
@@ -474,14 +591,28 @@ def draw_card_side(
                             logger.warning("Failed to draw language flag image: %s", str(e))
                     
                     # Draw text
-                    c.setFont(desc_font, desc_font_size)
+                    c.setFont(desc_font_to_use, desc_font_size)
                     c.setFillColor(HexColor("#000000"))
                     text_x = line_x + flag_width + desc_flag_spacing if (line_idx == 0 and flag_image_data) else line_x
-                    c.drawString(text_x, y, line)
+                    
+                    # For Arabic/RTL text, use text object for better rendering
+                    if use_unicode_for_desc and contains_arabic_characters(line):
+                        try:
+                            textobj = c.beginText()
+                            textobj.setFont(desc_font_to_use, desc_font_size)
+                            textobj.setFillColor(HexColor("#000000"))
+                            textobj.setTextOrigin(text_x, y)
+                            textobj.textLine(line)
+                            c.drawText(textobj)
+                        except Exception as e:
+                            logger.warning("Failed to draw Arabic description with text object, falling back: %s", str(e))
+                            c.drawString(text_x, y, line)
+                    else:
+                        c.drawString(text_x, y, line)
                     y -= desc_font_size + line_spacing
             else:
                 # Title is included, use normal description styling
-                c.setFont(desc_font, desc_font_size)
+                c.setFont(desc_font_to_use, desc_font_size)
                 c.setFillColor(HexColor("#999999"))  # Grey color
                 
                 # Use narrower width for description container (80% of available width)
@@ -494,7 +625,7 @@ def draw_card_side(
                 
                 for word in words:
                     test_line = f"{current_line} {word}".strip()
-                    if c.stringWidth(test_line, desc_font, desc_font_size) <= desc_container_width:
+                    if c.stringWidth(test_line, desc_font_to_use, desc_font_size) <= desc_container_width:
                         current_line = test_line
                     else:
                         if current_line:
@@ -510,9 +641,23 @@ def draw_card_side(
                 for line in desc_lines[:max_desc_lines]:
                     if y < min_y_for_desc_lines:
                         break
-                    line_width = c.stringWidth(line, desc_font, desc_font_size)
+                    line_width = c.stringWidth(line, desc_font_to_use, desc_font_size)
                     line_x = offset_x + (width - line_width) / 2
-                    c.drawString(line_x, y, line)
+                    
+                    # For Arabic/RTL text, use text object for better rendering
+                    if use_unicode_for_desc and contains_arabic_characters(line):
+                        try:
+                            textobj = c.beginText()
+                            textobj.setFont(desc_font_to_use, desc_font_size)
+                            textobj.setFillColor(HexColor("#999999"))
+                            textobj.setTextOrigin(line_x, y)
+                            textobj.textLine(line)
+                            c.drawText(textobj)
+                        except Exception as e:
+                            logger.warning("Failed to draw Arabic description with text object, falling back: %s", str(e))
+                            c.drawString(line_x, y, line)
+                    else:
+                        c.drawString(line_x, y, line)
                     y -= desc_font_size + line_spacing
         
         y -= language_spacing  # Scaled spacing between languages

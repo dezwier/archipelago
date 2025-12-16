@@ -11,4 +11,6 @@ python-dotenv
 nltk
 pillow
 reportlab
+arabic-reshaper
+python-bidi
 
