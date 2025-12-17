@@ -4,10 +4,10 @@ Dictionary endpoints for retrieving paired dictionary items.
 # pyright: reportAttributeAccessIssue=false
 # pyright: reportCallIssue=false
 # pyright: reportArgumentType=false
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, func, or_
 from sqlalchemy.orm import aliased
-from typing import Optional, List
+from typing import Optional
 from app.core.database import get_session
 from app.models.models import Concept, Lemma, CEFRLevel
 from app.schemas.lemma import LemmaResponse
@@ -496,18 +496,17 @@ async def get_dictionary(
         
         # Apply topic_ids filter (same as main query)
         if topic_id_list is not None and len(topic_id_list) > 0:
-            if include_without_topic:
-                filtered_concept_query = filtered_concept_query.where(
-                    or_(
-                        Concept.topic_id.in_(topic_id_list),
-                        Concept.topic_id.is_(None)
-                    )
-                )
-            else:
-                filtered_concept_query = filtered_concept_query.where(Concept.topic_id.in_(topic_id_list))
+            # When filtering by topic(s), only show concepts with those topic IDs
+            # Always exclude concepts without a topic when topic_ids are provided
+            filtered_concept_query = filtered_concept_query.where(
+                Concept.topic_id.in_(topic_id_list)
+            )
         else:
+            # topic_id_list is None/empty (all topics selected in frontend)
             if not include_without_topic:
+                # Exclude concepts without a topic (only show concepts with a topic)
                 filtered_concept_query = filtered_concept_query.where(Concept.topic_id.isnot(None))
+            # If include_without_topic is True, show ALL concepts (no topic filter)
         
         # Apply levels filter (same as main query)
         if level_list is not None and len(level_list) > 0:
