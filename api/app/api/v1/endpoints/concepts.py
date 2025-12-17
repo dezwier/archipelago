@@ -556,17 +556,11 @@ async def get_concepts_with_missing_languages(
     
     # Apply topic_ids filter if provided (same logic as dictionary endpoint)
     if request.topic_ids is not None and len(request.topic_ids) > 0:
-        if request.include_without_topic:
-            # Include concepts with these topic IDs OR concepts without a topic
-            base_query = base_query.where(
-                or_(
-                    Concept.topic_id.in_(request.topic_ids),
-                    Concept.topic_id.is_(None)
-                )
-            )
-        else:
-            # Only include concepts with these topic IDs
-            base_query = base_query.where(Concept.topic_id.in_(request.topic_ids))
+        # When filtering by topic(s), only show concepts with those topic IDs
+        # Always exclude concepts without a topic when topic_ids are provided
+        base_query = base_query.where(
+            Concept.topic_id.in_(request.topic_ids)
+        )
     else:
         # topic_ids is None/empty (all topics selected in frontend)
         if not request.include_without_topic:
