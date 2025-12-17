@@ -92,8 +92,15 @@ async def create_concept_only(
         )
     
     # Create the concept
+    # Require user_id for concepts created from the app (create page)
     # If coming from the app (user_id is present), is_phrase is always True
-    is_phrase = True if request.user_id is not None else False
+    if request.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User must be logged in to create concepts"
+        )
+    
+    is_phrase = True  # Always True when created from app (user_id is required)
     concept = Concept(
         term=term_stripped,
         description=request.description.strip() if request.description else None,

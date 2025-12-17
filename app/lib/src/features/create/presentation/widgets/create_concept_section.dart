@@ -212,6 +212,17 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
 
 
   Future<void> _handleCreateConcept() async {
+    // Check if user is logged in
+    if (_userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You must be logged in to create concepts'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
     if (_formKey.currentState!.validate()) {
       // Validate term is not empty
       final term = _termController.text.trim();
