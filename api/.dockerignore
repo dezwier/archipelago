@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Git
+.git/
+.gitignore
+
+# Documentation and scripts
+*.md
+README.md
+download_*.py
+download_*.sh
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.venv/
+venv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Other
+*.log
+.DS_Store
+pyrightconfig.json
+nixpacks.toml
+
+# Init scripts (likely not needed at runtime)
+init/
+
