@@ -25,10 +25,10 @@ class DictionaryFabButtons extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Generate lemmas button
+        // Generate lemmas button (always enabled to allow viewing progress)
         FloatingActionButton.small(
           heroTag: 'generate_lemmas_fab',
-          onPressed: isLoadingConcepts ? null : onGenerateLemmasPressed,
+          onPressed: onGenerateLemmasPressed,
           backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
           foregroundColor: Theme.of(context).colorScheme.onSurface,
           child: isLoadingConcepts

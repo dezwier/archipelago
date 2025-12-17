@@ -70,3 +70,4 @@ def downgrade() -> None:
     op.drop_column('concept', 'image_url')
 
 
+

@@ -21,7 +21,7 @@ import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/features/create/data/topic_service.dart';
 import 'package:archipelago/src/features/create/data/flashcard_service.dart';
 import 'package:archipelago/src/features/create/data/card_generation_background_service.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/card_generation_progress_widget.dart';
+import 'package:archipelago/src/features/dictionary/presentation/widgets/generate_lemmas_drawer.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archipelago/src/features/profile/domain/user.dart';
@@ -258,31 +258,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                     ),
                   ),
                 ),
-                // Progress display for lemma generation
-                if (_cardGenerationState.totalConcepts != null)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
-                      child: CardGenerationProgressWidget(
-                        totalConcepts: _cardGenerationState.totalConcepts,
-                        currentConceptIndex: _cardGenerationState.currentConceptIndex,
-                        currentConceptTerm: _cardGenerationState.currentConceptTerm,
-                        currentConceptMissingLanguages: _cardGenerationState.currentConceptMissingLanguages,
-                        conceptsProcessed: _cardGenerationState.conceptsProcessed,
-                        cardsCreated: _cardGenerationState.cardsCreated,
-                        errors: _cardGenerationState.errors,
-                        sessionCostUsd: _cardGenerationState.sessionCostUsd,
-                        isGenerating: _cardGenerationState.isGeneratingCards,
-                        isCancelled: _cardGenerationState.isCancelled,
-                        onCancel: _cardGenerationState.isGeneratingCards 
-                            ? () => _cardGenerationState.handleCancel()
-                            : null,
-                        onDismiss: !_cardGenerationState.isGeneratingCards 
-                            ? () => _cardGenerationState.dismissProgress()
-                            : null,
-                      ),
-                    ),
-                  ),
                 // Paired dictionary items
                 if (_controller.filteredItems.isNotEmpty)
                   SliverList(
@@ -353,7 +328,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                   filterButtonKey: _filterButtonKey,
                   onFilterPressed: () => _showFilterMenu(context),
                   onFilteringPressed: () => _showFilteringMenu(context),
-                  onGenerateLemmasPressed: () => _handleGenerateLemmas(context),
+                  onGenerateLemmasPressed: () => _showGenerateLemmasDrawer(context),
                   onExportPressed: () => _showExportDrawer(context),
                   isLoadingConcepts: _isLoadingConcepts,
                   isLoadingExport: _isLoadingExport,
@@ -656,6 +631,27 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     
     // The drawer will reload the concept data itself via its onItemUpdated callback
     // No need to close and reopen - the drawer handles its own refresh
+  }
+
+  void _showGenerateLemmasDrawer(BuildContext context) {
+    final visibleLanguages = _languageVisibilityManager.getVisibleLanguageCodes();
+    
+    if (visibleLanguages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one visible language'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    showGenerateLemmasDrawer(
+      context: context,
+      cardGenerationState: _cardGenerationState,
+      onConfirmGenerate: () => _handleGenerateLemmas(context),
+      visibleLanguageCodes: visibleLanguages,
+    );
   }
 
   Future<void> _handleGenerateLemmas(BuildContext context) async {
