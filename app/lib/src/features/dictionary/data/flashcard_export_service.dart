@@ -15,7 +15,7 @@ class FlashcardExportService {
     required List<int> conceptIds,
     required List<String> languagesFront,
     required List<String> languagesBack,
-    String layout = 'a4',
+    String layout = 'a6',
     bool fitToA4 = false,
     bool includeImageFront = true,
     bool includePhraseFront = true,

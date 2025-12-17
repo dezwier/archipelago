@@ -90,10 +90,10 @@ def draw_card_side_a8_landscape(
     # Base values (for A8 landscape reference size)
     base_margin = 5 * mm  # Smaller margin for A8
     base_title_font_size = 12  # Increased from 10
-    base_desc_font_size = 7  # Increased from 6
+    base_desc_font_size = 12  # Increased from 7 (for IPA and description)
     base_icon_size = 12
     base_flag_spacing = 4
-    base_line_spacing = 1.5
+    base_line_spacing = 3  # Increased from 1.5 (more vertical spacing for title & description)
     base_language_spacing = 12
     base_corner_radius = 3 * mm
     
@@ -106,11 +106,11 @@ def draw_card_side_a8_landscape(
     line_spacing = base_line_spacing * scale_factor
     language_spacing = base_language_spacing * scale_factor
     
-    # Layout: Image on left ~30%, content on right ~70% (slightly bigger image)
-    left_section_width = width * 0.30  # 30% for image (increased from 25%)
-    right_section_width = width * 0.70  # 70% for text (decreased from 75%)
-    image_margin = margin
-    content_margin = margin * 0.5  # Reduced gap between image and text
+    # Layout: Image at top (60% width, centered), content below
+    image_width_percent = 0.70  # 60% of page width (increased from 50% to reduce side whitespace)
+    image_margin_top = margin * 2.5  # Reduced from 2.5 (less whitespace above)
+    image_margin_bottom = margin * 2.5  # Increased from 1.5 (more space between image and text)
+    content_margin = margin
     
     # Register Unicode fonts for IPA symbols and emojis
     unicode_font, emoji_font = register_unicode_fonts()
@@ -155,14 +155,9 @@ def draw_card_side_a8_landscape(
                 logger.debug("Failed to draw topic icon with unicode font: %s", str(e))
     
     # ============================================================================
-    # LEFT SECTION: Image
+    # TOP SECTION: Image (50% width, centered)
     # ============================================================================
-    image_x = offset_x + image_margin
-    # Use same top margin as content section for consistency
-    top_margin = margin * 2.5  # Increased top margin
-    image_y_start = offset_y + height - top_margin
-    image_available_width = left_section_width - 2 * image_margin
-    image_available_height = height - top_margin - margin  # Account for top and bottom margins
+    y = offset_y + height - image_margin_top
     
     if include_image and concept.image_url:
         image_data = download_image(concept.image_url)
@@ -171,17 +166,22 @@ def draw_card_side_a8_landscape(
                 # Open with PIL to resize
                 pil_image = Image.open(image_data)
                 
-                # Calculate image dimensions to fit in left section
-                max_width = image_available_width
-                max_height = image_available_height
+                # Image width is 50% of page width
+                max_width = width * image_width_percent
+                max_image_height = height * 0.4  # Max 40% of page height
                 
                 # Maintain aspect ratio
                 img_width, img_height = pil_image.size
                 aspect_ratio = img_width / img_height
                 
-                # Calculate dimensions to fit in available space
-                new_width = min(max_width, max_height * aspect_ratio)
-                new_height = min(max_height, max_width / aspect_ratio)
+                # Calculate dimensions: width is fixed at 50% of page, height scales
+                new_width = max_width
+                new_height = max_width / aspect_ratio
+                
+                # Limit height if too tall
+                if new_height > max_image_height:
+                    new_height = max_image_height
+                    new_width = max_image_height * aspect_ratio
                 
                 # Calculate target display size in pixels
                 target_width_px = int(new_width)
@@ -210,22 +210,21 @@ def draw_card_side_a8_landscape(
                 pil_image.save(img_buffer, format="PNG", compress_level=0, optimize=False)
                 img_buffer.seek(0)
                 
-                # Center image vertically in left section
-                image_y = image_y_start - new_height
+                # Center image horizontally
+                image_x = offset_x + (width - new_width) / 2
+                image_y = y - new_height
                 c.drawImage(ImageReader(img_buffer), image_x, image_y, width=new_width, height=new_height, mask='auto')
+                y = image_y - image_margin_bottom  # Move y below image
             except Exception as e:
                 logger.warning("Failed to draw image for concept %d: %s", concept.id, str(e))
+                # Reserve space even if image fails
+                estimated_image_height = max_width / 1.5  # Assume 1.5:1 aspect ratio
+                y -= estimated_image_height + image_margin_bottom
     
     # ============================================================================
-    # RIGHT SECTION: Languages, Title, IPA, Description
+    # CONTENT SECTION: Languages, Title, IPA, Description (centered)
     # ============================================================================
-    content_x = offset_x + left_section_width + content_margin
-    # More whitespace from top border
-    top_margin = margin * 2.5  # Increased top margin
-    content_y = offset_y + height - top_margin
-    content_available_width = right_section_width - 2 * content_margin
-    
-    y = content_y
+    content_available_width = width - 2 * content_margin
     
     # Draw lemmas for each language
     for lang_code in languages:
@@ -303,11 +302,18 @@ def draw_card_side_a8_landscape(
             if current_line:
                 lines.append(current_line)
             
-            # Draw translation lines with flag image prefix
+            # Draw translation lines with flag image prefix (centered)
             min_y_threshold = offset_y + margin + (10 * mm * scale_factor)
             for line_idx, line in enumerate(lines):
                 if y < min_y_threshold:
                     break
+                
+                # Calculate total width (flag + space + text)
+                text_width = c.stringWidth(line, title_font_to_use, title_font_size)
+                total_width = flag_width + current_flag_spacing + text_width if flag_image_data else text_width
+                
+                # Center the entire line (flag + text)
+                line_x = offset_x + (width - total_width) / 2
                 
                 # Draw flag image (only on first line)
                 if line_idx == 0 and flag_image_data:
@@ -315,14 +321,14 @@ def draw_card_side_a8_landscape(
                         ascent = pdfmetrics.getAscent(title_font_to_use) * title_font_size / 1000.0
                         offset = title_font_size * 0.22
                         flag_y = y + ascent - flag_height - offset
-                        c.drawImage(ImageReader(flag_image_data), content_x, flag_y, width=flag_width, height=flag_height, mask='auto')
+                        c.drawImage(ImageReader(flag_image_data), line_x, flag_y, width=flag_width, height=flag_height, mask='auto')
                     except Exception as e:
                         logger.warning("Failed to draw language flag image: %s", str(e))
                 
-                # Draw text (left-aligned)
+                # Draw text (centered with flag)
                 c.setFont(title_font_to_use, title_font_size)
                 c.setFillColor(HexColor("#000000"))
-                text_x = content_x + flag_width + current_flag_spacing if (line_idx == 0 and flag_image_data) else content_x
+                text_x = line_x + flag_width + current_flag_spacing if (line_idx == 0 and flag_image_data) else line_x
                 
                 if use_unicode_for_title and contains_arabic_characters(line):
                     try:
@@ -395,14 +401,16 @@ def draw_card_side_a8_landscape(
                 if current_line:
                     ipa_lines.append(current_line)
                 
-                # Draw IPA lines (left-aligned) - ensure proper wrapping
+                # Draw IPA lines (centered) - ensure proper wrapping
                 min_y_for_ipa_lines = offset_y + margin + (5 * mm * scale_factor)
                 for line in ipa_lines:
                     if y < min_y_for_ipa_lines:
                         break
                     c.setFont(ipa_font_to_use, desc_font_size)
                     c.setFillColor(HexColor("#aaaaaa"))
-                    c.drawString(content_x, y, line)
+                    ipa_line_width = c.stringWidth(line, ipa_font_to_use, desc_font_size)
+                    ipa_x = offset_x + (width - ipa_line_width) / 2
+                    c.drawString(ipa_x, y, line)
                     y -= desc_font_size + line_spacing
                 
                 ipa_drawn = True
@@ -485,11 +493,18 @@ def draw_card_side_a8_landscape(
                 if current_line:
                     desc_lines.append(current_line)
                 
-                # Draw description lines with flag image prefix
+                # Draw description lines with flag image prefix (centered)
                 min_y_for_desc_lines = offset_y + margin + (3 * mm * scale_factor)
                 for line_idx, line in enumerate(desc_lines):
                     if y < min_y_for_desc_lines:
                         break
+                    
+                    # Calculate total width (flag + space + text)
+                    text_width = c.stringWidth(line, desc_font_to_use, desc_font_size)
+                    total_width = flag_width + desc_flag_spacing + text_width if flag_image_data else text_width
+                    
+                    # Center the entire line (flag + text)
+                    line_x = offset_x + (width - total_width) / 2
                     
                     # Draw flag image (only on first line)
                     if line_idx == 0 and flag_image_data:
@@ -497,14 +512,14 @@ def draw_card_side_a8_landscape(
                             ascent = pdfmetrics.getAscent(desc_font_to_use) * desc_font_size / 1000.0
                             offset = desc_font_size * 0.22
                             flag_y = y + ascent - flag_height - offset
-                            c.drawImage(ImageReader(flag_image_data), content_x, flag_y, width=flag_width, height=flag_height, mask='auto')
+                            c.drawImage(ImageReader(flag_image_data), line_x, flag_y, width=flag_width, height=flag_height, mask='auto')
                         except Exception as e:
                             logger.warning("Failed to draw language flag image: %s", str(e))
                     
-                    # Draw text
+                    # Draw text (centered with flag)
                     c.setFont(desc_font_to_use, desc_font_size)
                     c.setFillColor(HexColor("#000000"))
-                    text_x = content_x + flag_width + desc_flag_spacing if (line_idx == 0 and flag_image_data) else content_x
+                    text_x = line_x + flag_width + desc_flag_spacing if (line_idx == 0 and flag_image_data) else line_x
                     
                     if use_unicode_for_desc and contains_arabic_characters(line):
                         try:
@@ -523,7 +538,7 @@ def draw_card_side_a8_landscape(
             else:
                 # Title is included, use normal description styling
                 c.setFont(desc_font_to_use, desc_font_size)
-                c.setFillColor(HexColor("#999999"))  # Grey color
+                c.setFillColor(HexColor("#666666"))  # Darker grey color (was #999999)
                 
                 # Word wrap description
                 words = desc.split()
@@ -542,25 +557,28 @@ def draw_card_side_a8_landscape(
                 if current_line:
                     desc_lines.append(current_line)
                 
-                # Draw description lines (left-aligned)
+                # Draw description lines (centered)
                 min_y_for_desc_lines = offset_y + margin + (3 * mm * scale_factor)
                 for line in desc_lines:
                     if y < min_y_for_desc_lines:
                         break
                     
+                    line_width = c.stringWidth(line, desc_font_to_use, desc_font_size)
+                    line_x = offset_x + (width - line_width) / 2
+                    
                     if use_unicode_for_desc and contains_arabic_characters(line):
                         try:
                             textobj = c.beginText()
                             textobj.setFont(desc_font_to_use, desc_font_size)
-                            textobj.setFillColor(HexColor("#999999"))
-                            textobj.setTextOrigin(content_x, y)
+                            textobj.setFillColor(HexColor("#666666"))  # Darker grey color (was #999999)
+                            textobj.setTextOrigin(line_x, y)
                             textobj.textLine(line)
                             c.drawText(textobj)
                         except Exception as e:
                             logger.warning("Failed to draw Arabic description with text object, falling back: %s", str(e))
-                            c.drawString(content_x, y, line)
+                            c.drawString(line_x, y, line)
                     else:
-                        c.drawString(content_x, y, line)
+                        c.drawString(line_x, y, line)
                     y -= desc_font_size + line_spacing
         
         y -= language_spacing  # Spacing between languages

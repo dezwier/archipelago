@@ -28,8 +28,8 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
   List<String> _backLanguageCodes = [];
   bool _isExporting = false;
   
-  // Layout selection: 'a4', 'a6', or 'a8'
-  String _layout = 'a4';
+  // Layout selection: 'a6' or 'a8'
+  String _layout = 'a6';
   
   // Fit to A4 toggle (only enabled for A6 and A8)
   bool _fitToA4 = true;
@@ -57,7 +57,9 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
       final prefs = await SharedPreferences.getInstance();
       
       // Load layout
-      _layout = prefs.getString('export_layout') ?? 'a4';
+      final savedLayout = prefs.getString('export_layout') ?? 'a6';
+      // Migrate old 'a4' selections to 'a6'
+      _layout = savedLayout == 'a4' ? 'a6' : savedLayout;
       _fitToA4 = prefs.getBool('export_fit_to_a4') ?? true;
       
       // Load front side options
@@ -339,44 +341,6 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      // A4 button
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _layout = 'a4';
-                              _fitToA4 = false; // Reset toggle when A4 is selected
-                              _saveSettings();
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: _layout == 'a4'
-                                  ? Theme.of(context).colorScheme.primaryContainer
-                                  : Theme.of(context).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _layout == 'a4'
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              'A4',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: _layout == 'a4'
-                                    ? Theme.of(context).colorScheme.onPrimaryContainer
-                                    : Theme.of(context).colorScheme.onSurface,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
                       // A6 button
                       Expanded(
                         child: GestureDetector(
@@ -461,9 +425,6 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                           builder: (context) {
                             String gridSize;
                             switch (_layout) {
-                              case 'a4':
-                                gridSize = '1x1';
-                                break;
                               case 'a6':
                                 gridSize = '2x2';
                                 break;
@@ -471,15 +432,12 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                                 gridSize = '4x4';
                                 break;
                               default:
-                                gridSize = '1x1';
+                                gridSize = '2x2';
                             }
                             return Text(
                               'Fit to A4 page ($gridSize)',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w500,
-                                color: _layout == 'a4'
-                                    ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)
-                                    : null,
                               ),
                             );
                           },
@@ -487,7 +445,7 @@ class _ExportFlashcardsDrawerState extends State<ExportFlashcardsDrawer> {
                       ),
                       Switch(
                         value: _fitToA4,
-                        onChanged: _layout == 'a4' ? null : (value) {
+                        onChanged: (value) {
                           setState(() {
                             _fitToA4 = value;
                             _saveSettings();
