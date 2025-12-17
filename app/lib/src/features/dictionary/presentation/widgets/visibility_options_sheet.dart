@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
 
 /// Bottom drawer that exposes visibility-related options (language toggles and
 /// card detail switches). Mirrors the look/feel of the filter drawer.
@@ -9,6 +10,8 @@ class VisibilityOptionsSheet extends StatefulWidget {
   final Map<String, bool> languageVisibility;
   final bool showDescription;
   final bool showExtraInfo;
+  final DictionaryController? controller;
+  final String? firstVisibleLanguage;
   final ValueChanged<String> onLanguageVisibilityToggled;
   final ValueChanged<bool> onShowDescriptionChanged;
   final ValueChanged<bool> onShowExtraInfoChanged;
@@ -19,6 +22,8 @@ class VisibilityOptionsSheet extends StatefulWidget {
     required this.languageVisibility,
     required this.showDescription,
     required this.showExtraInfo,
+    required this.controller,
+    this.firstVisibleLanguage,
     required this.onLanguageVisibilityToggled,
     required this.onShowDescriptionChanged,
     required this.onShowExtraInfoChanged,
@@ -32,6 +37,7 @@ class _VisibilityOptionsSheetState extends State<VisibilityOptionsSheet> {
   late Map<String, bool> _localVisibility;
   late bool _localShowDescription;
   late bool _localShowExtraInfo;
+  SortOption? _pendingSortOption;
 
   @override
   void initState() {
@@ -39,6 +45,19 @@ class _VisibilityOptionsSheetState extends State<VisibilityOptionsSheet> {
     _localVisibility = Map<String, bool>.from(widget.languageVisibility);
     _localShowDescription = widget.showDescription;
     _localShowExtraInfo = widget.showExtraInfo;
+    _pendingSortOption = widget.controller?.sortOption;
+  }
+
+  void _applyPendingChanges() {
+    // Apply pending sort changes to the controller
+    if (widget.controller != null && 
+        _pendingSortOption != null && 
+        _pendingSortOption != widget.controller!.sortOption) {
+      widget.controller!.setSortOption(
+        _pendingSortOption!,
+        firstVisibleLanguage: widget.firstVisibleLanguage,
+      );
+    }
   }
 
   void _toggleLanguage(String languageCode) {
@@ -76,7 +95,15 @@ class _VisibilityOptionsSheetState extends State<VisibilityOptionsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return PopScope(
+      canPop: true,
+      onPopInvoked: (didPop) {
+        if (didPop) {
+          // Apply pending changes when the sheet is dismissed
+          _applyPendingChanges();
+        }
+      },
+      child: Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.9,
       ),
@@ -112,6 +139,7 @@ class _VisibilityOptionsSheetState extends State<VisibilityOptionsSheet> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: () {
+                    _applyPendingChanges();
                     Navigator.of(context).pop();
                   },
                 ),
@@ -124,6 +152,192 @@ class _VisibilityOptionsSheetState extends State<VisibilityOptionsSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Sort options (only show if controller is provided)
+                  if (widget.controller != null)
+                    StatefulBuilder(
+                      builder: (context, setMenuState) {
+                        final currentSortOption = _pendingSortOption ?? widget.controller!.sortOption;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
+                            child: Text(
+                              'Sort',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16.0),
+                            child: Row(
+                              children: [
+                                // Alphabetical button
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setMenuState(() {
+                                        _pendingSortOption = SortOption.alphabetical;
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: currentSortOption == SortOption.alphabetical
+                                            ? Theme.of(context).colorScheme.primaryContainer
+                                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: currentSortOption == SortOption.alphabetical
+                                              ? Theme.of(context).colorScheme.primary
+                                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                          width: currentSortOption == SortOption.alphabetical ? 1 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.sort_by_alpha,
+                                            size: 18,
+                                            color: currentSortOption == SortOption.alphabetical
+                                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                : Theme.of(context).colorScheme.onSurface,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              'Alphabetical',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: currentSortOption == SortOption.alphabetical
+                                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                    : Theme.of(context).colorScheme.onSurface,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Recent button
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setMenuState(() {
+                                        _pendingSortOption = SortOption.timeCreatedRecentFirst;
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: currentSortOption == SortOption.timeCreatedRecentFirst
+                                            ? Theme.of(context).colorScheme.primaryContainer
+                                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: currentSortOption == SortOption.timeCreatedRecentFirst
+                                              ? Theme.of(context).colorScheme.primary
+                                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                          width: currentSortOption == SortOption.timeCreatedRecentFirst ? 1 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.access_time,
+                                            size: 18,
+                                            color: currentSortOption == SortOption.timeCreatedRecentFirst
+                                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                : Theme.of(context).colorScheme.onSurface,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              'Recent',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: currentSortOption == SortOption.timeCreatedRecentFirst
+                                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                    : Theme.of(context).colorScheme.onSurface,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Random button
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setMenuState(() {
+                                        _pendingSortOption = SortOption.random;
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: currentSortOption == SortOption.random
+                                            ? Theme.of(context).colorScheme.primaryContainer
+                                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: currentSortOption == SortOption.random
+                                              ? Theme.of(context).colorScheme.primary
+                                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                          width: currentSortOption == SortOption.random ? 1 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.shuffle,
+                                            size: 18,
+                                            color: currentSortOption == SortOption.random
+                                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                : Theme.of(context).colorScheme.onSurface,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              'Random',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: currentSortOption == SortOption.random
+                                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                                    : Theme.of(context).colorScheme.onSurface,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                    ),
+                  const SizedBox(height: 4),
+                  if (widget.controller != null) const Divider(height: 1),
+                  const SizedBox(height: 16),
                   Text(
                     'Languages',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -170,6 +384,7 @@ class _VisibilityOptionsSheetState extends State<VisibilityOptionsSheet> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -231,6 +446,8 @@ void showVisibilityOptionsSheet({
   required Map<String, bool> languageVisibility,
   required bool showDescription,
   required bool showExtraInfo,
+  DictionaryController? controller,
+  String? firstVisibleLanguage,
   required ValueChanged<String> onLanguageVisibilityToggled,
   required ValueChanged<bool> onShowDescriptionChanged,
   required ValueChanged<bool> onShowExtraInfoChanged,
@@ -246,6 +463,8 @@ void showVisibilityOptionsSheet({
       languageVisibility: languageVisibility,
       showDescription: showDescription,
       showExtraInfo: showExtraInfo,
+      controller: controller,
+      firstVisibleLanguage: firstVisibleLanguage,
       onLanguageVisibilityToggled: onLanguageVisibilityToggled,
       onShowDescriptionChanged: onShowDescriptionChanged,
       onShowExtraInfoChanged: onShowExtraInfoChanged,

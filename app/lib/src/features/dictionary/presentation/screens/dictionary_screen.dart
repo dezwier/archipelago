@@ -357,16 +357,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
 
 
   void _showFilteringMenu(BuildContext context) {
-    // Get the first visible language for alphabetical sorting
-    final firstVisibleLanguage = _languageVisibilityManager.languagesToShow.isNotEmpty 
-        ? _languageVisibilityManager.languagesToShow.first 
-        : null;
     showDictionaryFilterSheet(
       context: context,
       controller: _controller,
       topics: _allTopics,
       isLoadingTopics: _isLoadingTopics,
-      firstVisibleLanguage: firstVisibleLanguage,
     );
   }
 
@@ -526,12 +521,18 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
 
   void _showFilterMenu(BuildContext context) {
+    // Get the first visible language for alphabetical sorting
+    final firstVisibleLanguage = _languageVisibilityManager.languagesToShow.isNotEmpty 
+        ? _languageVisibilityManager.languagesToShow.first 
+        : null;
     showVisibilityOptionsSheet(
       context: context,
       allLanguages: _allLanguages,
       languageVisibility: _languageVisibilityManager.languageVisibility,
       showDescription: _showDescription,
       showExtraInfo: _showExtraInfo,
+      controller: _controller,
+      firstVisibleLanguage: firstVisibleLanguage,
       onLanguageVisibilityToggled: (languageCode) {
         setState(() {
           _languageVisibilityManager.toggleLanguageVisibility(languageCode);

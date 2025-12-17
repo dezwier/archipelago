@@ -27,7 +27,6 @@ class DictionaryFilterSheet extends StatefulWidget {
   final List<Topic> topics;
   final bool isLoadingTopics;
   final VoidCallback? onApplyFilters;
-  final String? firstVisibleLanguage;
 
   const DictionaryFilterSheet({
     super.key,
@@ -35,7 +34,6 @@ class DictionaryFilterSheet extends StatefulWidget {
     required this.topics,
     this.isLoadingTopics = false,
     this.onApplyFilters,
-    this.firstVisibleLanguage,
   });
 
   @override
@@ -44,7 +42,6 @@ class DictionaryFilterSheet extends StatefulWidget {
 
 class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
   // Pending filter changes - only applied when drawer is closed
-  SortOption? _pendingSortOption;
   Set<int>? _pendingTopicIds;
   bool? _pendingShowLemmasWithoutTopic;
   Set<String>? _pendingLevels;
@@ -65,7 +62,6 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
   void initState() {
     super.initState();
     // Initialize pending changes with current controller state
-    _pendingSortOption = widget.controller.sortOption;
     _pendingTopicIds = Set<int>.from(widget.controller.selectedTopicIds);
     _pendingShowLemmasWithoutTopic = widget.controller.showLemmasWithoutTopic;
     _pendingLevels = Set<String>.from(widget.controller.selectedLevels);
@@ -76,12 +72,6 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
 
   void applyPendingChanges() {
     // Apply all pending filter changes to the controller
-    if (_pendingSortOption != null && _pendingSortOption != widget.controller.sortOption) {
-      widget.controller.setSortOption(
-        _pendingSortOption!,
-        firstVisibleLanguage: widget.firstVisibleLanguage,
-      );
-    }
     if (_pendingTopicIds != null && _pendingTopicIds != widget.controller.selectedTopicIds) {
       widget.controller.setTopicFilter(_pendingTopicIds!);
     }
@@ -172,189 +162,6 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Sort options
-                  StatefulBuilder(
-                    builder: (context, setMenuState) {
-                      final currentSortOption = _pendingSortOption ?? widget.controller.sortOption;
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-                            child: Text(
-                              'Sort',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16.0),
-                            child: Row(
-                              children: [
-                                // Alphabetical button
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setMenuState(() {
-                                        _pendingSortOption = SortOption.alphabetical;
-                                      });
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: currentSortOption == SortOption.alphabetical
-                                            ? Theme.of(context).colorScheme.primaryContainer
-                                            : Theme.of(context).colorScheme.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: currentSortOption == SortOption.alphabetical
-                                              ? Theme.of(context).colorScheme.primary
-                                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                                          width: currentSortOption == SortOption.alphabetical ? 1 : 1,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.sort_by_alpha,
-                                            size: 18,
-                                            color: currentSortOption == SortOption.alphabetical
-                                                ? Theme.of(context).colorScheme.onPrimaryContainer
-                                                : Theme.of(context).colorScheme.onSurface,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Flexible(
-                                            child: Text(
-                                              'Alphabetical',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: currentSortOption == SortOption.alphabetical
-                                                    ? Theme.of(context).colorScheme.onPrimaryContainer
-                                                    : Theme.of(context).colorScheme.onSurface,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                // Recent button
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setMenuState(() {
-                                        _pendingSortOption = SortOption.timeCreatedRecentFirst;
-                                      });
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: currentSortOption == SortOption.timeCreatedRecentFirst
-                                            ? Theme.of(context).colorScheme.primaryContainer
-                                            : Theme.of(context).colorScheme.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: currentSortOption == SortOption.timeCreatedRecentFirst
-                                              ? Theme.of(context).colorScheme.primary
-                                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                                          width: currentSortOption == SortOption.timeCreatedRecentFirst ? 1 : 1,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.access_time,
-                                            size: 18,
-                                            color: currentSortOption == SortOption.timeCreatedRecentFirst
-                                                ? Theme.of(context).colorScheme.onPrimaryContainer
-                                                : Theme.of(context).colorScheme.onSurface,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Flexible(
-                                            child: Text(
-                                              'Recent',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: currentSortOption == SortOption.timeCreatedRecentFirst
-                                                    ? Theme.of(context).colorScheme.onPrimaryContainer
-                                                    : Theme.of(context).colorScheme.onSurface,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                // Random button
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setMenuState(() {
-                                        _pendingSortOption = SortOption.random;
-                                      });
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: currentSortOption == SortOption.random
-                                            ? Theme.of(context).colorScheme.primaryContainer
-                                            : Theme.of(context).colorScheme.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: currentSortOption == SortOption.random
-                                              ? Theme.of(context).colorScheme.primary
-                                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                                          width: currentSortOption == SortOption.random ? 1 : 1,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.shuffle,
-                                            size: 18,
-                                            color: currentSortOption == SortOption.random
-                                                ? Theme.of(context).colorScheme.onPrimaryContainer
-                                                : Theme.of(context).colorScheme.onSurface,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Flexible(
-                                            child: Text(
-                                              'Random',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: currentSortOption == SortOption.random
-                                                    ? Theme.of(context).colorScheme.onPrimaryContainer
-                                                    : Theme.of(context).colorScheme.onSurface,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  const Divider(height: 1),
                   // Public/Private filter
                   StatefulBuilder(
                     builder: (context, setMenuState) {
@@ -829,7 +636,6 @@ void showDictionaryFilterSheet({
   required DictionaryController controller,
   required List<Topic> topics,
   bool isLoadingTopics = false,
-  String? firstVisibleLanguage,
 }) {
   showModalBottomSheet(
     context: context,
@@ -841,7 +647,6 @@ void showDictionaryFilterSheet({
       controller: controller,
       topics: topics,
       isLoadingTopics: isLoadingTopics,
-      firstVisibleLanguage: firstVisibleLanguage,
     ),
   );
 }

@@ -397,6 +397,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       languageVisibility: _languageVisibilityManager.languageVisibility,
       showDescription: _showDescription,
       showExtraInfo: _showExtraInfo,
+      controller: null, // Vocabulary doesn't have sorting
+      firstVisibleLanguage: null,
       onLanguageVisibilityToggled: (languageCode) {
         setState(() {
           _languageVisibilityManager.toggleLanguageVisibility(languageCode);
