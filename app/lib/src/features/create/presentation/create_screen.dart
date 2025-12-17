@@ -2,13 +2,31 @@ import 'package:flutter/material.dart';
 import 'widgets/create_concept_section.dart';
 
 class GenerateFlashcardsScreen extends StatefulWidget {
-  const GenerateFlashcardsScreen({super.key});
+  final Function(Function())? onRefreshCallbackReady;
+  
+  const GenerateFlashcardsScreen({
+    super.key,
+    this.onRefreshCallbackReady,
+  });
 
   @override
   State<GenerateFlashcardsScreen> createState() => _GenerateFlashcardsScreenState();
 }
 
 class _GenerateFlashcardsScreenState extends State<GenerateFlashcardsScreen> {
+  Function()? _refreshTopicsCallback;
+
+  @override
+  void initState() {
+    super.initState();
+    // Register refresh callback with parent
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onRefreshCallbackReady?.call(() {
+        _refreshTopicsCallback?.call();
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -24,7 +42,11 @@ class _GenerateFlashcardsScreenState extends State<GenerateFlashcardsScreen> {
               const SizedBox(height: 8),
               
               // Create Concepts
-              const CreateConceptSection(),
+              CreateConceptSection(
+                onRefreshCallbackReady: (callback) {
+                  _refreshTopicsCallback = callback;
+                },
+              ),
               
               const SizedBox(height: 8),
             ],

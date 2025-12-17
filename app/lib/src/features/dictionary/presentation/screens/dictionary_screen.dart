@@ -27,7 +27,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archipelago/src/features/profile/domain/user.dart';
 
 class DictionaryScreen extends StatefulWidget {
-  const DictionaryScreen({super.key});
+  final Function(Function())? onRefreshCallbackReady;
+  
+  const DictionaryScreen({
+    super.key,
+    this.onRefreshCallbackReady,
+  });
 
   @override
   State<DictionaryScreen> createState() => _DictionaryScreenState();
@@ -62,6 +67,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     _scrollController.addListener(_onScroll);
     _loadLanguages();
     _loadTopics();
+    
+    // Register refresh callback with parent
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onRefreshCallbackReady?.call(_loadTopics);
+    });
     
     // Listen to controller changes to update language visibility when user loads
     _controller.addListener(_onControllerChanged);

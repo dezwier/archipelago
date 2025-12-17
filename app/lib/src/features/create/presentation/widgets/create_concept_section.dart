@@ -13,7 +13,12 @@ import 'create_selectors_widget.dart';
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
 
 class CreateConceptSection extends StatefulWidget {
-  const CreateConceptSection({super.key});
+  final Function(Function())? onRefreshCallbackReady;
+  
+  const CreateConceptSection({
+    super.key,
+    this.onRefreshCallbackReady,
+  });
 
   @override
   State<CreateConceptSection> createState() => _CreateConceptSectionState();
@@ -43,8 +48,15 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
   @override
   void initState() {
     super.initState();
-    _loadUserId();
+    _loadUserId().then((_) {
+      _loadTopics();
+    });
     _loadLanguages();
+    
+    // Register refresh callback with parent
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onRefreshCallbackReady?.call(_loadTopics);
+    });
     
     // Prevent fields from requesting focus automatically
     _termFocusNode.canRequestFocus = false;
@@ -156,13 +168,21 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
           _userId = user.id;
           _currentUser = user;
         });
-        _loadTopics();
         // Set default languages after loading user
         _setDefaultLanguages();
+      } else {
+        // User logged out
+        setState(() {
+          _userId = null;
+          _currentUser = null;
+        });
       }
     } catch (e) {
-      // If loading user fails, still try to load topics without filter
-      _loadTopics();
+      // If loading user fails, clear user state
+      setState(() {
+        _userId = null;
+        _currentUser = null;
+      });
     }
   }
 
@@ -170,6 +190,9 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
     setState(() {
       _isLoadingTopics = true;
     });
+    
+    // Reload user ID in case login state changed
+    await _loadUserId();
     
     final topics = await TopicService.getTopics(userId: _userId);
     

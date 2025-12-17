@@ -23,6 +23,8 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
   int _currentIndex = 0;
   Future<void> Function()? _logoutCallback;
   Function()? _refreshProfileCallback;
+  Function()? _refreshTopicsCallback;
+  Function()? _refreshDictionaryTopicsCallback;
   late final List<Widget> _screens;
   bool _isDarkMode = false;
   bool _isLoggedIn = false;
@@ -35,8 +37,16 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
     super.initState();
     // Cache screens so they persist across rebuilds
     _screens = [
-      const GenerateFlashcardsScreen(),
-      const DictionaryScreen(),
+      GenerateFlashcardsScreen(
+        onRefreshCallbackReady: (callback) {
+          _refreshTopicsCallback = callback;
+        },
+      ),
+      DictionaryScreen(
+        onRefreshCallbackReady: (callback) {
+          _refreshDictionaryTopicsCallback = callback;
+        },
+      ),
       const PracticeFlashcardsScreen(),
       ProfileScreen(
         key: const ValueKey('profile_screen'),
@@ -52,10 +62,16 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
           });
           if (isLoggedIn) {
             _loadCurrentUser();
+            // Reload topic islands and dictionary filter buttons after login
+            _refreshTopicsCallback?.call();
+            _refreshDictionaryTopicsCallback?.call();
           } else {
             setState(() {
               _currentUser = null;
             });
+            // Reload topics when logged out (to remove private topics)
+            _refreshTopicsCallback?.call();
+            _refreshDictionaryTopicsCallback?.call();
           }
         },
         onRefreshCallbackReady: (callback) {
