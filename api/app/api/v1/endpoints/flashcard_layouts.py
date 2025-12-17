@@ -11,6 +11,7 @@ from reportlab.pdfgen import canvas
 
 from app.models.models import Concept, Lemma, Topic
 from .flashcard_draw import draw_card_side
+from .flashcard_draw_a8 import draw_card_side_a8_landscape
 
 logger = logging.getLogger(__name__)
 
@@ -152,15 +153,27 @@ def generate_pdf_a4_layout(
             c.saveState()
             c.translate(offset_x, offset_y)
             c.scale(scale, scale)
-            draw_card_side(
-                c, concept, lemmas, languages_front, topic,
-                offset_x=0, offset_y=0,
-                include_image=include_image_front,
-                include_title=include_text_front,
-                include_ipa=include_ipa_front,
-                include_description=include_description_front,
-                page_size=card_format,
-            )
+            # Use A8 landscape drawing function for A8 cards, regular drawing for A6
+            if card_format == A8:
+                draw_card_side_a8_landscape(
+                    c, concept, lemmas, languages_front, topic,
+                    offset_x=0, offset_y=0,
+                    include_image=include_image_front,
+                    include_title=include_text_front,
+                    include_ipa=include_ipa_front,
+                    include_description=include_description_front,
+                    page_size=card_format,
+                )
+            else:
+                draw_card_side(
+                    c, concept, lemmas, languages_front, topic,
+                    offset_x=0, offset_y=0,
+                    include_image=include_image_front,
+                    include_title=include_text_front,
+                    include_ipa=include_ipa_front,
+                    include_description=include_description_front,
+                    page_size=card_format,
+                )
             c.restoreState()
             total_cards_drawn += 1
         
@@ -183,15 +196,27 @@ def generate_pdf_a4_layout(
             c.saveState()
             c.translate(offset_x, offset_y)
             c.scale(scale, scale)
-            draw_card_side(
-                c, concept, lemmas, languages_back, topic,
-                offset_x=0, offset_y=0,
-                include_image=include_image_back,
-                include_title=include_text_back,
-                include_ipa=include_ipa_back,
-                include_description=include_description_back,
-                page_size=card_format,
-            )
+            # Use A8 landscape drawing function for A8 cards, regular drawing for A6
+            if card_format == A8:
+                draw_card_side_a8_landscape(
+                    c, concept, lemmas, languages_back, topic,
+                    offset_x=0, offset_y=0,
+                    include_image=include_image_back,
+                    include_title=include_text_back,
+                    include_ipa=include_ipa_back,
+                    include_description=include_description_back,
+                    page_size=card_format,
+                )
+            else:
+                draw_card_side(
+                    c, concept, lemmas, languages_back, topic,
+                    offset_x=0, offset_y=0,
+                    include_image=include_image_back,
+                    include_title=include_text_back,
+                    include_ipa=include_ipa_back,
+                    include_description=include_description_back,
+                    page_size=card_format,
+                )
             c.restoreState()
         
         # Draw cutting lines on back page
