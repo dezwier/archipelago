@@ -53,10 +53,13 @@ async def get_topics(
     user_id: Optional[int] = None,
     session: Session = Depends(get_session)
 ):
-    """Get topics, optionally filtered by user_id. Sorted by created_at descending (most recent first)."""
-    query = select(Topic)
-    if user_id is not None:
-        query = query.where(Topic.user_id == user_id)
+    """Get topics, optionally filtered by user_id. Sorted by created_at descending (most recent first).
+    When user_id is None (logged out), returns empty list since all topics belong to users."""
+    if user_id is None:
+        # When logged out, return empty list (no topics visible)
+        return TopicsResponse(topics=[])
+    
+    query = select(Topic).where(Topic.user_id == user_id)
     query = query.order_by(Topic.created_at.desc())  # type: ignore
     topics = session.exec(query).all()
     return TopicsResponse(

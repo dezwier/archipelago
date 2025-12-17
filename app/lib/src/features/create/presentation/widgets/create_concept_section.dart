@@ -198,6 +198,10 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
     
     setState(() {
       _topics = topics;
+      // Clear selected topic if it's no longer in the available topics (e.g., private topic after logout)
+      if (_selectedTopic != null && !topics.any((t) => t.id == _selectedTopic!.id)) {
+        _selectedTopic = null;
+      }
       // Set the most recent topic as default (first in list since sorted by created_at desc)
       if (_topics.isNotEmpty && _selectedTopic == null) {
         _selectedTopic = _topics.first;

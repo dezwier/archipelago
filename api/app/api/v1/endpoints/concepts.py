@@ -348,15 +348,36 @@ async def delete_concept(
 
 @router.get("/count/total", response_model=ConceptCountResponse)
 async def get_total_concept_count(
+    user_id: Optional[int] = None,
     session: Session = Depends(get_session)
 ):
     """
-    Get the total count of all concepts.
+    Get the total count of concepts visible to the user.
+    - If user_id is provided: counts public concepts (user_id IS NULL) AND user's concepts
+    - If user_id is None (logged out): counts only public concepts (user_id IS NULL)
+    
+    Args:
+        user_id: Optional user ID to filter concepts
     
     Returns:
-        Total count of concepts
+        Total count of concepts visible to the user
     """
-    count = session.exec(select(func.count(Concept.id))).one()
+    query = select(func.count(Concept.id))
+    
+    # Filter by user_id: if provided, show public concepts (user_id IS NULL) AND that user's concepts; if None, show only public concepts
+    if user_id is not None:
+        # Count public concepts (user_id IS NULL) OR concepts belonging to this user
+        query = query.where(
+            or_(
+                Concept.user_id.is_(None),
+                Concept.user_id == user_id
+            )
+        )
+    else:
+        # When logged out, count only public concepts (user_id IS NULL)
+        query = query.where(Concept.user_id.is_(None))
+    
+    count = session.exec(query).one()
     return ConceptCountResponse(count=count)
 
 
@@ -493,9 +514,18 @@ async def get_concepts_with_missing_languages(
                     pos_list.append(pos_stripped)
     
     # Build base query for concepts with filters
-    # Start with all concepts
-    base_query_with_user_id = select(Concept).where(Concept.user_id.isnot(None))
-    base_query_without_user_id = select(Concept).where(Concept.user_id.is_(None))
+    # Filter by user_id: if provided, show public concepts (user_id IS NULL) AND that user's concepts; if None, show only public concepts
+    if request.user_id is not None:
+        # Show public concepts (user_id IS NULL) OR concepts belonging to this user
+        base_query = select(Concept).where(
+            or_(
+                Concept.user_id.is_(None),
+                Concept.user_id == request.user_id
+            )
+        )
+    else:
+        # When logged out, show only public concepts (user_id IS NULL)
+        base_query = select(Concept).where(Concept.user_id.is_(None))
     
     # Apply lemmas/phrases filters using is_phrase field (same logic as dictionary endpoint)
     use_lemmas = request.include_lemmas
@@ -506,31 +536,22 @@ async def get_concepts_with_missing_languages(
     # Otherwise, filter by is_phrase
     if not use_lemmas and not use_phrases:
         # Both filters are False - return empty result
-        base_query_with_user_id = base_query_with_user_id.where(False)
-        base_query_without_user_id = base_query_without_user_id.where(False)
+        base_query = base_query.where(False)
     elif use_lemmas and use_phrases:
         # Both filters are True - show all concepts (no is_phrase filter)
         pass
     elif use_lemmas and not use_phrases:
         # Only lemmas - concepts where is_phrase is False
-        base_query_with_user_id = base_query_with_user_id.where(Concept.is_phrase == False)
-        base_query_without_user_id = base_query_without_user_id.where(Concept.is_phrase == False)
+        base_query = base_query.where(Concept.is_phrase == False)
     elif not use_lemmas and use_phrases:
         # Only phrases - concepts where is_phrase is True
-        base_query_with_user_id = base_query_with_user_id.where(Concept.is_phrase == True)
-        base_query_without_user_id = base_query_without_user_id.where(Concept.is_phrase == True)
+        base_query = base_query.where(Concept.is_phrase == True)
     
     # Apply topic_ids filter if provided (same logic as dictionary endpoint)
     if request.topic_ids is not None and len(request.topic_ids) > 0:
         if request.include_without_topic:
             # Include concepts with these topic IDs OR concepts without a topic
-            base_query_with_user_id = base_query_with_user_id.where(
-                or_(
-                    Concept.topic_id.in_(request.topic_ids),
-                    Concept.topic_id.is_(None)
-                )
-            )
-            base_query_without_user_id = base_query_without_user_id.where(
+            base_query = base_query.where(
                 or_(
                     Concept.topic_id.in_(request.topic_ids),
                     Concept.topic_id.is_(None)
@@ -538,29 +559,23 @@ async def get_concepts_with_missing_languages(
             )
         else:
             # Only include concepts with these topic IDs
-            base_query_with_user_id = base_query_with_user_id.where(Concept.topic_id.in_(request.topic_ids))
-            base_query_without_user_id = base_query_without_user_id.where(Concept.topic_id.in_(request.topic_ids))
+            base_query = base_query.where(Concept.topic_id.in_(request.topic_ids))
     else:
         # topic_ids is None/empty (all topics selected in frontend)
         if not request.include_without_topic:
             # Exclude concepts without a topic (only show concepts with a topic)
-            base_query_with_user_id = base_query_with_user_id.where(Concept.topic_id.isnot(None))
-            base_query_without_user_id = base_query_without_user_id.where(Concept.topic_id.isnot(None))
+            base_query = base_query.where(Concept.topic_id.isnot(None))
         # If include_without_topic is True, show ALL concepts (no topic filter)
     
     # Apply levels filter if provided
     if level_list is not None and len(level_list) > 0:
-        base_query_with_user_id = base_query_with_user_id.where(Concept.level.in_(level_list))
-        base_query_without_user_id = base_query_without_user_id.where(Concept.level.in_(level_list))
+        base_query = base_query.where(Concept.level.in_(level_list))
     
     # Apply part_of_speech filter if provided
     if pos_list is not None and len(pos_list) > 0:
         # Convert all POS values to lowercase for case-insensitive comparison
         pos_list_lower = [pos.lower() for pos in pos_list]
-        base_query_with_user_id = base_query_with_user_id.where(
-            func.lower(Concept.part_of_speech).in_(pos_list_lower)
-        )
-        base_query_without_user_id = base_query_without_user_id.where(
+        base_query = base_query.where(
             func.lower(Concept.part_of_speech).in_(pos_list_lower)
         )
     
@@ -579,31 +594,17 @@ async def get_concepts_with_missing_languages(
         )
         
         # Filter concepts where term matches OR has matching lemmas
-        base_query_with_user_id = base_query_with_user_id.where(
-            or_(
-                func.lower(Concept.term).like(search_term),
-                Concept.id.in_(lemma_search_subquery)
-            )
-        )
-        base_query_without_user_id = base_query_without_user_id.where(
+        base_query = base_query.where(
             or_(
                 func.lower(Concept.term).like(search_term),
                 Concept.id.in_(lemma_search_subquery)
             )
         )
     
-    # Get all concepts with filters applied
-    # Prioritize concepts with filled user_id, then sort alphabetically (case-insensitive)
-    concepts_with_user_id = session.exec(
-        base_query_with_user_id.order_by(func.lower(Concept.term).asc())
+    # Get all concepts with filters applied, sorted alphabetically (case-insensitive)
+    all_concepts = session.exec(
+        base_query.order_by(func.lower(Concept.term).asc())
     ).all()
-    
-    concepts_without_user_id = session.exec(
-        base_query_without_user_id.order_by(func.lower(Concept.term).asc())
-    ).all()
-    
-    # Combine: concepts with user_id first, then those without, both alphabetically sorted
-    all_concepts = list(concepts_with_user_id) + list(concepts_without_user_id)
     
     # Get all lemmas for the specified languages
     lemmas = session.exec(

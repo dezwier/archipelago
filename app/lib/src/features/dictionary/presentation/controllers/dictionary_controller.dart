@@ -330,6 +330,8 @@ class DictionaryController extends ChangeNotifier {
       // Load user data
       final prefs = await SharedPreferences.getInstance();
       final userJson = prefs.getString('current_user');
+      final previousUserId = _currentUser?.id;
+      
       if (userJson != null) {
         final userMap = jsonDecode(userJson) as Map<String, dynamic>;
         _currentUser = User.fromJson(userMap);
@@ -340,6 +342,11 @@ class DictionaryController extends ChangeNotifier {
         _currentUser = null;
         _sourceLanguageCode = 'en';
         _targetLanguageCode = null;
+      }
+      
+      // Reload concept count if user state changed (login/logout)
+      if (previousUserId != _currentUser?.id) {
+        _loadConceptCountTotal();
       }
 
       // Load dictionary - pass visible languages to get cards for those languages only
@@ -468,8 +475,7 @@ class DictionaryController extends ChangeNotifier {
   }
 
   Future<void> refresh() {
-    // Reload concept counts when refreshing
-    _loadConceptCountTotal();
+    // Load user and dictionary first (this will update user state and reload concept count if user changed)
     // Filtered completed count will be loaded from dictionary endpoint
     return _loadUserAndDictionary(reset: true);
   }
@@ -484,7 +490,7 @@ class DictionaryController extends ChangeNotifier {
   /// Load total concept count (doesn't change during search)
   Future<void> _loadConceptCountTotal() async {
     try {
-      final result = await DictionaryService.getConceptCountTotal();
+      final result = await DictionaryService.getConceptCountTotal(userId: _currentUser?.id);
       if (result['success'] == true) {
         _totalConceptCount = result['count'] as int;
         notifyListeners();

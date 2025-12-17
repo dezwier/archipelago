@@ -70,7 +70,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     
     // Register refresh callback with parent
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onRefreshCallbackReady?.call(_loadTopics);
+      widget.onRefreshCallbackReady?.call(() {
+        // Reload topics and refresh dictionary (which will reload concept count if user changed)
+        _loadTopics();
+        _controller.refresh();
+      });
     });
     
     // Listen to controller changes to update language visibility when user loads
@@ -181,8 +185,20 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         // Set all available topic IDs in controller first
         final topicIds = topics.map((t) => t.id).toSet();
         _controller.setAllAvailableTopicIds(topicIds);
-        // Set all topics as selected by default
-        if (topics.isNotEmpty && _controller.selectedTopicIds.isEmpty) {
+        
+        // Remove any selected topic IDs that are no longer available (e.g., private topics after logout)
+        final validSelectedIds = _controller.selectedTopicIds.intersection(topicIds);
+        if (validSelectedIds.length != _controller.selectedTopicIds.length) {
+          // Some selected topics are no longer available, update the filter
+          if (validSelectedIds.isEmpty && topics.isNotEmpty) {
+            // If all selected topics were removed, select all available topics
+            _controller.setTopicFilter(topicIds);
+          } else {
+            // Keep only the valid selected topics
+            _controller.setTopicFilter(validSelectedIds);
+          }
+        } else if (topics.isNotEmpty && _controller.selectedTopicIds.isEmpty) {
+          // Set all topics as selected by default if nothing is selected
           _controller.setTopicFilter(topicIds);
         }
       });

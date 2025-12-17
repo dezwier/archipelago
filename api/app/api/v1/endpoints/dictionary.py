@@ -125,6 +125,19 @@ async def get_dictionary(
     # Build base query for concepts - start with all concepts
     concept_query = select(Concept)
     
+    # Filter by user_id: if provided, show public concepts (user_id IS NULL) AND that user's concepts; if None, show only public concepts
+    if user_id is not None:
+        # Show public concepts (user_id IS NULL) OR concepts belonging to this user
+        concept_query = concept_query.where(
+            or_(
+                Concept.user_id.is_(None),
+                Concept.user_id == user_id
+            )
+        )
+    else:
+        # When logged out, show only public concepts (user_id IS NULL)
+        concept_query = concept_query.where(Concept.user_id.is_(None))
+    
     # Apply lemmas/phrases filters using is_phrase field
     use_lemmas = include_lemmas
     use_phrases = include_phrases
@@ -462,6 +475,19 @@ async def get_dictionary(
         # Build the same filtered concept query as the main query (without pagination/sorting)
         # Start with all concepts
         filtered_concept_query = select(Concept)
+        
+        # Apply user_id filter (same as main query)
+        if user_id is not None:
+            # Show public concepts (user_id IS NULL) OR concepts belonging to this user
+            filtered_concept_query = filtered_concept_query.where(
+                or_(
+                    Concept.user_id.is_(None),
+                    Concept.user_id == user_id
+                )
+            )
+        else:
+            # When logged out, show only public concepts (user_id IS NULL)
+            filtered_concept_query = filtered_concept_query.where(Concept.user_id.is_(None))
         
         # Apply lemmas/phrases filters (same as main query)
         use_lemmas = include_lemmas

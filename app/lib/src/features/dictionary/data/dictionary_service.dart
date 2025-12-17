@@ -334,14 +334,17 @@ class DictionaryService {
   }
 
 
-  /// Get the total count of all concepts.
+  /// Get the total count of concepts visible to the user.
   /// 
   /// Returns a map with:
   /// - 'success': bool
-  /// - 'count': int (if successful) - total count of concepts
+  /// - 'count': int (if successful) - total count of concepts visible to the user
   /// - 'message': String (if error)
-  static Future<Map<String, dynamic>> getConceptCountTotal() async {
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/count/total');
+  static Future<Map<String, dynamic>> getConceptCountTotal({int? userId}) async {
+    final uri = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/count/total');
+    final url = userId != null 
+        ? uri.replace(queryParameters: {'user_id': userId.toString()})
+        : uri;
     
     try {
       final response = await http.get(
