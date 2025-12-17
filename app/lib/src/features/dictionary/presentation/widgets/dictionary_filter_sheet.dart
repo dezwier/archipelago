@@ -46,8 +46,8 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
   bool? _pendingShowLemmasWithoutTopic;
   Set<String>? _pendingLevels;
   Set<String>? _pendingPartOfSpeech;
-  bool? _pendingIncludePublic;
-  bool? _pendingIncludePrivate;
+  bool? _pendingIncludeLemmas;
+  bool? _pendingIncludePhrases;
 
   // Helper method to capitalize words in a string
   String _capitalizeWords(String text) {
@@ -66,8 +66,8 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
     _pendingShowLemmasWithoutTopic = widget.controller.showLemmasWithoutTopic;
     _pendingLevels = Set<String>.from(widget.controller.selectedLevels);
     _pendingPartOfSpeech = Set<String>.from(widget.controller.selectedPartOfSpeech);
-    _pendingIncludePublic = widget.controller.includePublic;
-    _pendingIncludePrivate = widget.controller.includePrivate;
+    _pendingIncludeLemmas = widget.controller.includeLemmas;
+    _pendingIncludePhrases = widget.controller.includePhrases;
   }
 
   void applyPendingChanges() {
@@ -86,13 +86,13 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
         _pendingPartOfSpeech != widget.controller.selectedPartOfSpeech) {
       widget.controller.setPartOfSpeechFilter(_pendingPartOfSpeech!);
     }
-    if (_pendingIncludePublic != null && 
-        _pendingIncludePublic != widget.controller.includePublic) {
-      widget.controller.setIncludePublic(_pendingIncludePublic!);
+    if (_pendingIncludeLemmas != null && 
+        _pendingIncludeLemmas != widget.controller.includeLemmas) {
+      widget.controller.setIncludeLemmas(_pendingIncludeLemmas!);
     }
-    if (_pendingIncludePrivate != null && 
-        _pendingIncludePrivate != widget.controller.includePrivate) {
-      widget.controller.setIncludePrivate(_pendingIncludePrivate!);
+    if (_pendingIncludePhrases != null && 
+        _pendingIncludePhrases != widget.controller.includePhrases) {
+      widget.controller.setIncludePhrases(_pendingIncludePhrases!);
     }
   }
   
@@ -162,13 +162,12 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Public/Private filter
+                  // Lemmas/Phrases filter
                   StatefulBuilder(
                     builder: (context, setMenuState) {
-                      final currentIncludePublic = _pendingIncludePublic ?? widget.controller.includePublic;
-                      final currentIncludePrivate = _pendingIncludePrivate ?? widget.controller.includePrivate;
-                      final isLoggedIn = widget.controller.currentUser != null;
-                      final allSelected = currentIncludePublic && currentIncludePrivate;
+                      final currentIncludeLemmas = _pendingIncludeLemmas ?? widget.controller.includeLemmas;
+                      final currentIncludePhrases = _pendingIncludePhrases ?? widget.controller.includePhrases;
+                      final allSelected = currentIncludeLemmas && currentIncludePhrases;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -187,8 +186,8 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
                                   onPressed: () {
                                     setMenuState(() {
                                       final newValue = !allSelected;
-                                      _pendingIncludePublic = newValue;
-                                      _pendingIncludePrivate = newValue;
+                                      _pendingIncludeLemmas = newValue;
+                                      _pendingIncludePhrases = newValue;
                                     });
                                   },
                                   style: TextButton.styleFrom(
@@ -210,69 +209,64 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                // Public button
+                                // Lemmas button
                                 GestureDetector(
                                   onTap: () {
                                     setMenuState(() {
-                                      _pendingIncludePublic = !currentIncludePublic;
+                                      _pendingIncludeLemmas = !currentIncludeLemmas;
                                     });
                                   },
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                     decoration: BoxDecoration(
-                                      color: currentIncludePublic
+                                      color: currentIncludeLemmas
                                           ? Theme.of(context).colorScheme.primaryContainer
                                           : Theme.of(context).colorScheme.surfaceContainerHighest,
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: currentIncludePublic
+                                        color: currentIncludeLemmas
                                             ? Theme.of(context).colorScheme.primary
                                             : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                                        width: currentIncludePublic ? 1 : 1,
+                                        width: currentIncludeLemmas ? 1 : 1,
                                       ),
                                     ),
                                     child: Text(
-                                      'Public',
+                                      'Lemmas',
                                       style: TextStyle(
-                                        color: currentIncludePublic
+                                        color: currentIncludeLemmas
                                             ? Theme.of(context).colorScheme.onPrimaryContainer
                                             : Theme.of(context).colorScheme.onSurface,
                                       ),
                                     ),
                                   ),
                                 ),
-                                // Private button
+                                // Phrases button
                                 GestureDetector(
-                                  onTap: isLoggedIn
-                                      ? () {
-                                          setMenuState(() {
-                                            _pendingIncludePrivate = !currentIncludePrivate;
-                                          });
-                                        }
-                                      : null,
-                                  child: Opacity(
-                                    opacity: isLoggedIn ? 1.0 : 0.5,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: currentIncludePrivate
-                                            ? Theme.of(context).colorScheme.primaryContainer
-                                            : Theme.of(context).colorScheme.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: currentIncludePrivate
-                                              ? Theme.of(context).colorScheme.primary
-                                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                                          width: currentIncludePrivate ? 1 : 1,
-                                        ),
+                                  onTap: () {
+                                    setMenuState(() {
+                                      _pendingIncludePhrases = !currentIncludePhrases;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: currentIncludePhrases
+                                          ? Theme.of(context).colorScheme.primaryContainer
+                                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: currentIncludePhrases
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                        width: currentIncludePhrases ? 1 : 1,
                                       ),
-                                      child: Text(
-                                        'Private',
-                                        style: TextStyle(
-                                          color: currentIncludePrivate
-                                              ? Theme.of(context).colorScheme.onPrimaryContainer
-                                              : Theme.of(context).colorScheme.onSurface,
-                                        ),
+                                    ),
+                                    child: Text(
+                                      'Phrases',
+                                      style: TextStyle(
+                                        color: currentIncludePhrases
+                                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                                            : Theme.of(context).colorScheme.onSurface,
                                       ),
                                     ),
                                   ),

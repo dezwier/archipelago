@@ -32,9 +32,8 @@ async def get_dictionary(
     sort_by: str = "alphabetical",  # Options: "alphabetical", "recent", "random"
     search: Optional[str] = None,  # Optional search query for concept.term and lemma.term
     visible_languages: Optional[str] = None,  # Comma-separated list of visible language codes - lemmas are filtered to these languages
-    own_user_id: Optional[int] = None,  # Filter for concepts created by this user (concept.user_id == own_user_id)
-    include_public: bool = True,  # Include public concepts (concept.user_id is null)
-    include_private: bool = True,  # Include private concepts (concept.user_id == logged in user)
+    include_lemmas: bool = True,  # Include lemmas (concept.is_phrase is False)
+    include_phrases: bool = True,  # Include phrases (concept.is_phrase is True)
     topic_ids: Optional[str] = None,  # Comma-separated list of topic IDs to filter by
     include_without_topic: bool = False,  # Include concepts without a topic (topic_id is null)
     levels: Optional[str] = None,  # Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
@@ -52,9 +51,8 @@ async def get_dictionary(
         sort_by: Sort order - "alphabetical" (default), "recent" (by created_at, newest first), or "random"
         search: Optional search query to filter by concept.term and lemma.term (for visible languages)
         visible_languages: Comma-separated list of visible language codes - only lemmas for these languages are returned
-        own_user_id: Filter for concepts created by this user (concept.user_id == own_user_id) - deprecated, use include_public/include_private instead
-        include_public: Include public concepts (concept.user_id is null) - default: True
-        include_private: Include private concepts (concept.user_id == logged in user) - default: True
+        include_lemmas: Include lemmas (concept.is_phrase is False)
+        include_phrases: Include phrases (concept.is_phrase is True)
         topic_ids: Comma-separated list of topic IDs to filter by
         include_without_topic: Include concepts without a topic (topic_id is null)
         levels: Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
@@ -127,26 +125,25 @@ async def get_dictionary(
     # Build base query for concepts - start with all concepts
     concept_query = select(Concept)
     
-    # Apply public/private filters
+    # Apply lemmas/phrases filters using is_phrase field
+    use_lemmas = include_lemmas
+    use_phrases = include_phrases
+    
     # If both are False, show nothing (empty result)
     # If both are True, show all (no filter)
-    # Otherwise, filter by user_id
-    if not include_public and not include_private:
+    # Otherwise, filter by is_phrase
+    if not use_lemmas and not use_phrases:
         # Both filters are False - return empty result
         concept_query = concept_query.where(False)  # This will return no results
-    elif include_public and include_private:
-        # Both filters are True - show all concepts (no user_id filter)
+    elif use_lemmas and use_phrases:
+        # Both filters are True - show all concepts (no is_phrase filter)
         pass
-    elif include_public and not include_private:
-        # Only public - concepts where user_id is null
-        concept_query = concept_query.where(Concept.user_id.is_(None))
-    elif not include_public and include_private:
-        # Only private - concepts where user_id matches logged in user
-        if own_user_id is not None:
-            concept_query = concept_query.where(Concept.user_id == own_user_id)
-        else:
-            # No logged in user, but only private requested - return empty result
-            concept_query = concept_query.where(False)  # This will return no results
+    elif use_lemmas and not use_phrases:
+        # Only lemmas - concepts where is_phrase is False
+        concept_query = concept_query.where(Concept.is_phrase == False)
+    elif not use_lemmas and use_phrases:
+        # Only phrases - concepts where is_phrase is True
+        concept_query = concept_query.where(Concept.is_phrase == True)
     
     # Apply topic_ids filter if provided
     if topic_id_list is not None and len(topic_id_list) > 0:
@@ -466,16 +463,16 @@ async def get_dictionary(
         # Start with all concepts
         filtered_concept_query = select(Concept)
         
-        # Apply public/private filters (same as main query)
-        if not include_public and not include_private:
+        # Apply lemmas/phrases filters (same as main query)
+        use_lemmas = include_lemmas
+        use_phrases = include_phrases
+        
+        if not use_lemmas and not use_phrases:
             filtered_concept_query = filtered_concept_query.where(False)
-        elif include_public and not include_private:
-            filtered_concept_query = filtered_concept_query.where(Concept.user_id.is_(None))
-        elif not include_public and include_private:
-            if own_user_id is not None:
-                filtered_concept_query = filtered_concept_query.where(Concept.user_id == own_user_id)
-            else:
-                filtered_concept_query = filtered_concept_query.where(False)
+        elif use_lemmas and not use_phrases:
+            filtered_concept_query = filtered_concept_query.where(Concept.is_phrase == False)
+        elif not use_lemmas and use_phrases:
+            filtered_concept_query = filtered_concept_query.where(Concept.is_phrase == True)
         
         # Apply topic_ids filter (same as main query)
         if topic_id_list is not None and len(topic_id_list) > 0:

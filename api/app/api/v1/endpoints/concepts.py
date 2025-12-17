@@ -92,11 +92,14 @@ async def create_concept_only(
         )
     
     # Create the concept
+    # If coming from the app (user_id is present), is_phrase is always True
+    is_phrase = True if request.user_id is not None else False
     concept = Concept(
         term=term_stripped,
         description=request.description.strip() if request.description else None,
         topic_id=request.topic_id,
         user_id=request.user_id,
+        is_phrase=is_phrase,
         created_at=datetime.now(timezone.utc)
     )
     
@@ -494,22 +497,28 @@ async def get_concepts_with_missing_languages(
     base_query_with_user_id = select(Concept).where(Concept.user_id.isnot(None))
     base_query_without_user_id = select(Concept).where(Concept.user_id.is_(None))
     
-    # Apply public/private filters (same logic as dictionary endpoint)
-    if not request.include_public and not request.include_private:
+    # Apply lemmas/phrases filters using is_phrase field (same logic as dictionary endpoint)
+    use_lemmas = request.include_lemmas
+    use_phrases = request.include_phrases
+    
+    # If both are False, show nothing (empty result)
+    # If both are True, show all (no filter)
+    # Otherwise, filter by is_phrase
+    if not use_lemmas and not use_phrases:
         # Both filters are False - return empty result
         base_query_with_user_id = base_query_with_user_id.where(False)
         base_query_without_user_id = base_query_without_user_id.where(False)
-    elif request.include_public and not request.include_private:
-        # Only public - concepts where user_id is null
-        base_query_with_user_id = base_query_with_user_id.where(False)  # No concepts with user_id
-        # base_query_without_user_id already filters for user_id is None
-    elif not request.include_public and request.include_private:
-        # Only private - concepts where user_id matches logged in user
-        if request.own_user_id is not None:
-            base_query_with_user_id = base_query_with_user_id.where(Concept.user_id == request.own_user_id)
-        else:
-            base_query_with_user_id = base_query_with_user_id.where(False)
-        base_query_without_user_id = base_query_without_user_id.where(False)  # No concepts without user_id
+    elif use_lemmas and use_phrases:
+        # Both filters are True - show all concepts (no is_phrase filter)
+        pass
+    elif use_lemmas and not use_phrases:
+        # Only lemmas - concepts where is_phrase is False
+        base_query_with_user_id = base_query_with_user_id.where(Concept.is_phrase == False)
+        base_query_without_user_id = base_query_without_user_id.where(Concept.is_phrase == False)
+    elif not use_lemmas and use_phrases:
+        # Only phrases - concepts where is_phrase is True
+        base_query_with_user_id = base_query_with_user_id.where(Concept.is_phrase == True)
+        base_query_without_user_id = base_query_without_user_id.where(Concept.is_phrase == True)
     
     # Apply topic_ids filter if provided (same logic as dictionary endpoint)
     if request.topic_ids is not None and len(request.topic_ids) > 0:

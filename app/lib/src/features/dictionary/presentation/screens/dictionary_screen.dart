@@ -382,12 +382,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       // Use the EXACT same parameters as the controller uses
       // Loop through all pages to get all results
       
-      // Calculate ownUserId the same way the controller does
-      final ownUserIdForApi = (_controller.includePrivate && _controller.currentUser != null) || 
-                              (_controller.ownLemmasFilter && _controller.currentUser != null) 
-                              ? _controller.currentUser!.id 
-                              : null;
-      
       final Set<int> conceptIdSet = {};
       int currentPage = 1;
       bool hasMorePages = true;
@@ -402,9 +396,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       print('🔵 [Export] Using same parameters as controller:');
       print('  - userId: ${_controller.currentUser?.id}');
       print('  - visibleLanguageCodes: $visibleLanguageCodes');
-      print('  - ownUserId: $ownUserIdForApi');
-      print('  - includePublic: ${_controller.includePublic}');
-      print('  - includePrivate: ${_controller.includePrivate}');
+      print('  - includeLemmas: ${_controller.includeLemmas}');
+      print('  - includePhrases: ${_controller.includePhrases}');
       print('  - search: ${_controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null}');
       print('  - topicIds: $effectiveTopicIds');
       print('  - includeWithoutTopic: ${_controller.showLemmasWithoutTopic}');
@@ -422,9 +415,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
               : (_controller.sortOption == SortOption.timeCreatedRecentFirst ? 'recent' : 'random'),
           search: _controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null,
           visibleLanguageCodes: visibleLanguageCodes,
-          ownUserId: ownUserIdForApi, // Use same logic as controller
-          includePublic: _controller.includePublic,
-          includePrivate: _controller.includePrivate,
+          includeLemmas: _controller.includeLemmas,
+          includePhrases: _controller.includePhrases,
           topicIds: effectiveTopicIds, // Use helper method
           includeWithoutTopic: _controller.showLemmasWithoutTopic,
           levels: effectiveLevels, // Use helper method
@@ -680,11 +672,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       final effectivePOS = _controller.getEffectivePartOfSpeech();
       final effectiveTopicIds = _controller.getEffectiveTopicIds();
       
-      // Get own user ID for private filtering
-      final ownUserId = (_controller.includePrivate && _controller.currentUser != null) 
-          ? _controller.currentUser!.id 
-          : null;
-      
       // Get concepts with missing languages for visible languages
       // All filtering is now done API-side
       final missingResult = await FlashcardService.getConceptsWithMissingLanguages(
@@ -693,9 +680,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         partOfSpeech: effectivePOS,
         topicIds: effectiveTopicIds,
         includeWithoutTopic: _controller.showLemmasWithoutTopic,
-        includePublic: _controller.includePublic,
-        includePrivate: _controller.includePrivate,
-        ownUserId: ownUserId,
+        includeLemmas: _controller.includeLemmas,
+        includePhrases: _controller.includePhrases,
         search: _controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null,
       );
       

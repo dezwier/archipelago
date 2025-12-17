@@ -155,6 +155,7 @@ def populate_concepts(words_file_path: str = None):
                     'term': word,
                     'part_of_speech': pos,
                     'level': cefr_level,
+                    'is_phrase': False,  # Script-created concepts are words, not phrases
                 })
             except ValueError:
                 logger.warning("Invalid level '%s' on line %d: %s", level, line_num, line.strip())

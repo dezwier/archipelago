@@ -23,9 +23,8 @@ class DictionaryService {
     String sortBy = 'alphabetical', // Options: 'alphabetical', 'recent'
     String? search,
     List<String> visibleLanguageCodes = const [],
-    int? ownUserId, // Filter for own user id cards (deprecated, use includePublic/includePrivate)
-    bool includePublic = true, // Include public concepts (user_id is null)
-    bool includePrivate = true, // Include private concepts (user_id == logged in user)
+    bool includeLemmas = true, // Include lemmas (is_phrase is false)
+    bool includePhrases = true, // Include phrases (is_phrase is true)
     List<int>? topicIds, // Filter by topic IDs
     bool includeWithoutTopic = false, // Include concepts without a topic (topic_id is null)
     List<String>? levels, // Filter by CEFR levels (A1, A2, B1, B2, C1, C2)
@@ -52,19 +51,14 @@ class DictionaryService {
       queryParams['visible_languages'] = visibleLanguageCodes.join(',');
     }
     
-    // Add own_user_id parameter - filters to concepts created by this user (legacy support)
-    if (ownUserId != null) {
-      queryParams['own_user_id'] = ownUserId.toString();
+    // Add include_lemmas parameter - include lemmas (is_phrase is false)
+    if (!includeLemmas) {
+      queryParams['include_lemmas'] = 'false';
     }
     
-    // Add include_public parameter - include public concepts (user_id is null)
-    if (!includePublic) {
-      queryParams['include_public'] = 'false';
-    }
-    
-    // Add include_private parameter - include private concepts (user_id == logged in user)
-    if (!includePrivate) {
-      queryParams['include_private'] = 'false';
+    // Add include_phrases parameter - include phrases (is_phrase is true)
+    if (!includePhrases) {
+      queryParams['include_phrases'] = 'false';
     }
     
     // Add topic_ids parameter - filters to concepts with these topic IDs

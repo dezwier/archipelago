@@ -38,6 +38,7 @@ class ConceptResponse(BaseModel):
     frequency_bucket: Optional[str] = None
     status: Optional[str] = None
     image_url: Optional[str] = None  # URL of the concept's image
+    is_phrase: bool = False  # True if concept is a phrase (user-created), False if it's a word (script-created)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     
@@ -135,9 +136,8 @@ class GetConceptsWithMissingLanguagesRequest(BaseModel):
     part_of_speech: Optional[List[str]] = Field(None, description="Optional list of part of speech values to filter by")
     topic_ids: Optional[List[int]] = Field(None, description="Optional list of topic IDs to filter by")
     include_without_topic: bool = Field(False, description="Include concepts without a topic (topic_id is null)")
-    include_public: bool = Field(True, description="Include public concepts (user_id is null)")
-    include_private: bool = Field(True, description="Include private concepts (user_id == logged in user)")
-    own_user_id: Optional[int] = Field(None, description="User ID for filtering private concepts (required if include_private is True)")
+    include_lemmas: bool = Field(True, description="Include lemmas (is_phrase is False)")
+    include_phrases: bool = Field(True, description="Include phrases (is_phrase is True)")
     search: Optional[str] = Field(None, description="Optional search query to filter by concept.term and lemma.term")
 
 

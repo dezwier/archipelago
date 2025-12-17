@@ -72,6 +72,7 @@ class Concept(SQLModel, table=True):
     level: Optional[CEFRLevel] = None  # CEFR language proficiency level (A1-C2)
     status: Optional[str] = None
     image_url: Optional[str] = None  # URL of the concept's image (max 1 image per concept)
+    is_phrase: bool = Field(default=False)  # True if concept is a phrase (user-created), False if it's a word (script-created)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
     

@@ -501,9 +501,8 @@ class FlashcardService {
     List<String>? partOfSpeech,
     List<int>? topicIds,
     bool includeWithoutTopic = false,
-    bool includePublic = true,
-    bool includePrivate = true,
-    int? ownUserId,
+    bool includeLemmas = true,
+    bool includePhrases = true,
     String? search,
   }) async {
     if (languages.isEmpty) {
@@ -559,19 +558,14 @@ class FlashcardService {
         body['include_without_topic'] = true;
       }
       
-      // Add include_public filter (only if false, true is default)
-      if (!includePublic) {
-        body['include_public'] = false;
+      // Add include_lemmas filter
+      if (!includeLemmas) {
+        body['include_lemmas'] = false;
       }
       
-      // Add include_private filter (only if false, true is default)
-      if (!includePrivate) {
-        body['include_private'] = false;
-      }
-      
-      // Add own_user_id for private filtering
-      if (ownUserId != null) {
-        body['own_user_id'] = ownUserId;
+      // Add include_phrases filter
+      if (!includePhrases) {
+        body['include_phrases'] = false;
       }
       
       // Add search filter if provided

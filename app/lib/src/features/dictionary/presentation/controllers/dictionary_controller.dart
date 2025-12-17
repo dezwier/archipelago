@@ -49,9 +49,9 @@ class DictionaryController extends ChangeNotifier {
   // Own lemmas filter state
   bool _ownLemmasFilter = false; // Filter for own user id cards
   
-  // Public/Private filter state
-  bool _includePublic = true; // Include public concepts (user_id is null)
-  bool _includePrivate = true; // Include private concepts (user_id == logged in user)
+  // Lemmas/Phrases filter state
+  bool _includeLemmas = true; // Include lemmas (is_phrase is false)
+  bool _includePhrases = true; // Include phrases (is_phrase is true)
   
   // Topic, level, and POS filter state
   Set<int> _selectedTopicIds = {}; // Selected topic IDs (empty means all topics) - will be set to all topics when loaded
@@ -95,9 +95,9 @@ class DictionaryController extends ChangeNotifier {
   // Own lemmas filter getter
   bool get ownLemmasFilter => _ownLemmasFilter;
   
-  // Public/Private filter getters
-  bool get includePublic => _includePublic;
-  bool get includePrivate => _includePrivate;
+  // Lemmas/Phrases filter getters
+  bool get includeLemmas => _includeLemmas;
+  bool get includePhrases => _includePhrases;
   
   // Topic, level, and POS filter getters
   Set<int> get selectedTopicIds => _selectedTopicIds;
@@ -127,20 +127,20 @@ class DictionaryController extends ChangeNotifier {
     }
   }
   
-  // Set public filter
-  void setIncludePublic(bool include) {
-    if (_includePublic != include) {
-      _includePublic = include;
+  // Set lemmas filter
+  void setIncludeLemmas(bool include) {
+    if (_includeLemmas != include) {
+      _includeLemmas = include;
       notifyListeners(); // Notify listeners immediately for UI update
       // Reload dictionary when filter changes
       _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
   
-  // Set private filter
-  void setIncludePrivate(bool include) {
-    if (_includePrivate != include) {
-      _includePrivate = include;
+  // Set phrases filter
+  void setIncludePhrases(bool include) {
+    if (_includePhrases != include) {
+      _includePhrases = include;
       notifyListeners(); // Notify listeners immediately for UI update
       // Reload dictionary when filter changes
       _loadUserAndDictionary(reset: true, showLoading: false);
@@ -344,13 +344,6 @@ class DictionaryController extends ChangeNotifier {
 
       // Load dictionary - pass visible languages to get cards for those languages only
       // The dictionary endpoint will return the filtered completed count (with all filters applied)
-      // Pass own_user_id when include_private is true (needed for filtering private concepts)
-      // or when legacy _ownLemmasFilter is true
-      final ownUserIdForApi = (_includePrivate && _currentUser != null) || 
-                              (_ownLemmasFilter && _currentUser != null) 
-                              ? _currentUser!.id 
-                              : null;
-      
       final result = await DictionaryService.getDictionary(
         userId: _currentUser?.id,
         page: 1,
@@ -358,9 +351,8 @@ class DictionaryController extends ChangeNotifier {
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
         visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
-        ownUserId: ownUserIdForApi, // Pass own user id filter (for private concepts or legacy filter)
-        includePublic: _includePublic, // Pass public filter
-        includePrivate: _includePrivate, // Pass private filter
+        includeLemmas: _includeLemmas, // Pass lemmas filter
+        includePhrases: _includePhrases, // Pass phrases filter
         topicIds: getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
         includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
         levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
@@ -411,13 +403,6 @@ class DictionaryController extends ChangeNotifier {
 
     try {
       final nextPage = _currentPage + 1;
-      // Pass own_user_id when include_private is true (needed for filtering private concepts)
-      // or when legacy _ownLemmasFilter is true
-      final ownUserIdForApi = (_includePrivate && _currentUser != null) || 
-                              (_ownLemmasFilter && _currentUser != null) 
-                              ? _currentUser!.id 
-                              : null;
-      
       final result = await DictionaryService.getDictionary(
         userId: _currentUser?.id,
         page: nextPage,
@@ -425,9 +410,8 @@ class DictionaryController extends ChangeNotifier {
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim().isNotEmpty ? _searchQuery.trim() : null,
         visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
-        ownUserId: ownUserIdForApi, // Pass own user id filter (for private concepts or legacy filter)
-        includePublic: _includePublic, // Pass public filter
-        includePrivate: _includePrivate, // Pass private filter
+        includeLemmas: _includeLemmas, // Pass lemmas filter
+        includePhrases: _includePhrases, // Pass phrases filter
         topicIds: getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
         includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
         levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
@@ -629,13 +613,6 @@ class DictionaryController extends ChangeNotifier {
     notifyListeners();
     
     try {
-      // Pass own_user_id when include_private is true (needed for filtering private concepts)
-      // or when legacy _ownLemmasFilter is true
-      final ownUserIdForApi = (_includePrivate && _currentUser != null) || 
-                              (_ownLemmasFilter && _currentUser != null) 
-                              ? _currentUser!.id 
-                              : null;
-      
       final result = await DictionaryService.getDictionary(
         userId: _currentUser?.id,
         page: 1,
@@ -643,9 +620,8 @@ class DictionaryController extends ChangeNotifier {
         sortBy: _getSortByParameter(),
         search: _searchQuery.trim(),
         visibleLanguageCodes: _visibleLanguageCodes, // Pass visible languages to filter cards
-        ownUserId: ownUserIdForApi, // Pass own user id filter (for private concepts or legacy filter)
-        includePublic: _includePublic, // Pass public filter
-        includePrivate: _includePrivate, // Pass private filter
+        includeLemmas: _includeLemmas, // Pass lemmas filter
+        includePhrases: _includePhrases, // Pass phrases filter
         topicIds: getEffectiveTopicIds(), // Pass topic filter (null if all topics selected)
         includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
         levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)

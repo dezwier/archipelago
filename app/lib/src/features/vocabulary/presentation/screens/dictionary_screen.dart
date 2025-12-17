@@ -541,11 +541,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       final effectivePOS = _controller.getEffectivePartOfSpeech();
       final effectiveTopicIds = _controller.getEffectiveTopicIds();
       
-      // Get own user ID for private filtering
-      final ownUserId = (_controller.includePrivate && _controller.currentUser != null) 
-          ? _controller.currentUser!.id 
-          : null;
-      
       // Get concepts with missing languages for visible languages
       // All filtering is now done API-side
       final missingResult = await FlashcardService.getConceptsWithMissingLanguages(
@@ -554,9 +549,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         partOfSpeech: effectivePOS,
         topicIds: effectiveTopicIds,
         includeWithoutTopic: _controller.showLemmasWithoutTopic,
-        includePublic: _controller.includePublic,
-        includePrivate: _controller.includePrivate,
-        ownUserId: ownUserId,
+        includeLemmas: _controller.includeLemmas,
+        includePhrases: _controller.includePhrases,
         search: _controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null,
       );
       

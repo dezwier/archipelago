@@ -360,6 +360,7 @@ def update_concepts_with_descriptions(definitions_map: Dict[int, List[str]]):
                     frequency_bucket=concept.frequency_bucket,
                     level=concept.level,
                     status=concept.status,
+                    is_phrase=False,  # Script-created concepts are words, not phrases
                 )
                 session.add(new_concept)
                 total_created += 1
