@@ -6,11 +6,15 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy only necessary files (not everything)
+# Copy application code
 COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 COPY migrate.sh .
+
+# Copy assets directory (unnecessary files excluded via .dockerignore)
+# This copies: Noto fonts, 2 TT Ramillas fonts (Medium & Light), and language images
+# Excludes: download scripts, README, and 7 unused TT Ramillas font variants
 COPY assets/ ./assets/
 
 # Make migrate script executable

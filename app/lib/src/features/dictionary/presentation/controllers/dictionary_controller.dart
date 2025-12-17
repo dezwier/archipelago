@@ -43,8 +43,7 @@ class DictionaryController extends ChangeNotifier {
   
   // Language filter state - used only for limiting search (does not filter which concepts are shown)
   List<String> _languageCodes = []; // Languages to limit search to (does not filter which concepts are shown)
-  List<String> _visibleLanguageCodes = []; // Visible languages - used to calculate count of concepts with cards for all visible languages
-  int? _conceptsWithAllVisibleLanguages; // Count of concepts with cards for all visible languages (with filters applied)
+  List<String> _visibleLanguageCodes = []; // Visible languages
   
   // Own lemmas filter state
   bool _ownLemmasFilter = false; // Filter for own user id cards
@@ -52,6 +51,12 @@ class DictionaryController extends ChangeNotifier {
   // Lemmas/Phrases filter state
   bool _includeLemmas = true; // Include lemmas (is_phrase is false)
   bool _includePhrases = true; // Include phrases (is_phrase is true)
+  
+  // Include with filter state
+  bool _hasImages = true; // Show concepts with images (default: true, means exclude missing images)
+  bool _hasNoImages = false; // Show concepts without images
+  bool _isComplete = true; // Show complete concepts (default: true, means exclude incomplete)
+  bool _isIncomplete = false; // Show incomplete concepts
   
   // Topic, level, and POS filter state
   Set<int> _selectedTopicIds = {}; // Selected topic IDs (empty means all topics) - will be set to all topics when loaded
@@ -89,7 +94,6 @@ class DictionaryController extends ChangeNotifier {
   
   // Language filter getters
   List<String> get languageCodes => _languageCodes;
-  int? get conceptsWithAllVisibleLanguages => _conceptsWithAllVisibleLanguages;
   int? get totalConceptCount => _totalConceptCount;
   
   // Own lemmas filter getter
@@ -98,6 +102,12 @@ class DictionaryController extends ChangeNotifier {
   // Lemmas/Phrases filter getters
   bool get includeLemmas => _includeLemmas;
   bool get includePhrases => _includePhrases;
+  
+  // Include with filter getters
+  bool get hasImages => _hasImages;
+  bool get hasNoImages => _hasNoImages;
+  bool get isComplete => _isComplete;
+  bool get isIncomplete => _isIncomplete;
   
   // Topic, level, and POS filter getters
   Set<int> get selectedTopicIds => _selectedTopicIds;
@@ -117,12 +127,12 @@ class DictionaryController extends ChangeNotifier {
     }
   }
   
-  // Set visible languages (used to calculate count of concepts with cards for all visible languages)
+  // Set visible languages
   void setVisibleLanguageCodes(List<String> visibleLanguageCodes) {
     if (_visibleLanguageCodes != visibleLanguageCodes) {
       _visibleLanguageCodes = visibleLanguageCodes;
       // Always reload dictionary when visible languages change
-      // This updates the cards shown and recalculates the completed count with filters
+      // This updates the cards shown
       _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
@@ -183,6 +193,134 @@ class DictionaryController extends ChangeNotifier {
       _showLemmasWithoutTopic = show;
       notifyListeners(); // Notify listeners immediately for UI update
       // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set has images filter
+  void setHasImages(bool has) {
+    if (_hasImages != has) {
+      _hasImages = has;
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set has no images filter
+  void setHasNoImages(bool has) {
+    if (_hasNoImages != has) {
+      _hasNoImages = has;
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set is complete filter
+  void setIsComplete(bool isComplete) {
+    if (_isComplete != isComplete) {
+      _isComplete = isComplete;
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set is incomplete filter
+  void setIsIncomplete(bool isIncomplete) {
+    if (_isIncomplete != isIncomplete) {
+      _isIncomplete = isIncomplete;
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Get effective has_images value to pass to API
+  // Returns: 1 = include only concepts with images, 0 = include only concepts without images, null = include all
+  int? getEffectiveHasImages() {
+    if (_hasImages && !_hasNoImages) {
+      return 1; // Only "Has Images" selected -> include only concepts with images
+    } else if (!_hasImages && _hasNoImages) {
+      return 0; // Only "Has no Images" selected -> include only concepts without images
+    }
+    // Both selected or neither selected -> include all
+    return null;
+  }
+  
+  // Get effective is_complete value to pass to API
+  // Returns: 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
+  int? getEffectiveIsComplete() {
+    if (_isComplete && !_isIncomplete) {
+      return 1; // Only "Is Complete" selected -> include only complete concepts
+    } else if (!_isComplete && _isIncomplete) {
+      return 0; // Only "Is Incomplete" selected -> include only incomplete concepts
+    }
+    // Both selected or neither selected -> include all
+    return null;
+  }
+  
+  // Batch update multiple filters at once (used when filter drawer closes)
+  // This prevents multiple API calls when multiple filters change simultaneously
+  void batchUpdateFilters({
+    Set<int>? topicIds,
+    bool? showLemmasWithoutTopic,
+    Set<String>? levels,
+    Set<String>? partOfSpeech,
+    bool? includeLemmas,
+    bool? includePhrases,
+    bool? hasImages,
+    bool? hasNoImages,
+    bool? isComplete,
+    bool? isIncomplete,
+  }) {
+    bool hasChanges = false;
+    
+    if (topicIds != null && _selectedTopicIds != topicIds) {
+      _selectedTopicIds = topicIds;
+      hasChanges = true;
+    }
+    if (showLemmasWithoutTopic != null && _showLemmasWithoutTopic != showLemmasWithoutTopic) {
+      _showLemmasWithoutTopic = showLemmasWithoutTopic;
+      hasChanges = true;
+    }
+    if (levels != null && _selectedLevels != levels) {
+      _selectedLevels = levels;
+      hasChanges = true;
+    }
+    if (partOfSpeech != null && _selectedPartOfSpeech != partOfSpeech) {
+      _selectedPartOfSpeech = partOfSpeech;
+      hasChanges = true;
+    }
+    if (includeLemmas != null && _includeLemmas != includeLemmas) {
+      _includeLemmas = includeLemmas;
+      hasChanges = true;
+    }
+    if (includePhrases != null && _includePhrases != includePhrases) {
+      _includePhrases = includePhrases;
+      hasChanges = true;
+    }
+    if (hasImages != null && _hasImages != hasImages) {
+      _hasImages = hasImages;
+      hasChanges = true;
+    }
+    if (hasNoImages != null && _hasNoImages != hasNoImages) {
+      _hasNoImages = hasNoImages;
+      hasChanges = true;
+    }
+    if (isComplete != null && _isComplete != isComplete) {
+      _isComplete = isComplete;
+      hasChanges = true;
+    }
+    if (isIncomplete != null && _isIncomplete != isIncomplete) {
+      _isIncomplete = isIncomplete;
+      hasChanges = true;
+    }
+    
+    if (hasChanges) {
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload dictionary once with all filter changes
       _loadUserAndDictionary(reset: true, showLoading: false);
     }
   }
@@ -350,7 +488,6 @@ class DictionaryController extends ChangeNotifier {
       }
 
       // Load dictionary - pass visible languages to get cards for those languages only
-      // The dictionary endpoint will return the filtered completed count (with all filters applied)
       final result = await DictionaryService.getDictionary(
         userId: _currentUser?.id,
         page: 1,
@@ -364,6 +501,8 @@ class DictionaryController extends ChangeNotifier {
         includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
         levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
         partOfSpeech: getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
+        hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
+        isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
       );
 
       if (result['success'] == true) {
@@ -377,10 +516,6 @@ class DictionaryController extends ChangeNotifier {
         _currentPage = result['page'] as int;
         _totalItems = result['total'] as int;
         _hasNextPage = result['has_next'] as bool;
-        // Update filtered completed count from dictionary endpoint (includes all filters)
-        if (result['concepts_with_all_visible_languages'] != null) {
-          _conceptsWithAllVisibleLanguages = result['concepts_with_all_visible_languages'] as int;
-        }
         if (showLoading) {
           _isLoading = false;
         }
@@ -423,6 +558,8 @@ class DictionaryController extends ChangeNotifier {
         includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
         levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
         partOfSpeech: getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
+        hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
+        isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
       );
 
       if (result['success'] == true) {
@@ -436,10 +573,6 @@ class DictionaryController extends ChangeNotifier {
         _currentPage = result['page'] as int;
         _totalItems = result['total'] as int;
         _hasNextPage = result['has_next'] as bool;
-        // Update filtered completed count from dictionary endpoint (includes all filters)
-        if (result['concepts_with_all_visible_languages'] != null) {
-          _conceptsWithAllVisibleLanguages = result['concepts_with_all_visible_languages'] as int;
-        }
         _isLoadingMore = false;
       } else {
         _isLoadingMore = false;
@@ -476,7 +609,6 @@ class DictionaryController extends ChangeNotifier {
 
   Future<void> refresh() {
     // Load user and dictionary first (this will update user state and reload concept count if user changed)
-    // Filtered completed count will be loaded from dictionary endpoint
     return _loadUserAndDictionary(reset: true);
   }
 
@@ -632,6 +764,8 @@ class DictionaryController extends ChangeNotifier {
         includeWithoutTopic: _showLemmasWithoutTopic, // Pass filter for concepts without topic
         levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
         partOfSpeech: getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
+        hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
+        isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
       );
       
       if (result['success'] == true) {
@@ -645,10 +779,6 @@ class DictionaryController extends ChangeNotifier {
         _currentPage = result['page'] as int;
         _totalItems = result['total'] as int;
         _hasNextPage = result['has_next'] as bool;
-        // Update filtered completed count from dictionary endpoint (includes all filters)
-        if (result['concepts_with_all_visible_languages'] != null) {
-          _conceptsWithAllVisibleLanguages = result['concepts_with_all_visible_languages'] as int;
-        }
         _errorMessage = null;
       } else {
         // On error, keep previous items visible

@@ -48,6 +48,10 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
   Set<String>? _pendingPartOfSpeech;
   bool? _pendingIncludeLemmas;
   bool? _pendingIncludePhrases;
+  bool? _pendingHasImages;
+  bool? _pendingHasNoImages;
+  bool? _pendingIsComplete;
+  bool? _pendingIsIncomplete;
 
   // Helper method to capitalize words in a string
   String _capitalizeWords(String text) {
@@ -68,32 +72,27 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
     _pendingPartOfSpeech = Set<String>.from(widget.controller.selectedPartOfSpeech);
     _pendingIncludeLemmas = widget.controller.includeLemmas;
     _pendingIncludePhrases = widget.controller.includePhrases;
+    _pendingHasImages = widget.controller.hasImages;
+    _pendingHasNoImages = widget.controller.hasNoImages;
+    _pendingIsComplete = widget.controller.isComplete;
+    _pendingIsIncomplete = widget.controller.isIncomplete;
   }
 
   void applyPendingChanges() {
-    // Apply all pending filter changes to the controller
-    if (_pendingTopicIds != null && _pendingTopicIds != widget.controller.selectedTopicIds) {
-      widget.controller.setTopicFilter(_pendingTopicIds!);
-    }
-    if (_pendingShowLemmasWithoutTopic != null && 
-        _pendingShowLemmasWithoutTopic != widget.controller.showLemmasWithoutTopic) {
-      widget.controller.setShowLemmasWithoutTopic(_pendingShowLemmasWithoutTopic!);
-    }
-    if (_pendingLevels != null && _pendingLevels != widget.controller.selectedLevels) {
-      widget.controller.setLevelFilter(_pendingLevels!);
-    }
-    if (_pendingPartOfSpeech != null && 
-        _pendingPartOfSpeech != widget.controller.selectedPartOfSpeech) {
-      widget.controller.setPartOfSpeechFilter(_pendingPartOfSpeech!);
-    }
-    if (_pendingIncludeLemmas != null && 
-        _pendingIncludeLemmas != widget.controller.includeLemmas) {
-      widget.controller.setIncludeLemmas(_pendingIncludeLemmas!);
-    }
-    if (_pendingIncludePhrases != null && 
-        _pendingIncludePhrases != widget.controller.includePhrases) {
-      widget.controller.setIncludePhrases(_pendingIncludePhrases!);
-    }
+    // Apply all pending filter changes to the controller in a single batch update
+    // This prevents multiple API calls and ensures the counter is updated correctly
+    widget.controller.batchUpdateFilters(
+      topicIds: _pendingTopicIds,
+      showLemmasWithoutTopic: _pendingShowLemmasWithoutTopic,
+      levels: _pendingLevels,
+      partOfSpeech: _pendingPartOfSpeech,
+      includeLemmas: _pendingIncludeLemmas,
+      includePhrases: _pendingIncludePhrases,
+      hasImages: _pendingHasImages,
+      hasNoImages: _pendingHasNoImages,
+      isComplete: _pendingIsComplete,
+      isIncomplete: _pendingIsIncomplete,
+    );
   }
   
   void _applyPendingChanges() {
@@ -176,7 +175,7 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
                             child: Row(
                               children: [
                                 Text(
-                                  'Visibility',
+                                  'Type',
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -265,6 +264,163 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
                                       'Phrases',
                                       style: TextStyle(
                                         color: currentIncludePhrases
+                                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const Divider(height: 1),
+                  // Include with filter
+                  StatefulBuilder(
+                    builder: (context, setMenuState) {
+                      final currentHasImages = _pendingHasImages ?? widget.controller.hasImages;
+                      final currentHasNoImages = _pendingHasNoImages ?? widget.controller.hasNoImages;
+                      final currentIsComplete = _pendingIsComplete ?? widget.controller.isComplete;
+                      final currentIsIncomplete = _pendingIsIncomplete ?? widget.controller.isIncomplete;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
+                            child: Text(
+                              'To Include',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16.0),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                // Has Images button
+                                GestureDetector(
+                                  onTap: () {
+                                    setMenuState(() {
+                                      _pendingHasImages = !currentHasImages;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: currentHasImages
+                                          ? Theme.of(context).colorScheme.primaryContainer
+                                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: currentHasImages
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                        width: currentHasImages ? 1 : 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Image',
+                                      style: TextStyle(
+                                        color: currentHasImages
+                                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Has no Images button
+                                GestureDetector(
+                                  onTap: () {
+                                    setMenuState(() {
+                                      _pendingHasNoImages = !currentHasNoImages;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: currentHasNoImages
+                                          ? Theme.of(context).colorScheme.primaryContainer
+                                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: currentHasNoImages
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                        width: currentHasNoImages ? 1 : 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'No Image',
+                                      style: TextStyle(
+                                        color: currentHasNoImages
+                                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Is Complete button
+                                GestureDetector(
+                                  onTap: () {
+                                    setMenuState(() {
+                                      _pendingIsComplete = !currentIsComplete;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: currentIsComplete
+                                          ? Theme.of(context).colorScheme.primaryContainer
+                                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: currentIsComplete
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                        width: currentIsComplete ? 1 : 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Complete',
+                                      style: TextStyle(
+                                        color: currentIsComplete
+                                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Is Incomplete button
+                                GestureDetector(
+                                  onTap: () {
+                                    setMenuState(() {
+                                      _pendingIsIncomplete = !currentIsIncomplete;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: currentIsIncomplete
+                                          ? Theme.of(context).colorScheme.primaryContainer
+                                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: currentIsIncomplete
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                        width: currentIsIncomplete ? 1 : 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Incomplete',
+                                      style: TextStyle(
+                                        color: currentIsIncomplete
                                             ? Theme.of(context).colorScheme.onPrimaryContainer
                                             : Theme.of(context).colorScheme.onSurface,
                                       ),

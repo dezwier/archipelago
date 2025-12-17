@@ -37,3 +37,4 @@ def downgrade() -> None:
     op.drop_column('concept', 'is_phrase')
 
 
+

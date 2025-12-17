@@ -44,3 +44,15 @@ nixpacks.toml
 # Init scripts (likely not needed at runtime)
 init/
 
+# Unnecessary font files (only need Medium and Light TT Ramillas)
+assets/fonts/tt_ramillas/TT Ramillas Trial Bold.ttf
+assets/fonts/tt_ramillas/TT Ramillas Trial Italic.ttf
+assets/fonts/tt_ramillas/TT Ramillas Trial Light Italic.ttf
+assets/fonts/tt_ramillas/TT Ramillas Trial Medium Italic.ttf
+assets/fonts/tt_ramillas/TT Ramillas Trial Regular.ttf
+assets/fonts/tt_ramillas/TT Ramillas Trial Variable Italic.ttf
+assets/fonts/tt_ramillas/TT Ramillas Trial Variable Roman.ttf
+assets/fonts/README.md
+assets/fonts/download_*.py
+assets/fonts/download_*.sh
+

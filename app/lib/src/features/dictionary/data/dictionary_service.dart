@@ -14,7 +14,6 @@ class DictionaryService {
   /// - 'page_size': int (if successful) - items per page
   /// - 'has_next': bool (if successful) - whether there are more pages
   /// - 'has_previous': bool (if successful) - whether there are previous pages
-  /// - 'concepts_with_all_visible_languages': int? (if successful) - count of concepts with cards for all visible languages
   /// - 'message': String (if error)
   static Future<Map<String, dynamic>> getDictionary({
     int? userId,
@@ -29,6 +28,8 @@ class DictionaryService {
     bool includeWithoutTopic = false, // Include concepts without a topic (topic_id is null)
     List<String>? levels, // Filter by CEFR levels (A1, A2, B1, B2, C1, C2)
     List<String>? partOfSpeech, // Filter by part of speech values
+    int? hasImages, // 1 = include only concepts with images, 0 = include only concepts without images, null = include all
+    int? isComplete, // 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
   }) async {
     final queryParams = <String, String>{
       'page': page.toString(),
@@ -81,6 +82,16 @@ class DictionaryService {
       queryParams['part_of_speech'] = partOfSpeech.join(',');
     }
     
+    // Add has_images parameter - 1 = include only concepts with images, 0 = include only concepts without images, null = include all
+    if (hasImages != null) {
+      queryParams['has_images'] = hasImages.toString();
+    }
+    
+    // Add is_complete parameter - 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
+    if (isComplete != null) {
+      queryParams['is_complete'] = isComplete.toString();
+    }
+    
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/dictionary').replace(
       queryParameters: queryParams,
     );
@@ -102,7 +113,6 @@ class DictionaryService {
           'page_size': data['page_size'] as int,
           'has_next': data['has_next'] as bool,
           'has_previous': data['has_previous'] as bool,
-          'concepts_with_all_visible_languages': data['concepts_with_all_visible_languages'] as int?,
           'total_concepts_with_term': data['total_concepts_with_term'] as int?,
         };
       } else {

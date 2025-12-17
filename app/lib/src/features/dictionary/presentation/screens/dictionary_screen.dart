@@ -19,7 +19,6 @@ import 'package:archipelago/src/features/dictionary/presentation/screens/edit_co
 import 'package:archipelago/src/features/profile/data/language_service.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/features/create/data/topic_service.dart';
-import 'package:archipelago/src/features/create/data/flashcard_service.dart';
 import 'package:archipelago/src/features/create/data/card_generation_background_service.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/generate_lemmas_drawer.dart';
 import 'dart:convert';
@@ -375,10 +374,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     // Get filtered count (number of concepts with filters applied)
     final filteredLemmas = _controller.totalItems;
     
-    // Get completed count (includes filters AND considers which visible languages are complete)
-    final completedCount = _controller.conceptsWithAllVisibleLanguages ?? 0;
-    
-    return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $filteredLemmas filtered • $completedCount completed';
+    return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $filteredLemmas filtered';
   }
 
 
@@ -399,10 +395,9 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     });
     
     try {
-      final completedCount = _controller.conceptsWithAllVisibleLanguages ?? 0;
       final visibleLanguageCodes = _languageVisibilityManager.getVisibleLanguageCodes();
       
-      print('🔵 [Export] Starting export - completedCount: $completedCount, visibleLanguages: $visibleLanguageCodes');
+      print('🔵 [Export] Starting export - visibleLanguages: $visibleLanguageCodes');
       
       // Fetch ALL concept IDs that match the current filters (not just visible ones)
       // Use the EXACT same parameters as the controller uses
@@ -511,7 +506,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       showExportFlashcardsDrawer(
         context: context,
         conceptIds: conceptIds,
-        completedConceptsCount: completedCount,
+        completedConceptsCount: 0,
         availableLanguages: _allLanguages,
         visibleLanguageCodes: visibleLanguageCodes,
       );
@@ -693,43 +688,117 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     });
     
     try {
+      // Get all concepts from DictionaryResponse with current filters applied
+      // Loop through all pages to get all concepts that match the filters
+      final List<PairedDictionaryItem> allFilteredItems = [];
+      int currentPage = 1;
+      bool hasMorePages = true;
+      
       // Get effective filters (same logic as controller)
       final effectiveLevels = _controller.getEffectiveLevels();
       final effectivePOS = _controller.getEffectivePartOfSpeech();
       final effectiveTopicIds = _controller.getEffectiveTopicIds();
       
-      // Get concepts with missing languages for visible languages
-      // All filtering is now done API-side
-      final missingResult = await FlashcardService.getConceptsWithMissingLanguages(
-        languages: visibleLanguages,
-        levels: effectiveLevels,
-        partOfSpeech: effectivePOS,
-        topicIds: effectiveTopicIds,
-        includeWithoutTopic: _controller.showLemmasWithoutTopic,
-        includeLemmas: _controller.includeLemmas,
-        includePhrases: _controller.includePhrases,
-        search: _controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null,
-      );
+      print('🔵 [Generate] Starting to fetch all pages with filters...');
+      print('🔵 [Generate] Using same parameters as controller:');
+      print('  - userId: ${_controller.currentUser?.id}');
+      print('  - visibleLanguageCodes: $visibleLanguages');
+      print('  - includeLemmas: ${_controller.includeLemmas}');
+      print('  - includePhrases: ${_controller.includePhrases}');
+      print('  - search: ${_controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null}');
+      print('  - topicIds: $effectiveTopicIds');
+      print('  - includeWithoutTopic: ${_controller.showLemmasWithoutTopic}');
+      print('  - levels: $effectiveLevels');
+      print('  - partOfSpeech: $effectivePOS');
       
-      if (missingResult['success'] != true) {
-        setState(() {
-          _isLoadingConcepts = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(missingResult['message'] as String),
-              backgroundColor: Colors.red,
-            ),
-          );
+      while (hasMorePages) {
+        print('🔵 [Generate] Fetching page $currentPage...');
+        final result = await DictionaryService.getDictionary(
+          userId: _controller.currentUser?.id,
+          page: currentPage,
+          pageSize: 100, // Maximum allowed page size
+          sortBy: _controller.sortOption == SortOption.alphabetical 
+              ? 'alphabetical' 
+              : (_controller.sortOption == SortOption.timeCreatedRecentFirst ? 'recent' : 'random'),
+          search: _controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null,
+          visibleLanguageCodes: visibleLanguages,
+          includeLemmas: _controller.includeLemmas,
+          includePhrases: _controller.includePhrases,
+          topicIds: effectiveTopicIds,
+          includeWithoutTopic: _controller.showLemmasWithoutTopic,
+          levels: effectiveLevels,
+          partOfSpeech: effectivePOS,
+          hasImages: _controller.getEffectiveHasImages(),
+          isComplete: _controller.getEffectiveIsComplete(),
+        );
+        
+        print('🔵 [Generate] Page $currentPage result - success: ${result['success']}, items: ${(result['items'] as List?)?.length ?? 0}');
+        
+        if (result['success'] == true) {
+          final List<dynamic> itemsData = result['items'] as List<dynamic>;
+          print('🔵 [Generate] Page $currentPage has ${itemsData.length} items');
+          
+          // Convert to PairedDictionaryItem
+          final items = itemsData
+              .map((json) => PairedDictionaryItem.fromJson(json as Map<String, dynamic>))
+              .toList();
+          
+          allFilteredItems.addAll(items);
+          
+          // Check if there are more pages
+          hasMorePages = result['has_next'] as bool? ?? false;
+          currentPage++;
+          
+          print('🔵 [Generate] Has more pages: $hasMorePages');
+        } else {
+          // Error occurred, break the loop
+          final errorMsg = result['message'] as String? ?? 'Failed to load concepts for generation';
+          print('🔴 [Generate] Error on page $currentPage: $errorMsg');
+          setState(() {
+            _isLoadingConcepts = false;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(errorMsg),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
         }
-        return;
       }
       
-      final missingData = missingResult['data'] as Map<String, dynamic>?;
-      final concepts = missingData?['concepts'] as List<dynamic>?;
+      print('🔵 [Generate] Finished fetching. Total items: ${allFilteredItems.length}');
       
-      if (concepts == null || concepts.isEmpty) {
+      // For each concept, check which visible languages are missing
+      final conceptIds = <int>[];
+      final conceptTerms = <int, String>{};
+      final conceptMissingLanguages = <int, List<String>>{};
+      
+      for (final item in allFilteredItems) {
+        // Get languages that have cards for this concept
+        final existingLanguageCodes = item.cards
+            .map((card) => card.languageCode.toLowerCase())
+            .toSet();
+        
+        // Find which visible languages are missing
+        final missingLanguages = visibleLanguages
+            .where((lang) => !existingLanguageCodes.contains(lang.toLowerCase()))
+            .map((lang) => lang.toUpperCase())
+            .toList();
+        
+        // Only include concepts that have at least one missing language
+        if (missingLanguages.isNotEmpty) {
+          conceptIds.add(item.conceptId);
+          conceptTerms[item.conceptId] = item.conceptTerm ?? 'Unknown';
+          conceptMissingLanguages[item.conceptId] = missingLanguages;
+        }
+      }
+      
+      print('🔵 [Generate] Found ${conceptIds.length} concepts with missing languages');
+      
+      if (conceptIds.isEmpty) {
         setState(() {
           _isLoadingConcepts = false;
         });
@@ -742,25 +811,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           );
         }
         return;
-      }
-      
-      // All filtering is done API-side, so use concepts directly
-      // Extract concept IDs, terms, and missing languages
-      final conceptIds = <int>[];
-      final conceptTerms = <int, String>{};
-      final conceptMissingLanguages = <int, List<String>>{};
-      
-      for (final c in concepts) {
-        final conceptData = c as Map<String, dynamic>;
-        final concept = conceptData['concept'] as Map<String, dynamic>;
-        final conceptId = concept['id'] as int;
-        final conceptTerm = concept['term'] as String? ?? 'Unknown';
-        final missingLanguages = (conceptData['missing_languages'] as List<dynamic>?)
-            ?.map((lang) => lang.toString().toUpperCase())
-            .toList() ?? [];
-        conceptIds.add(conceptId);
-        conceptTerms[conceptId] = conceptTerm;
-        conceptMissingLanguages[conceptId] = missingLanguages;
       }
       
       // Set initial progress state
