@@ -111,20 +111,47 @@ def generate_pdf_a4_layout(
             positions_back.append((x, y))
     
     def draw_cutting_lines(canvas_obj, page_width, page_height, card_width, card_height, margin_x, margin_y, cols, rows):
-        """Draw very subtle cutting lines to separate cards on A4 page."""
-        # Use a very light gray color for subtle cutting lines
+        """Draw tiny cutting marks at edges and crosses at crosspoints."""
+        # Use a very light gray color for subtle cutting marks
         canvas_obj.setStrokeColor(HexColor("#F3F3F3"))
         canvas_obj.setLineWidth(0.5)  # Very thin line
         
-        # Vertical lines (separate columns)
+        # Mark length: few mm (3mm)
+        mark_length = 3 * mm
+        
+        # Draw tiny marks at edges for vertical lines (separate columns)
         for col in range(1, cols):
             vertical_x = margin_x + card_width * col
-            canvas_obj.line(vertical_x, margin_y, vertical_x, page_height - margin_y)
+            # Top edge mark
+            canvas_obj.line(vertical_x, margin_y, vertical_x, margin_y + mark_length)
+            # Bottom edge mark
+            canvas_obj.line(vertical_x, page_height - margin_y - mark_length, vertical_x, page_height - margin_y)
         
-        # Horizontal lines (separate rows)
+        # Draw tiny marks at edges for horizontal lines (separate rows)
         for row in range(1, rows):
             horizontal_y = page_height - margin_y - card_height * row
-            canvas_obj.line(margin_x, horizontal_y, page_width - margin_x, horizontal_y)
+            # Left edge mark
+            canvas_obj.line(margin_x, horizontal_y, margin_x + mark_length, horizontal_y)
+            # Right edge mark
+            canvas_obj.line(page_width - margin_x - mark_length, horizontal_y, page_width - margin_x, horizontal_y)
+        
+        # Draw crosses at crosspoints (where vertical and horizontal lines intersect)
+        cross_arm_length = 2 * mm  # Length of each arm of the cross
+        for col in range(1, cols):
+            for row in range(1, rows):
+                cross_x = margin_x + card_width * col
+                cross_y = page_height - margin_y - card_height * row
+                # Draw + sign: horizontal and vertical lines
+                # Horizontal line
+                canvas_obj.line(
+                    cross_x - cross_arm_length, cross_y,
+                    cross_x + cross_arm_length, cross_y
+                )
+                # Vertical line
+                canvas_obj.line(
+                    cross_x, cross_y - cross_arm_length,
+                    cross_x, cross_y + cross_arm_length
+                )
     
     # Process concepts in groups
     total_cards_drawn = 0

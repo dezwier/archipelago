@@ -54,9 +54,9 @@ class DictionaryController extends ChangeNotifier {
   
   // Include with filter state
   bool _hasImages = true; // Show concepts with images (default: true, means exclude missing images)
-  bool _hasNoImages = false; // Show concepts without images
+  bool _hasNoImages = true; // Show concepts without images
   bool _isComplete = true; // Show complete concepts (default: true, means exclude incomplete)
-  bool _isIncomplete = false; // Show incomplete concepts
+  bool _isIncomplete = true; // Show incomplete concepts
   
   // Topic, level, and POS filter state
   Set<int> _selectedTopicIds = {}; // Selected topic IDs (empty means all topics) - will be set to all topics when loaded

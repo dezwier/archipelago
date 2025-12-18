@@ -88,29 +88,31 @@ def draw_card_side_a8_landscape(
     
     # Scale all dimensions proportionally
     # Base values (for A8 landscape reference size)
-    base_margin = 5 * mm  # Smaller margin for A8
+    base_margin = 7 * mm  # Smaller margin for A8
     base_title_font_size = 12  # Increased from 10
-    base_desc_font_size = 12  # Increased from 7 (for IPA and description)
     base_icon_size = 12
     base_flag_spacing = 4
     base_line_spacing = 3  # Increased from 1.5 (more vertical spacing for title & description)
-    base_language_spacing = 12
+    base_language_spacing = 32
     base_corner_radius = 3 * mm
     
     # Scaled values
     margin = base_margin * scale_factor
     title_font_size = base_title_font_size * scale_factor
-    desc_font_size = base_desc_font_size * scale_factor
+    # IPA font size is 50% of title font size
+    ipa_font_size = title_font_size * 0.7
+    # Description font size: 50% of title if title is present, 80% if not
+    desc_font_size = title_font_size * (0.7 if include_title else 0.9)
     icon_size = base_icon_size * scale_factor
     flag_spacing = base_flag_spacing * scale_factor
     line_spacing = base_line_spacing * scale_factor
     language_spacing = base_language_spacing * scale_factor
     
     # Layout: Image at top (60% width, centered), content below
-    image_width_percent = 0.70  # 60% of page width (increased from 50% to reduce side whitespace)
-    image_margin_top = margin * 2.5  # Reduced from 2.5 (less whitespace above)
-    image_margin_bottom = margin * 2.5  # Increased from 1.5 (more space between image and text)
-    content_margin = margin
+    image_width_percent = 0.80  # 70% of page width (increased from 50% to reduce side whitespace)
+    image_margin_top = margin * 2  # Reduced from 2.5 (less whitespace above)
+    image_margin_bottom = margin * 2  # Increased from 1.5 (more space between image and text)
+    content_margin = margin * 0.95
     
     # Register Unicode fonts for IPA symbols and emojis
     unicode_font, emoji_font = register_unicode_fonts()
@@ -225,7 +227,10 @@ def draw_card_side_a8_landscape(
     # CONTENT SECTION: Languages, Title, IPA, Description (centered)
     # ============================================================================
     content_available_width = width - 2 * content_margin
-    
+
+    if not include_image:
+        y -= image_margin_bottom * 0.25
+
     # Draw lemmas for each language
     for lang_code in languages:
         # Find lemma for this language
@@ -375,7 +380,7 @@ def draw_card_side_a8_landscape(
                 ipa_font_to_use = "Helvetica"
             
             try:
-                c.setFont(ipa_font_to_use, desc_font_size)
+                c.setFont(ipa_font_to_use, ipa_font_size)
                 c.setFillColor(HexColor("#aaaaaa"))
                 
                 # Improved word wrap for IPA text - ensure it uses full available width
@@ -386,13 +391,13 @@ def draw_card_side_a8_landscape(
                 
                 for word in words:
                     test_line = f"{current_line} {word}".strip() if current_line else word
-                    if c.stringWidth(test_line, ipa_font_to_use, desc_font_size) <= content_available_width:
+                    if c.stringWidth(test_line, ipa_font_to_use, ipa_font_size) <= content_available_width:
                         current_line = test_line
                     else:
                         if current_line:
                             ipa_lines.append(current_line)
                         # If single word is too long, add it anyway (will overflow slightly but better than breaking IPA)
-                        if c.stringWidth(word, ipa_font_to_use, desc_font_size) > content_available_width:
+                        if c.stringWidth(word, ipa_font_to_use, ipa_font_size) > content_available_width:
                             ipa_lines.append(word)
                             current_line = ""
                         else:
@@ -406,12 +411,12 @@ def draw_card_side_a8_landscape(
                 for line in ipa_lines:
                     if y < min_y_for_ipa_lines:
                         break
-                    c.setFont(ipa_font_to_use, desc_font_size)
+                    c.setFont(ipa_font_to_use, ipa_font_size)
                     c.setFillColor(HexColor("#aaaaaa"))
-                    ipa_line_width = c.stringWidth(line, ipa_font_to_use, desc_font_size)
+                    ipa_line_width = c.stringWidth(line, ipa_font_to_use, ipa_font_size)
                     ipa_x = offset_x + (width - ipa_line_width) / 2
                     c.drawString(ipa_x, y, line)
-                    y -= desc_font_size + line_spacing
+                    y -= ipa_font_size + line_spacing
                 
                 ipa_drawn = True
             except Exception as e:
@@ -421,8 +426,7 @@ def draw_card_side_a8_landscape(
                 y -= (4 * scale_factor)  # Space before description
         
         # Description - left-aligned, wrapped
-        min_y_for_desc = offset_y + margin + (5 * mm * scale_factor)
-        if include_description and lemma.description and y > min_y_for_desc:
+        if include_description and lemma.description:
             desc = decode_html_entities(lemma.description)
             
             # Process Arabic text for proper rendering
@@ -494,11 +498,7 @@ def draw_card_side_a8_landscape(
                     desc_lines.append(current_line)
                 
                 # Draw description lines with flag image prefix (centered)
-                min_y_for_desc_lines = offset_y + margin + (3 * mm * scale_factor)
                 for line_idx, line in enumerate(desc_lines):
-                    if y < min_y_for_desc_lines:
-                        break
-                    
                     # Calculate total width (flag + space + text)
                     text_width = c.stringWidth(line, desc_font_to_use, desc_font_size)
                     total_width = flag_width + desc_flag_spacing + text_width if flag_image_data else text_width
@@ -558,11 +558,7 @@ def draw_card_side_a8_landscape(
                     desc_lines.append(current_line)
                 
                 # Draw description lines (centered)
-                min_y_for_desc_lines = offset_y + margin + (3 * mm * scale_factor)
                 for line in desc_lines:
-                    if y < min_y_for_desc_lines:
-                        break
-                    
                     line_width = c.stringWidth(line, desc_font_to_use, desc_font_size)
                     line_x = offset_x + (width - line_width) / 2
                     

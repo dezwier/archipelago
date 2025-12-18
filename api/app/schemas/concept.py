@@ -139,6 +139,8 @@ class GetConceptsWithMissingLanguagesRequest(BaseModel):
     include_lemmas: bool = Field(True, description="Include lemmas (is_phrase is False)")
     include_phrases: bool = Field(True, description="Include phrases (is_phrase is True)")
     search: Optional[str] = Field(None, description="Optional search query to filter by concept.term and lemma.term")
+    has_images: Optional[int] = Field(None, description="1 = include only concepts with images, 0 = include only concepts without images, null = include all")
+    is_complete: Optional[int] = Field(None, description="1 = include only complete concepts, 0 = include only incomplete concepts, null = include all")
 
 
 class GenerateLemmasForConceptsRequest(BaseModel):

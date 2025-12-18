@@ -463,18 +463,58 @@ async def _generate_lemmas_for_concepts_list(
             # Generate lemmas for each language
             for lang_code in language_codes:
                 try:
-                    # Check if lemma already exists for this concept and language
-                    existing_lemma = session.exec(
+                    # Check if lemma already exists for this concept and language (case-insensitive)
+                    # Query all lemmas for this concept and language to see what we have
+                    all_lemmas_for_concept_lang = session.exec(
                         select(Lemma).where(
                             Lemma.concept_id == concept.id,
-                            Lemma.language_code == lang_code
+                            func.lower(Lemma.language_code) == lang_code.lower()
                         )
-                    ).first()
+                    ).all()
                     
+                    existing_lemma = all_lemmas_for_concept_lang[0] if all_lemmas_for_concept_lang else None
+                    
+                    if len(all_lemmas_for_concept_lang) > 1:
+                        logger.warning("Found %d lemmas for concept %s, language %s. Using first one.", 
+                                     len(all_lemmas_for_concept_lang), concept.id, lang_code)
+                    
+                    # Check if existing lemma is missing term, ipa, or description
+                    needs_generation = False
                     if existing_lemma:
-                        # Skip if lemma already exists
-                        logger.info(f"Lemma already exists for concept {concept.id}, language {lang_code}")
-                        continue
+                        # Helper function to check if a field is missing (None, empty, or whitespace only)
+                        def is_missing(field_value):
+                            return field_value is None or (isinstance(field_value, str) and not field_value.strip())
+                        
+                        term_missing = is_missing(existing_lemma.term)
+                        ipa_missing = is_missing(existing_lemma.ipa)
+                        description_missing = is_missing(existing_lemma.description)
+                        
+                        # Debug logging to see actual values
+                        logger.debug("Checking lemma for concept %s, language %s: term=%s, ipa=%s, description=%s", 
+                                   concept.id, lang_code, 
+                                   repr(existing_lemma.term), repr(existing_lemma.ipa), repr(existing_lemma.description))
+                        
+                        has_missing_data = term_missing or ipa_missing or description_missing
+                        
+                        if has_missing_data:
+                            needs_generation = True
+                            missing_fields = []
+                            if term_missing:
+                                missing_fields.append("term")
+                            if ipa_missing:
+                                missing_fields.append("ipa")
+                            if description_missing:
+                                missing_fields.append("description")
+                            logger.info("Lemma exists but is incomplete for concept %s, language %s (found as %s). Missing: %s. Regenerating.", 
+                                      concept.id, lang_code, existing_lemma.language_code, ', '.join(missing_fields))
+                        else:
+                            # Skip if lemma already exists and is complete
+                            logger.info("Lemma already exists and is complete for concept %s, language %s (found as %s)", 
+                                      concept.id, lang_code, existing_lemma.language_code)
+                            continue
+                    else:
+                        needs_generation = True
+                        logger.info("No existing lemma found for concept %s, language %s. Will create new one.", concept.id, lang_code)
                     
                     # Generate user prompt for this language
                     user_prompt = generate_lemma_user_prompt(target_language=lang_code)
@@ -525,7 +565,14 @@ async def _generate_lemmas_for_concepts_list(
                     if term:
                         term = normalize_lemma_term(term)
                     
-                    # Check for existing lemmas with same concept_id, language_code, and term (case-insensitive)
+                    # If existing lemma has missing data, delete it and create a new one with all fields
+                    if existing_lemma and needs_generation:
+                        # Delete the incomplete lemma to overwrite with all new data
+                        session.delete(existing_lemma)
+                        session.flush()
+                        logger.info(f"Deleted incomplete lemma for concept {concept.id}, language {lang_code}. Will create new one with all fields.")
+                    
+                    # Check for any other existing lemmas with same concept_id, language_code, and term (case-insensitive)
                     # This prevents duplicates and ensures the unique constraint is respected
                     if term:
                         existing_lemmas = session.exec(
@@ -537,24 +584,24 @@ async def _generate_lemmas_for_concepts_list(
                         ).all()
                         
                         # Delete all matching lemmas to avoid unique constraint issues
-                        for existing_lemma in existing_lemmas:
-                            session.delete(existing_lemma)
+                        for existing_lemma_to_delete in existing_lemmas:
+                            session.delete(existing_lemma_to_delete)
                         if existing_lemmas:
                             session.flush()
                     else:
                         # If no term, check by concept_id and language_code only
-                        existing_lemma = session.exec(
+                        existing_lemma_to_delete = session.exec(
                             select(Lemma).where(
                                 Lemma.concept_id == concept.id,
                                 Lemma.language_code == lang_code
                             )
                         ).first()
                         
-                        if existing_lemma:
-                            session.delete(existing_lemma)
+                        if existing_lemma_to_delete:
+                            session.delete(existing_lemma_to_delete)
                             session.flush()
                     
-                    # Create new lemma
+                    # Create new lemma with all fields from LLM (overwrites everything)
                     lemma = Lemma(
                         concept_id=concept.id,
                         language_code=lang_code,
@@ -575,7 +622,7 @@ async def _generate_lemmas_for_concepts_list(
                     session.refresh(lemma)
                     
                     total_lemmas_created += 1
-                    logger.info(f"Created lemma {lemma.id} for concept {concept.id}, language {lang_code}")
+                    logger.info(f"Created/regenerated lemma {lemma.id} for concept {concept.id}, language {lang_code}")
                     
                 except Exception as e:
                     logger.error(f"Error generating lemma for concept {concept.id}, language {lang_code}: {str(e)}")

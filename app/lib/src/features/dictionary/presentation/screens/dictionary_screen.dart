@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
+import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_item_widget.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_empty_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_error_state.dart';
@@ -771,24 +772,45 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       
       print('🔵 [Generate] Finished fetching. Total items: ${allFilteredItems.length}');
       
-      // For each concept, check which visible languages are missing
+      // For each concept, check which visible languages are missing or incomplete
       final conceptIds = <int>[];
       final conceptTerms = <int, String>{};
       final conceptMissingLanguages = <int, List<String>>{};
       
+      // Helper function to check if a field is missing (null, empty, or whitespace only)
+      bool isFieldMissing(String? field) {
+        return field == null || field.trim().isEmpty;
+      }
+      
+      // Helper function to check if a card is complete (has all 3 required fields)
+      bool isCardComplete(DictionaryCard card) {
+        return !isFieldMissing(card.translation) &&
+               !isFieldMissing(card.ipa) &&
+               !isFieldMissing(card.description);
+      }
+      
       for (final item in allFilteredItems) {
-        // Get languages that have cards for this concept
-        final existingLanguageCodes = item.cards
-            .map((card) => card.languageCode.toLowerCase())
-            .toSet();
+        // Find which visible languages are missing or have incomplete cards
+        final missingLanguages = <String>[];
         
-        // Find which visible languages are missing
-        final missingLanguages = visibleLanguages
-            .where((lang) => !existingLanguageCodes.contains(lang.toLowerCase()))
-            .map((lang) => lang.toUpperCase())
-            .toList();
+        for (final lang in visibleLanguages) {
+          // Find card for this language
+          final matchingCards = item.cards.where(
+            (card) => card.languageCode.toLowerCase() == lang.toLowerCase(),
+          );
+          
+          // If no card exists, or card is incomplete, add to missing languages
+          if (matchingCards.isEmpty) {
+            missingLanguages.add(lang.toUpperCase());
+          } else {
+            final card = matchingCards.first;
+            if (!isCardComplete(card)) {
+              missingLanguages.add(lang.toUpperCase());
+            }
+          }
+        }
         
-        // Only include concepts that have at least one missing language
+        // Only include concepts that have at least one missing or incomplete language
         if (missingLanguages.isNotEmpty) {
           conceptIds.add(item.conceptId);
           conceptTerms[item.conceptId] = item.conceptTerm ?? 'Unknown';

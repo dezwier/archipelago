@@ -20,6 +20,13 @@ from app.schemas.concept import (
     ConceptWithMissingLanguages
 )
 from app.schemas.utils import normalize_part_of_speech
+from app.api.v1.endpoints.dictionary_helpers import (
+    parse_visible_languages,
+    parse_topic_ids,
+    parse_levels,
+    parse_part_of_speech,
+    build_base_filtered_query,
+)
 from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
 
@@ -458,14 +465,15 @@ async def get_concepts_with_missing_languages(
     session: Session = Depends(get_session)
 ):
     """
-    Get concepts that are missing lemmas for the specified languages.
+    Get concepts that are missing lemmas or have incomplete lemmas (missing term/ipa/description) 
+    for the specified languages.
     
-    This endpoint returns concepts that don't have lemmas for one or more of the
-    specified languages. It's useful for identifying concepts that need lemma
-    generation for specific languages.
+    This endpoint returns concepts that don't have complete lemmas for one or more of the
+    specified languages. It uses the exact same filters as the dictionary endpoint.
+    It's useful for identifying concepts that need lemma generation for specific languages.
     
     Args:
-        request: GetConceptsWithMissingLanguagesRequest with languages and optional user_id
+        request: GetConceptsWithMissingLanguagesRequest with languages and filters
     
     Returns:
         ConceptsWithMissingLanguagesResponse with list of concepts and their missing languages
@@ -491,120 +499,29 @@ async def get_concepts_with_missing_languages(
             detail=f"Invalid language codes: {', '.join(sorted(missing_codes))}"
         )
     
-    # Parse and validate levels filter if provided
-    level_list = None
-    if request.levels is not None and len(request.levels) > 0:
-        level_strs = [level.strip().upper() for level in request.levels if level.strip()]
-        level_list = []
-        for level_str in level_strs:
-            try:
-                level_list.append(CEFRLevel(level_str))
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid CEFR level: {level_str}. Must be one of: A1, A2, B1, B2, C1, C2"
-                )
+    # Parse filters using the same helper functions as dictionary endpoint
+    topic_id_list = parse_topic_ids(','.join(map(str, request.topic_ids)) if request.topic_ids else None)
+    level_list = parse_levels(','.join(request.levels) if request.levels else None)
+    pos_list = parse_part_of_speech(','.join(request.part_of_speech) if request.part_of_speech else None)
     
-    # Parse and validate part of speech filter if provided
-    pos_list = None
-    if request.part_of_speech is not None and len(request.part_of_speech) > 0:
-        pos_list = []
-        for pos in request.part_of_speech:
-            pos_stripped = pos.strip()
-            if pos_stripped:
-                # Normalize POS value to proper case for comparison
-                try:
-                    normalized_pos = normalize_part_of_speech(pos_stripped)
-                    pos_list.append(normalized_pos)
-                except ValueError:
-                    # If normalization fails, try lowercase comparison as fallback
-                    pos_list.append(pos_stripped)
+    # Build base filtered query using the exact same function as dictionary endpoint
+    concept_query = build_base_filtered_query(
+        user_id=request.user_id,
+        include_lemmas=request.include_lemmas,
+        include_phrases=request.include_phrases,
+        topic_id_list=topic_id_list,
+        include_without_topic=request.include_without_topic,
+        level_list=level_list,
+        pos_list=pos_list,
+        has_images=request.has_images,
+        is_complete=request.is_complete,
+        visible_language_codes=language_codes,
+        search=request.search
+    )
     
-    # Build base query for concepts with filters
-    # Filter by user_id: if provided, show public concepts (user_id IS NULL) AND that user's concepts; if None, show only public concepts
-    if request.user_id is not None:
-        # Show public concepts (user_id IS NULL) OR concepts belonging to this user
-        base_query = select(Concept).where(
-            or_(
-                Concept.user_id.is_(None),
-                Concept.user_id == request.user_id
-            )
-        )
-    else:
-        # When logged out, show only public concepts (user_id IS NULL)
-        base_query = select(Concept).where(Concept.user_id.is_(None))
-    
-    # Apply lemmas/phrases filters using is_phrase field (same logic as dictionary endpoint)
-    use_lemmas = request.include_lemmas
-    use_phrases = request.include_phrases
-    
-    # If both are False, show nothing (empty result)
-    # If both are True, show all (no filter)
-    # Otherwise, filter by is_phrase
-    if not use_lemmas and not use_phrases:
-        # Both filters are False - return empty result
-        base_query = base_query.where(False)
-    elif use_lemmas and use_phrases:
-        # Both filters are True - show all concepts (no is_phrase filter)
-        pass
-    elif use_lemmas and not use_phrases:
-        # Only lemmas - concepts where is_phrase is False
-        base_query = base_query.where(Concept.is_phrase == False)
-    elif not use_lemmas and use_phrases:
-        # Only phrases - concepts where is_phrase is True
-        base_query = base_query.where(Concept.is_phrase == True)
-    
-    # Apply topic_ids filter if provided (same logic as dictionary endpoint)
-    if request.topic_ids is not None and len(request.topic_ids) > 0:
-        # When filtering by topic(s), only show concepts with those topic IDs
-        # Always exclude concepts without a topic when topic_ids are provided
-        base_query = base_query.where(
-            Concept.topic_id.in_(request.topic_ids)
-        )
-    else:
-        # topic_ids is None/empty (all topics selected in frontend)
-        if not request.include_without_topic:
-            # Exclude concepts without a topic (only show concepts with a topic)
-            base_query = base_query.where(Concept.topic_id.isnot(None))
-        # If include_without_topic is True, show ALL concepts (no topic filter)
-    
-    # Apply levels filter if provided
-    if level_list is not None and len(level_list) > 0:
-        base_query = base_query.where(Concept.level.in_(level_list))
-    
-    # Apply part_of_speech filter if provided
-    if pos_list is not None and len(pos_list) > 0:
-        # Convert all POS values to lowercase for case-insensitive comparison
-        pos_list_lower = [pos.lower() for pos in pos_list]
-        base_query = base_query.where(
-            func.lower(Concept.part_of_speech).in_(pos_list_lower)
-        )
-    
-    # Apply search filter if provided (same logic as dictionary endpoint)
-    if request.search and request.search.strip():
-        search_term = f"%{request.search.strip().lower()}%"
-        
-        # Search in concept.term or lemma.term for visible languages
-        lemma_search_subquery = (
-            select(Lemma.concept_id)
-            .where(
-                Lemma.language_code.in_(language_codes),
-                func.lower(Lemma.term).like(search_term)
-            )
-            .distinct()
-        )
-        
-        # Filter concepts where term matches OR has matching lemmas
-        base_query = base_query.where(
-            or_(
-                func.lower(Concept.term).like(search_term),
-                Concept.id.in_(lemma_search_subquery)
-            )
-        )
-    
-    # Get all concepts with filters applied, sorted alphabetically (case-insensitive)
+    # Get all concepts with filters applied (no pagination)
     all_concepts = session.exec(
-        base_query.order_by(func.lower(Concept.term).asc())
+        concept_query.order_by(func.lower(Concept.term).asc())
     ).all()
     
     # Get all lemmas for the specified languages
@@ -612,26 +529,42 @@ async def get_concepts_with_missing_languages(
         select(Lemma).where(Lemma.language_code.in_(language_codes))
     ).all()
     
-    # Group lemmas by concept_id and language_code
+    # Group lemmas by concept_id and language_code, storing the full lemma object
     concept_lemmas_map = {}
     for lemma in lemmas:
         if lemma.concept_id not in concept_lemmas_map:
-            concept_lemmas_map[lemma.concept_id] = set()
-        concept_lemmas_map[lemma.concept_id].add(lemma.language_code.lower())
+            concept_lemmas_map[lemma.concept_id] = {}
+        concept_lemmas_map[lemma.concept_id][lemma.language_code.lower()] = lemma
     
-    # Find concepts with missing languages
+    # Find concepts with missing or incomplete lemmas
     result_concepts = []
     for concept in all_concepts:
         # Get lemmas for this concept (if any)
-        concept_lemma_languages = concept_lemmas_map.get(concept.id, set())
+        concept_lemmas = concept_lemmas_map.get(concept.id, {})
         
-        # Find which languages are missing
+        # Find which languages are missing or have incomplete data
         missing_languages = []
         for lang_code in language_codes:
-            if lang_code not in concept_lemma_languages:
+            lemma = concept_lemmas.get(lang_code)
+            
+            if lemma is None:
+                # Lemma doesn't exist at all
                 missing_languages.append(lang_code)
+            else:
+                # Helper function to check if a field is missing (None, empty, or whitespace only)
+                def is_missing(field_value):
+                    return field_value is None or (isinstance(field_value, str) and not field_value.strip())
+                
+                # Check if lemma is missing term, ipa, or description
+                has_missing_data = (
+                    is_missing(lemma.term) or
+                    is_missing(lemma.ipa) or
+                    is_missing(lemma.description)
+                )
+                if has_missing_data:
+                    missing_languages.append(lang_code)
         
-        # Only include concepts that are missing at least one language
+        # Only include concepts that are missing at least one language or have incomplete lemmas
         if missing_languages:
             # Convert concept to dict and ensure level is serialized as string
             concept_dict = ConceptResponse.model_validate(concept).model_dump()
