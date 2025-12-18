@@ -28,5 +28,4 @@ class Concept(SQLModel, table=True):
     # Relationships
     topic: Optional["Topic"] = Relationship(back_populates="concepts")
     lemmas: List["Lemma"] = Relationship(back_populates="concept")
-    images: List["Image"] = Relationship(back_populates="concept")  # Deprecated: kept for backward compatibility during migration
 

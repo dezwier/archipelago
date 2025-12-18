@@ -6,7 +6,6 @@ from app.models.enums import UserCardStatus, CEFRLevel
 
 # Import all models
 from app.models.topic import Topic
-from app.models.image import Image
 from app.models.concept import Concept
 from app.models.language import Language
 from app.models.lemma import Lemma
@@ -24,7 +23,6 @@ _models_module = ModuleType('app.models.models')
 _models_module.UserCardStatus = UserCardStatus
 _models_module.CEFRLevel = CEFRLevel
 _models_module.Topic = Topic
-_models_module.Image = Image
 _models_module.Concept = Concept
 _models_module.Language = Language
 _models_module.Lemma = Lemma
@@ -39,7 +37,6 @@ __all__ = [
     'UserCardStatus',
     'CEFRLevel',
     'Topic',
-    'Image',
     'Concept',
     'Language',
     'Lemma',

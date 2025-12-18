@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra environment variables
     
     def __init__(self, **kwargs):
         # Ensure we read DATABASE_URL from environment (Railway provides it uppercase)

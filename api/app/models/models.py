@@ -9,7 +9,6 @@ All models are now in separate files in the models package.
 # Re-export everything from the models package
 from app.models.enums import UserCardStatus, CEFRLevel
 from app.models.topic import Topic
-from app.models.image import Image
 from app.models.concept import Concept
 from app.models.language import Language
 from app.models.lemma import Lemma
@@ -21,7 +20,6 @@ __all__ = [
     'UserCardStatus',
     'CEFRLevel',
     'Topic',
-    'Image',
     'Concept',
     'Language',
     'Lemma',

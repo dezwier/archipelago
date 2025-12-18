@@ -240,11 +240,11 @@ async def delete_concept(
     session: Session = Depends(get_session)
 ):
     """
-    Delete a concept and all its associated lemmas, user_cards, images, and image files.
+    Delete a concept and all its associated lemmas, user_cards, and image files.
     This will delete:
     - All UserCards that reference lemmas for this concept
     - All Lemmas for this concept
-    - All Images for this concept (database records and files)
+    - The concept's image file (if it exists)
     - The Concept itself
     """
     try:
