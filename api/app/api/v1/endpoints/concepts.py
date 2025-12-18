@@ -9,11 +9,9 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_
 from datetime import datetime, timezone
-from pathlib import Path
 import logging
 from app.core.database import get_session
-from app.core.config import settings
-from app.models.models import Concept, Lemma, Language
+from app.models.models import Concept, Lemma
 from app.schemas.concept import (
     ConceptResponse, ConceptCountResponse, CreateConceptOnlyRequest,
     GetConceptsWithMissingLanguagesRequest, ConceptsWithMissingLanguagesResponse,
@@ -249,76 +247,13 @@ async def delete_concept(
     - All Images for this concept (database records and files)
     - The Concept itself
     """
-    concept = session.get(Concept, concept_id)
-    if not concept:
+    try:
+        delete_concept_and_associated_resources(session, concept_id)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Concept not found"
+            detail=str(e)
         )
-    
-    # Delete image file from assets directory if it exists
-    if concept.image_url and concept.image_url.startswith("/assets/"):
-        assets_dir = get_assets_directory()
-        image_filename = concept.image_url.replace("/assets/", "")
-        image_path = assets_dir / image_filename
-        
-        # Delete the image file if it exists
-        if image_path.exists():
-            try:
-                image_path.unlink()
-                logger.info(f"Deleted image file: {image_path}")
-            except Exception as e:
-                logger.warning(f"Failed to delete image file {image_path}: {str(e)}")
-        else:
-            logger.warning(f"Image file not found: {image_path}")
-    
-    # Get all images for this concept and delete them
-    from app.models.models import Image, Lemma, UserCard
-    images = session.exec(
-        select(Image).where(Image.concept_id == concept_id)
-    ).all()
-    
-    # Delete image files from assets directory for each image record
-    for image in images:
-        if image.url and image.url.startswith("/assets/"):
-            assets_dir = get_assets_directory()
-            image_filename = image.url.replace("/assets/", "")
-            image_path = assets_dir / image_filename
-            
-            # Delete the image file if it exists
-            if image_path.exists():
-                try:
-                    image_path.unlink()
-                    logger.info(f"Deleted image file: {image_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to delete image file {image_path}: {str(e)}")
-    
-    # Delete all image records
-    for image in images:
-        session.delete(image)
-    
-    # Get all lemmas for this concept
-    lemmas = session.exec(
-        select(Lemma).where(Lemma.concept_id == concept_id)
-    ).all()
-    
-    # Delete all UserCards that reference these lemmas
-    lemma_ids = [lemma.id for lemma in lemmas]
-    if lemma_ids:
-        user_cards = session.exec(
-            select(UserCard).where(UserCard.lemma_id.in_(lemma_ids))
-        ).all()
-        for user_card in user_cards:
-            session.delete(user_card)
-    
-    # Delete all lemmas
-    for lemma in lemmas:
-        session.delete(lemma)
-    
-    # Delete the concept
-    session.delete(concept)
-    
-    session.commit()
     
     return None
 
@@ -449,18 +384,9 @@ async def get_concepts_with_missing_languages(
         )
     
     # Validate all language codes exist
+    from app.services.lemma_service import validate_language_codes
     language_codes = [lang.lower() for lang in request.languages]
-    languages = session.exec(
-        select(Language).where(Language.code.in_(language_codes))
-    ).all()
-    
-    found_codes = {lang.code.lower() for lang in languages}
-    missing_codes = set(language_codes) - found_codes
-    if missing_codes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid language codes: {', '.join(sorted(missing_codes))}"
-        )
+    validate_language_codes(session, language_codes)
     
     # Parse filters using the same helper functions as dictionary endpoint
     topic_id_list = parse_topic_ids(','.join(map(str, request.topic_ids)) if request.topic_ids else None)

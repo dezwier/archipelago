@@ -7,10 +7,8 @@ Flashcard PDF export endpoint.
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlmodel import Session, select
-from typing import List
-from pydantic import BaseModel, Field
 from io import BytesIO
-from reportlab.lib.pagesizes import A4, A5, A6, A8
+from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from app.core.database import get_session

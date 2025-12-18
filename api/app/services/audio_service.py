@@ -188,6 +188,14 @@ def generate_audio_with_google_tts(text: str, language_code: str) -> bytes:
         HTTPException: If audio generation fails
     """
     try:
+        from google.cloud import texttospeech
+    except ImportError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google Cloud Text-to-Speech library not installed. Please install it with: pip install google-cloud-texttospeech"
+        )
+    
+    try:
         client = _get_tts_client()
         
         # Get language and voice settings

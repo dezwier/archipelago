@@ -5,10 +5,8 @@ Lemma generation endpoint - unified endpoint for generating translations.
 # pyright: reportCallIssue=false
 # pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
-from sqlalchemy.exc import IntegrityError
 from app.core.database import get_session
-from app.models.models import Language, Concept, Lemma
+from app.models.models import Concept
 from app.schemas.lemma import (
     GenerateLemmaRequest,
     GenerateLemmaResponse,
@@ -23,7 +21,11 @@ from app.services.prompt_service import (
     generate_lemma_system_instruction,
     generate_lemma_user_prompt
 )
-from app.utils.text_utils import normalize_lemma_term
+from app.services.lemma_service import (
+    validate_llm_lemma_data,
+    create_or_update_lemma_from_llm_data,
+    validate_language_codes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +52,7 @@ async def generate_lemma(
     """
     # Validate target language exists
     target_language_code = request.target_language.lower()
-    language = session.exec(
-        select(Language).where(Language.code == target_language_code)
-    ).first()
-    
-    if not language:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid language code: {request.target_language}"
-        )
+    validate_language_codes(session, [target_language_code])
     
     # Generate system instruction and user prompt separately
     system_instruction = generate_lemma_system_instruction(
@@ -87,31 +81,11 @@ async def generate_lemma(
     
     # Validate LLM output
     try:
-        # Validate required fields
-        if not isinstance(llm_data, dict):
-            raise ValueError("LLM output must be a JSON object")
-        
-        required_fields = ['term', 'description']
-        for field in required_fields:
-            if field not in llm_data or not llm_data[field]:
-                raise ValueError(f"Missing or empty required field: {field}")
-        
-        # Validate optional fields
-        if 'gender' in llm_data and llm_data['gender'] is not None:
-            valid_genders = ['masculine', 'feminine', 'neuter']
-            if llm_data['gender'] not in valid_genders:
-                raise ValueError(f"Invalid gender value: {llm_data['gender']}. Must be one of: {', '.join(valid_genders)}")
-        
-        if 'register' in llm_data and llm_data['register'] is not None:
-            valid_registers = ['neutral', 'formal', 'informal', 'slang']
-            if llm_data['register'] not in valid_registers:
-                raise ValueError(f"Invalid register value: {llm_data['register']}. Must be one of: {', '.join(valid_registers)}")
-
+        validate_llm_lemma_data(llm_data, target_language_code)
         logger.info(f"=== VALIDATED LEMMA DATA ===")
         logger.info(f"Term: '{llm_data.get('term')}', Description: '{llm_data.get('description')}'")
         logger.info(f"LLM Output JSON: {json.dumps(llm_data, indent=2, ensure_ascii=False)}")
-
-    except Exception as e:
+    except ValueError as e:
         logger.error(f"=== VALIDATION ERROR ===")
         logger.error(f"LLM Output that failed validation: {json.dumps(llm_data, indent=2, ensure_ascii=False)}")
         logger.error(f"Validation error: {str(e)}")
@@ -121,78 +95,14 @@ async def generate_lemma(
         )
     
     # If concept_id is provided, create/update the lemma in the database
-    lemma_updated = False
     if request.concept_id is not None:
-        try:
-            # Verify concept exists
-            concept = session.get(Concept, request.concept_id)
-            if not concept:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Concept with id {request.concept_id} not found"
-                )
-            
-            # Normalize term (trim dots and whitespace)
-            term = llm_data.get('term')
-            if term:
-                term = normalize_lemma_term(term)
-            
-            # Delete all existing lemmas for this concept_id and language_code
-            # This ensures we replace any existing lemma for this language when generating a new one
-            existing_lemmas = session.exec(
-                select(Lemma).where(
-                    Lemma.concept_id == request.concept_id,
-                    Lemma.language_code == target_language_code
-                )
-            ).all()
-            
-            lemma_updated = len(existing_lemmas) > 0
-            for existing_lemma in existing_lemmas:
-                session.delete(existing_lemma)
-            if existing_lemmas:
-                session.flush()
-            
-            # Create new lemma (or recreate if we just deleted one)
-            lemma = Lemma(
-                concept_id=request.concept_id,
-                language_code=target_language_code,
-                term=term,
-                ipa=llm_data.get('ipa'),
-                description=llm_data.get('description'),
-                gender=llm_data.get('gender'),
-                article=llm_data.get('article'),
-                plural_form=llm_data.get('plural_form'),
-                verb_type=llm_data.get('verb_type'),
-                auxiliary_verb=llm_data.get('auxiliary_verb'),
-                formality_register=llm_data.get('register'),
-                status="active",
-                source="llm"
-            )
-            session.add(lemma)
-            session.commit()
-            session.refresh(lemma)
-            
-            logger.info(f"Lemma {'updated' if lemma_updated else 'created'} for concept {request.concept_id}, language {target_language_code}")
-            
-        except IntegrityError as e:
-            session.rollback()
-            logger.error(f"Database integrity error: {str(e)}")
-            if "uq_lemma_concept_language_term" in str(e) or "unique constraint" in str(e).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="A lemma with the same concept_id, language_code, and term already exists"
-                )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database integrity error: {str(e)}"
-            )
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Failed to save lemma: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to save lemma: {str(e)}"
-            )
+        create_or_update_lemma_from_llm_data(
+            session=session,
+            concept_id=request.concept_id,
+            language_code=target_language_code,
+            llm_data=llm_data,
+            replace_existing=True
+        )
     
     # Build response
     return GenerateLemmaResponse(
@@ -237,18 +147,7 @@ async def generate_lemmas_batch(
     """
     # Validate all target languages exist
     target_language_codes = [lang.lower() for lang in request.target_languages]
-    valid_languages = session.exec(
-        select(Language).where(Language.code.in_(target_language_codes))  # type: ignore
-    ).all()
-    
-    found_language_codes = {lang.code.lower() for lang in valid_languages}
-    missing_languages = set(target_language_codes) - found_language_codes
-    
-    if missing_languages:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid language codes: {', '.join(sorted(missing_languages))}"
-        )
+    validate_language_codes(session, target_language_codes)
     
     # Generate system instruction once (reusable for all languages)
     system_instruction = generate_lemma_system_instruction(
@@ -297,73 +196,27 @@ async def generate_lemmas_batch(
                 model_name = token_usage.get('model_name', 'gemini-2.5-pro')
             
             # Validate LLM output
-            if not isinstance(llm_data, dict):
-                raise ValueError("LLM output must be a JSON object")
-            
-            required_fields = ['term', 'description']
-            for field in required_fields:
-                if field not in llm_data or not llm_data[field]:
-                    raise ValueError(f"Missing or empty required field: {field}")
-            
-            # Validate optional fields
-            if 'gender' in llm_data and llm_data['gender'] is not None:
-                valid_genders = ['masculine', 'feminine', 'neuter']
-                if llm_data['gender'] not in valid_genders:
-                    raise ValueError(f"Invalid gender value: {llm_data['gender']}")
-            
-            if 'register' in llm_data and llm_data['register'] is not None:
-                valid_registers = ['neutral', 'formal', 'informal', 'slang']
-                if llm_data['register'] not in valid_registers:
-                    raise ValueError(f"Invalid register value: {llm_data['register']}")
+            try:
+                validate_llm_lemma_data(llm_data, target_language_code)
+            except ValueError as e:
+                logger.error(f"Validation error for {target_language_code}: {str(e)}")
+                # Continue with other languages even if one fails
+                continue
             
             # If concept_id is provided, create/update the lemma in the database
             if request.concept_id is not None:
                 try:
-                    # Normalize term (trim dots and whitespace)
-                    term = llm_data.get('term')
-                    if term:
-                        term = normalize_lemma_term(term)
-                    
-                    # Delete all existing lemmas for this concept_id and language_code
-                    # This ensures we replace any existing lemma for this language when generating a new one
-                    existing_lemmas = session.exec(
-                        select(Lemma).where(
-                            Lemma.concept_id == request.concept_id,
-                            Lemma.language_code == target_language_code
-                        )
-                    ).all()
-                    
-                    for existing_lemma in existing_lemmas:
-                        session.delete(existing_lemma)
-                    if existing_lemmas:
-                        session.flush()
-                    
-                    # Create new lemma (or recreate if we just deleted one)
-                    lemma = Lemma(
+                    create_or_update_lemma_from_llm_data(
+                        session=session,
                         concept_id=request.concept_id,
                         language_code=target_language_code,
-                        term=term,
-                        ipa=llm_data.get('ipa'),
-                        description=llm_data.get('description'),
-                        gender=llm_data.get('gender'),
-                        article=llm_data.get('article'),
-                        plural_form=llm_data.get('plural_form'),
-                        verb_type=llm_data.get('verb_type'),
-                        auxiliary_verb=llm_data.get('auxiliary_verb'),
-                        formality_register=llm_data.get('register'),
-                        status="active",
-                        source="llm"
+                        llm_data=llm_data,
+                        replace_existing=True
                     )
-                    session.add(lemma)
-                    session.commit()
-                    session.refresh(lemma)
-                    
-                except IntegrityError as e:
-                    session.rollback()
-                    logger.error(f"Database integrity error for language {target_language_code}: {str(e)}")
-                    # Continue with other languages even if one fails
+                except HTTPException:
+                    # Re-raise HTTP exceptions (like 404, 409)
+                    raise
                 except Exception as e:
-                    session.rollback()
                     logger.error(f"Failed to save lemma for language {target_language_code}: {str(e)}")
                     # Continue with other languages even if one fails
             
