@@ -1,30 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
-import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
-import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_item_widget.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_empty_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_error_state.dart';
-import 'package:archipelago/src/common_widgets/concept_drawer/concept_delete.dart';
-import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_filter_sheet.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_search_bar.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_fab_buttons.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_empty_search_state.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/export_flashcards_drawer.dart';
-import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/visibility_options_sheet.dart';
-import 'package:archipelago/src/features/dictionary/presentation/screens/edit_concept_screen.dart';
-import 'package:archipelago/src/features/profile/data/language_service.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/features/create/data/topic_service.dart';
-import 'package:archipelago/src/features/create/data/card_generation_background_service.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/generate_lemmas_drawer.dart';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'dictionary_screen_data.dart';
+import 'dictionary_screen_export.dart';
+import 'dictionary_screen_generate.dart';
+import 'dictionary_screen_handlers.dart';
 
 class DictionaryScreen extends StatefulWidget {
   final Function(Function())? onRefreshCallbackReady;
@@ -38,7 +27,12 @@ class DictionaryScreen extends StatefulWidget {
   State<DictionaryScreen> createState() => _DictionaryScreenState();
 }
 
-class _DictionaryScreenState extends State<DictionaryScreen> {
+class _DictionaryScreenState extends State<DictionaryScreen>
+    with
+        DictionaryScreenData,
+        DictionaryScreenExport,
+        DictionaryScreenGenerate,
+        DictionaryScreenHandlers {
   late final DictionaryController _controller;
   late final CardGenerationState _cardGenerationState;
   late final LanguageVisibilityManager _languageVisibilityManager;
@@ -57,6 +51,62 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   bool _isLoadingConcepts = false; // Loading state for the button
   bool _isLoadingExport = false; // Loading state for export
 
+  // Getters for mixins
+  @override
+  DictionaryController get controller => _controller;
+
+  @override
+  LanguageVisibilityManager get languageVisibilityManager => _languageVisibilityManager;
+
+  @override
+  CardGenerationState get cardGenerationState => _cardGenerationState;
+
+  @override
+  List<Language> get allLanguages => _allLanguages;
+
+  @override
+  List<Topic> get allTopics => _allTopics;
+
+  @override
+  bool get isLoadingTopics => _isLoadingTopics;
+
+  @override
+  bool get isLoadingConcepts => _isLoadingConcepts;
+
+  @override
+  bool get isLoadingExport => _isLoadingExport;
+
+  @override
+  bool get showDescription => _showDescription;
+
+  @override
+  bool get showExtraInfo => _showExtraInfo;
+
+  // Setters for mixins
+  @override
+  void setAllLanguages(List<Language> value) => _allLanguages = value;
+
+  @override
+  void setAllTopics(List<Topic> value) => _allTopics = value;
+
+  @override
+  void setIsLoadingTopics(bool value) => _isLoadingTopics = value;
+
+  @override
+  void setIsLoadingConcepts(bool value) => _isLoadingConcepts = value;
+
+  @override
+  void setIsLoadingExport(bool value) => _isLoadingExport = value;
+
+  @override
+  void setShowDescription(bool value) => _showDescription = value;
+
+  @override
+  void setShowExtraInfo(bool value) => _showExtraInfo = value;
+
+  @override
+  void onControllerChanged() => _onControllerChanged();
+
   @override
   void initState() {
     super.initState();
@@ -65,14 +115,14 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     _languageVisibilityManager = LanguageVisibilityManager();
     _controller.initialize();
     _scrollController.addListener(_onScroll);
-    _loadLanguages();
-    _loadTopics();
+    loadLanguages();
+    loadTopics();
     
     // Register refresh callback with parent
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onRefreshCallbackReady?.call(() {
         // Reload topics and refresh dictionary (which will reload concept count if user changed)
-        _loadTopics();
+        loadTopics();
         _controller.refresh();
       });
     });
@@ -109,104 +159,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
 
   void _onControllerChanged() {
-    // Update language visibility defaults when user data is loaded
-    if (_controller.currentUser != null && _allLanguages.isNotEmpty) {
-      final sourceCode = _controller.sourceLanguageCode;
-      final targetCode = _controller.targetLanguageCode;
-      
-      // Only update if languages list is empty (initial state)
-      if (_languageVisibilityManager.languagesToShow.isEmpty) {
-        _languageVisibilityManager.initializeForLoggedInUser(
-          _allLanguages,
-          sourceCode,
-          targetCode,
-        );
-        setState(() {});
-        // Set language filter to visible languages (for search only)
-        _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-        // Set visible languages for count calculation
-        _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-      }
-    } else if (_controller.currentUser == null && _allLanguages.isNotEmpty) {
-      // When logged out, default to English only
-      if (_languageVisibilityManager.languagesToShow.isEmpty) {
-        _languageVisibilityManager.initializeForLoggedOutUser(_allLanguages);
-        setState(() {});
-        // Set language filter to visible languages (for search only)
-        _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-        // Set visible languages for count calculation
-        _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-      }
-    }
-  }
-
-  Future<void> _loadLanguages() async {
-    final languages = await LanguageService.getLanguages();
-    
-    setState(() {
-      _allLanguages = languages;
-      // Initialize visibility - default to English if logged out
-      if (_controller.currentUser == null) {
-        _languageVisibilityManager.initializeForLoggedOutUser(languages);
-      }
-    });
-    
-    // Update defaults based on user state
-    _onControllerChanged();
-    
-    // Set language filter after visibility is initialized (for search only)
-    if (_languageVisibilityManager.languagesToShow.isNotEmpty) {
-      _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-      // Set visible languages for count calculation
-      _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-    }
-  }
-  
-  Future<void> _loadTopics() async {
-    setState(() {
-      _isLoadingTopics = true;
-    });
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('current_user');
-      int? userId;
-      if (userJson != null) {
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        final user = User.fromJson(userMap);
-        userId = user.id;
-      }
-      
-      final topics = await TopicService.getTopics(userId: userId);
-      
-      setState(() {
-        _allTopics = topics;
-        _isLoadingTopics = false;
-        // Set all available topic IDs in controller first
-        final topicIds = topics.map((t) => t.id).toSet();
-        _controller.setAllAvailableTopicIds(topicIds);
-        
-        // Remove any selected topic IDs that are no longer available (e.g., private topics after logout)
-        final validSelectedIds = _controller.selectedTopicIds.intersection(topicIds);
-        if (validSelectedIds.length != _controller.selectedTopicIds.length) {
-          // Some selected topics are no longer available, update the filter
-          if (validSelectedIds.isEmpty && topics.isNotEmpty) {
-            // If all selected topics were removed, select all available topics
-            _controller.setTopicFilter(topicIds);
-          } else {
-            // Keep only the valid selected topics
-            _controller.setTopicFilter(validSelectedIds);
-          }
-        } else if (topics.isNotEmpty && _controller.selectedTopicIds.isEmpty) {
-          // Set all topics as selected by default if nothing is selected
-          _controller.setTopicFilter(topicIds);
-        }
-      });
-    } catch (e) {
-      setState(() {
-        _isLoadingTopics = false;
-      });
-    }
+    handleControllerChanged();
   }
   
 
@@ -226,6 +179,9 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     _controller.refresh();
     _cardGenerationState.clearCurrentConcept();
   }
+
+  @override
+  void onCardGenerationComplete() => _onCardGenerationComplete();
 
   void _onScroll() {
     if (_scrollController.position.pixels >= 
@@ -299,7 +255,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                           showDescription: _showDescription,
                           showExtraInfo: _showExtraInfo,
                           allItems: _controller.filteredItems,
-                          onTap: () => _handleItemTap(item),
+                          onTap: () => handleItemTap(item),
                         );
                       },
                       childCount: _controller.filteredItems.length,
@@ -352,10 +308,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 bottom: MediaQuery.of(context).padding.bottom + 70,
                 child: DictionaryFabButtons(
                   filterButtonKey: _filterButtonKey,
-                  onFilterPressed: () => _showFilterMenu(context),
-                  onFilteringPressed: () => _showFilteringMenu(context),
-                  onGenerateLemmasPressed: () => _showGenerateLemmasDrawer(context),
-                  onExportPressed: () => _showExportDrawer(context),
+                  onFilterPressed: () => showFilterMenu(context),
+                  onFilteringPressed: () => showFilteringMenu(context),
+                  onGenerateLemmasPressed: () => openGenerateLemmasDrawer(context),
+                  onExportPressed: () => showExportDrawer(context),
                   isLoadingConcepts: _isLoadingConcepts,
                   isLoadingExport: _isLoadingExport,
                 ),
@@ -376,509 +332,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     final filteredLemmas = _controller.totalItems;
     
     return '$totalConcepts ${totalConcepts == 1 ? 'concept' : 'concepts'} • $filteredLemmas filtered';
-  }
-
-
-  void _showFilteringMenu(BuildContext context) {
-    showDictionaryFilterSheet(
-      context: context,
-      controller: _controller,
-      topics: _allTopics,
-      isLoadingTopics: _isLoadingTopics,
-    );
-  }
-
-  Future<void> _showExportDrawer(BuildContext context) async {
-    if (_isLoadingExport) return; // Prevent multiple simultaneous exports
-    
-    setState(() {
-      _isLoadingExport = true;
-    });
-    
-    try {
-      final visibleLanguageCodes = _languageVisibilityManager.getVisibleLanguageCodes();
-      
-      print('🔵 [Export] Starting export - visibleLanguages: $visibleLanguageCodes');
-      
-      // Fetch ALL concept IDs that match the current filters (not just visible ones)
-      // Use the EXACT same parameters as the controller uses
-      // Loop through all pages to get all results
-      
-      final Set<int> conceptIdSet = {};
-      int currentPage = 1;
-      bool hasMorePages = true;
-      int totalPagesFetched = 0;
-      
-      // Use the same helper methods as the controller
-      final effectiveTopicIds = _controller.getEffectiveTopicIds();
-      final effectiveLevels = _controller.getEffectiveLevels();
-      final effectivePartOfSpeech = _controller.getEffectivePartOfSpeech();
-      
-      print('🔵 [Export] Starting to fetch pages with filters...');
-      print('🔵 [Export] Using same parameters as controller:');
-      print('  - userId: ${_controller.currentUser?.id}');
-      print('  - visibleLanguageCodes: $visibleLanguageCodes');
-      print('  - includeLemmas: ${_controller.includeLemmas}');
-      print('  - includePhrases: ${_controller.includePhrases}');
-      print('  - search: ${_controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null}');
-      print('  - topicIds: $effectiveTopicIds');
-      print('  - includeWithoutTopic: ${_controller.showLemmasWithoutTopic}');
-      print('  - levels: $effectiveLevels');
-      print('  - partOfSpeech: $effectivePartOfSpeech');
-      
-      while (hasMorePages) {
-        print('🔵 [Export] Fetching page $currentPage...');
-        final result = await DictionaryService.getDictionary(
-          userId: _controller.currentUser?.id,
-          page: currentPage,
-          pageSize: 100, // Maximum allowed page size
-          sortBy: _controller.sortOption == SortOption.alphabetical 
-              ? 'alphabetical' 
-              : (_controller.sortOption == SortOption.timeCreatedRecentFirst ? 'recent' : 'random'),
-          search: _controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null,
-          visibleLanguageCodes: visibleLanguageCodes,
-          includeLemmas: _controller.includeLemmas,
-          includePhrases: _controller.includePhrases,
-          topicIds: effectiveTopicIds, // Use helper method
-          includeWithoutTopic: _controller.showLemmasWithoutTopic,
-          levels: effectiveLevels, // Use helper method
-          partOfSpeech: effectivePartOfSpeech, // Use helper method
-        );
-        
-        print('🔵 [Export] Page $currentPage result - success: ${result['success']}, items: ${(result['items'] as List?)?.length ?? 0}');
-        
-        if (result['success'] == true) {
-          final List<dynamic> itemsData = result['items'] as List<dynamic>;
-          print('🔵 [Export] Page $currentPage has ${itemsData.length} items');
-          
-          // Extract unique concept IDs from items
-          for (final item in itemsData) {
-            final conceptId = (item as Map<String, dynamic>)['concept_id'] as int?;
-            if (conceptId != null) {
-              conceptIdSet.add(conceptId);
-            }
-          }
-          
-          print('🔵 [Export] Total unique concept IDs so far: ${conceptIdSet.length}');
-          
-          // Check if there are more pages
-          hasMorePages = result['has_next'] as bool? ?? false;
-          totalPagesFetched++;
-          currentPage++;
-          
-          print('🔵 [Export] Has more pages: $hasMorePages');
-        } else {
-          // Error occurred, break the loop
-          final errorMsg = result['message'] as String? ?? 'Failed to load concepts for export';
-          print('🔴 [Export] Error on page $currentPage: $errorMsg');
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(errorMsg),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          break;
-        }
-      }
-      
-      print('🔵 [Export] Finished fetching. Total pages: $totalPagesFetched, Total concept IDs: ${conceptIdSet.length}');
-      
-      if (!context.mounted) {
-        print('🔴 [Export] Context not mounted, cannot show drawer');
-        return;
-      }
-      
-      if (conceptIdSet.isEmpty) {
-        print('🔴 [Export] No concept IDs found!');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No concepts found to export with current filters'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-      
-      final conceptIds = conceptIdSet.toList();
-      print('🔵 [Export] Opening export drawer with ${conceptIds.length} concept IDs');
-      
-      showExportFlashcardsDrawer(
-        context: context,
-        conceptIds: conceptIds,
-        completedConceptsCount: 0,
-        availableLanguages: _allLanguages,
-        visibleLanguageCodes: visibleLanguageCodes,
-      );
-      
-      print('🔵 [Export] Export drawer opened successfully');
-    } catch (e, stackTrace) {
-      print('🔴 [Export] Exception occurred: $e');
-      print('🔴 [Export] Stack trace: $stackTrace');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading concepts: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingExport = false;
-        });
-        print('🔵 [Export] Loading state reset');
-      }
-    }
-  }
-
-  void _showFilterMenu(BuildContext context) {
-    // Get the first visible language for alphabetical sorting
-    final firstVisibleLanguage = _languageVisibilityManager.languagesToShow.isNotEmpty 
-        ? _languageVisibilityManager.languagesToShow.first 
-        : null;
-    showVisibilityOptionsSheet(
-      context: context,
-      allLanguages: _allLanguages,
-      languageVisibility: _languageVisibilityManager.languageVisibility,
-      showDescription: _showDescription,
-      showExtraInfo: _showExtraInfo,
-      controller: _controller,
-      firstVisibleLanguage: firstVisibleLanguage,
-      onLanguageVisibilityToggled: (languageCode) {
-        setState(() {
-          _languageVisibilityManager.toggleLanguageVisibility(languageCode);
-          // Update language filter for search (concepts are no longer filtered by visibility)
-          _controller.setLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-          // Update visible languages - this will refresh dictionary and counts
-          _controller.setVisibleLanguageCodes(_languageVisibilityManager.getVisibleLanguageCodes());
-        });
-      },
-      onShowDescriptionChanged: (value) {
-        setState(() {
-          _showDescription = value;
-        });
-      },
-      onShowExtraInfoChanged: (value) {
-        setState(() {
-          _showExtraInfo = value;
-        });
-      },
-    );
-  }
-
-  Future<void> _handleEdit(PairedDictionaryItem item) async {
-    // Navigate to edit concept screen
-    final result = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (context) => EditConceptScreen(item: item),
-      ),
-    );
-
-    if (result == true && mounted) {
-      // Refresh the dictionary list to show updated concept
-      await _controller.refresh();
-      
-      // Refresh the detail drawer if it's still open
-      // Find the updated item in the list
-      final updatedItems = _controller.filteredItems;
-      final updatedItem = updatedItems.firstWhere(
-        (i) => i.conceptId == item.conceptId,
-        orElse: () => item,
-      );
-      
-      // Close current drawer and reopen with updated item
-      if (mounted) {
-        Navigator.of(context).pop(); // Close current drawer
-        _handleItemTap(updatedItem); // Reopen with updated item
-      }
-    }
-  }
-
-  Future<void> _handleDelete(PairedDictionaryItem item) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => const DeleteDictionaryDialog(),
-    );
-
-    if (confirmed == true && mounted) {
-      final success = await _controller.deleteItem(item);
-
-      if (mounted) {
-        // Close the detail drawer if deletion was successful
-        if (success) {
-          Navigator.of(context).pop();
-        }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success
-                  ? 'Translation deleted successfully'
-                  : _controller.errorMessage ?? 'Failed to delete translation',
-            ),
-            backgroundColor: success
-                ? null
-                : Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    }
-  }
-
-  void _handleItemTap(PairedDictionaryItem item) {
-    showConceptDrawer(
-      context,
-      conceptId: item.conceptId,
-      languageVisibility: _languageVisibilityManager.languageVisibility,
-      languagesToShow: _languageVisibilityManager.languagesToShow,
-      onEdit: () => _handleEdit(item),
-      onDelete: () => _handleDelete(item),
-      onItemUpdated: () => _handleItemUpdated(context, item),
-    );
-  }
-
-  Future<void> _handleItemUpdated(BuildContext context, PairedDictionaryItem item) async {
-    // Refresh the dictionary list to get updated item
-    await _controller.refresh();
-    
-    // The drawer will reload the concept data itself via its onItemUpdated callback
-    // No need to close and reopen - the drawer handles its own refresh
-  }
-
-  void _showGenerateLemmasDrawer(BuildContext context) {
-    final visibleLanguages = _languageVisibilityManager.getVisibleLanguageCodes();
-    
-    if (visibleLanguages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select at least one visible language'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    
-    showGenerateLemmasDrawer(
-      context: context,
-      cardGenerationState: _cardGenerationState,
-      onConfirmGenerate: () => _handleGenerateLemmas(context),
-      visibleLanguageCodes: visibleLanguages,
-    );
-  }
-
-  Future<void> _handleGenerateLemmas(BuildContext context) async {
-    // Get visible languages
-    final visibleLanguages = _languageVisibilityManager.getVisibleLanguageCodes();
-    
-    if (visibleLanguages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select at least one visible language'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    
-    // Set loading state
-    setState(() {
-      _isLoadingConcepts = true;
-    });
-    
-    try {
-      // Get all concepts from DictionaryResponse with current filters applied
-      // Loop through all pages to get all concepts that match the filters
-      final List<PairedDictionaryItem> allFilteredItems = [];
-      int currentPage = 1;
-      bool hasMorePages = true;
-      
-      // Get effective filters (same logic as controller)
-      final effectiveLevels = _controller.getEffectiveLevels();
-      final effectivePOS = _controller.getEffectivePartOfSpeech();
-      final effectiveTopicIds = _controller.getEffectiveTopicIds();
-      
-      print('🔵 [Generate] Starting to fetch all pages with filters...');
-      print('🔵 [Generate] Using same parameters as controller:');
-      print('  - userId: ${_controller.currentUser?.id}');
-      print('  - visibleLanguageCodes: $visibleLanguages');
-      print('  - includeLemmas: ${_controller.includeLemmas}');
-      print('  - includePhrases: ${_controller.includePhrases}');
-      print('  - search: ${_controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null}');
-      print('  - topicIds: $effectiveTopicIds');
-      print('  - includeWithoutTopic: ${_controller.showLemmasWithoutTopic}');
-      print('  - levels: $effectiveLevels');
-      print('  - partOfSpeech: $effectivePOS');
-      
-      while (hasMorePages) {
-        print('🔵 [Generate] Fetching page $currentPage...');
-        final result = await DictionaryService.getDictionary(
-          userId: _controller.currentUser?.id,
-          page: currentPage,
-          pageSize: 100, // Maximum allowed page size
-          sortBy: _controller.sortOption == SortOption.alphabetical 
-              ? 'alphabetical' 
-              : (_controller.sortOption == SortOption.timeCreatedRecentFirst ? 'recent' : 'random'),
-          search: _controller.searchQuery.trim().isNotEmpty ? _controller.searchQuery.trim() : null,
-          visibleLanguageCodes: visibleLanguages,
-          includeLemmas: _controller.includeLemmas,
-          includePhrases: _controller.includePhrases,
-          topicIds: effectiveTopicIds,
-          includeWithoutTopic: _controller.showLemmasWithoutTopic,
-          levels: effectiveLevels,
-          partOfSpeech: effectivePOS,
-          hasImages: _controller.getEffectiveHasImages(),
-          isComplete: _controller.getEffectiveIsComplete(),
-        );
-        
-        print('🔵 [Generate] Page $currentPage result - success: ${result['success']}, items: ${(result['items'] as List?)?.length ?? 0}');
-        
-        if (result['success'] == true) {
-          final List<dynamic> itemsData = result['items'] as List<dynamic>;
-          print('🔵 [Generate] Page $currentPage has ${itemsData.length} items');
-          
-          // Convert to PairedDictionaryItem
-          final items = itemsData
-              .map((json) => PairedDictionaryItem.fromJson(json as Map<String, dynamic>))
-              .toList();
-          
-          allFilteredItems.addAll(items);
-          
-          // Check if there are more pages
-          hasMorePages = result['has_next'] as bool? ?? false;
-          currentPage++;
-          
-          print('🔵 [Generate] Has more pages: $hasMorePages');
-        } else {
-          // Error occurred, break the loop
-          final errorMsg = result['message'] as String? ?? 'Failed to load concepts for generation';
-          print('🔴 [Generate] Error on page $currentPage: $errorMsg');
-          setState(() {
-            _isLoadingConcepts = false;
-          });
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(errorMsg),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return;
-        }
-      }
-      
-      print('🔵 [Generate] Finished fetching. Total items: ${allFilteredItems.length}');
-      
-      // For each concept, check which visible languages are missing or incomplete
-      final conceptIds = <int>[];
-      final conceptTerms = <int, String>{};
-      final conceptMissingLanguages = <int, List<String>>{};
-      
-      // Helper function to check if a field is missing (null, empty, or whitespace only)
-      bool isFieldMissing(String? field) {
-        return field == null || field.trim().isEmpty;
-      }
-      
-      // Helper function to check if a card is complete (has all 3 required fields)
-      bool isCardComplete(DictionaryCard card) {
-        return !isFieldMissing(card.translation) &&
-               !isFieldMissing(card.ipa) &&
-               !isFieldMissing(card.description);
-      }
-      
-      for (final item in allFilteredItems) {
-        // Find which visible languages are missing or have incomplete cards
-        final missingLanguages = <String>[];
-        
-        for (final lang in visibleLanguages) {
-          // Find card for this language
-          final matchingCards = item.cards.where(
-            (card) => card.languageCode.toLowerCase() == lang.toLowerCase(),
-          );
-          
-          // If no card exists, or card is incomplete, add to missing languages
-          if (matchingCards.isEmpty) {
-            missingLanguages.add(lang.toUpperCase());
-          } else {
-            final card = matchingCards.first;
-            if (!isCardComplete(card)) {
-              missingLanguages.add(lang.toUpperCase());
-            }
-          }
-        }
-        
-        // Only include concepts that have at least one missing or incomplete language
-        if (missingLanguages.isNotEmpty) {
-          conceptIds.add(item.conceptId);
-          conceptTerms[item.conceptId] = item.conceptTerm ?? 'Unknown';
-          conceptMissingLanguages[item.conceptId] = missingLanguages;
-        }
-      }
-      
-      print('🔵 [Generate] Found ${conceptIds.length} concepts with missing languages');
-      
-      if (conceptIds.isEmpty) {
-        setState(() {
-          _isLoadingConcepts = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No concepts found that need cards for the visible languages'),
-              backgroundColor: Colors.blue,
-            ),
-          );
-        }
-        return;
-      }
-      
-      // Set initial progress state
-      setState(() {
-        _isLoadingConcepts = false;
-      });
-      
-      _cardGenerationState.startGeneration(
-        totalConcepts: conceptIds.length,
-        conceptIds: conceptIds,
-        conceptTerms: conceptTerms,
-        conceptMissingLanguages: conceptMissingLanguages,
-      );
-      
-      // Start the background task
-      await CardGenerationBackgroundService.startTask(
-        conceptIds: conceptIds,
-        conceptTerms: conceptTerms,
-        conceptMissingLanguages: conceptMissingLanguages,
-        selectedLanguages: visibleLanguages,
-      );
-      
-      // Run the task asynchronously
-      CardGenerationBackgroundService.executeTask().catchError((error) {
-        print('Error in background task: $error');
-        return <String, dynamic>{
-          'success': false,
-          'message': 'Task failed: $error',
-        };
-      });
-      
-      // Start polling for progress updates
-      _cardGenerationState.startProgressPolling(_onCardGenerationComplete);
-    } catch (e) {
-      setState(() {
-        _isLoadingConcepts = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
 }
