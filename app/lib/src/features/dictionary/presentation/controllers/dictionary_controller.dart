@@ -55,6 +55,8 @@ class DictionaryController extends ChangeNotifier {
   // Include with filter state
   bool _hasImages = true; // Show concepts with images (default: true, means exclude missing images)
   bool _hasNoImages = true; // Show concepts without images
+  bool _hasAudio = true; // Show concepts with audio (default: true, means exclude missing audio)
+  bool _hasNoAudio = true; // Show concepts without audio
   bool _isComplete = true; // Show complete concepts (default: true, means exclude incomplete)
   bool _isIncomplete = true; // Show incomplete concepts
   
@@ -106,6 +108,8 @@ class DictionaryController extends ChangeNotifier {
   // Include with filter getters
   bool get hasImages => _hasImages;
   bool get hasNoImages => _hasNoImages;
+  bool get hasAudio => _hasAudio;
+  bool get hasNoAudio => _hasNoAudio;
   bool get isComplete => _isComplete;
   bool get isIncomplete => _isIncomplete;
   
@@ -217,6 +221,26 @@ class DictionaryController extends ChangeNotifier {
     }
   }
   
+  // Set has audio filter
+  void setHasAudio(bool has) {
+    if (_hasAudio != has) {
+      _hasAudio = has;
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
+    }
+  }
+  
+  // Set has no audio filter
+  void setHasNoAudio(bool has) {
+    if (_hasNoAudio != has) {
+      _hasNoAudio = has;
+      notifyListeners(); // Notify listeners immediately for UI update
+      // Reload dictionary when filter changes
+      _loadUserAndDictionary(reset: true, showLoading: false);
+    }
+  }
+  
   // Set is complete filter
   void setIsComplete(bool isComplete) {
     if (_isComplete != isComplete) {
@@ -249,6 +273,18 @@ class DictionaryController extends ChangeNotifier {
     return null;
   }
   
+  // Get effective has_audio value to pass to API
+  // Returns: 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
+  int? getEffectiveHasAudio() {
+    if (_hasAudio && !_hasNoAudio) {
+      return 1; // Only "Has Audio" selected -> include only concepts with audio
+    } else if (!_hasAudio && _hasNoAudio) {
+      return 0; // Only "Has no Audio" selected -> include only concepts without audio
+    }
+    // Both selected or neither selected -> include all
+    return null;
+  }
+  
   // Get effective is_complete value to pass to API
   // Returns: 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
   int? getEffectiveIsComplete() {
@@ -272,6 +308,8 @@ class DictionaryController extends ChangeNotifier {
     bool? includePhrases,
     bool? hasImages,
     bool? hasNoImages,
+    bool? hasAudio,
+    bool? hasNoAudio,
     bool? isComplete,
     bool? isIncomplete,
   }) {
@@ -307,6 +345,14 @@ class DictionaryController extends ChangeNotifier {
     }
     if (hasNoImages != null && _hasNoImages != hasNoImages) {
       _hasNoImages = hasNoImages;
+      hasChanges = true;
+    }
+    if (hasAudio != null && _hasAudio != hasAudio) {
+      _hasAudio = hasAudio;
+      hasChanges = true;
+    }
+    if (hasNoAudio != null && _hasNoAudio != hasNoAudio) {
+      _hasNoAudio = hasNoAudio;
       hasChanges = true;
     }
     if (isComplete != null && _isComplete != isComplete) {
@@ -502,6 +548,7 @@ class DictionaryController extends ChangeNotifier {
         levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
         partOfSpeech: getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
         hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
+        hasAudio: getEffectiveHasAudio(), // Pass has_audio filter (1, 0, or null)
         isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
       );
 
@@ -559,6 +606,7 @@ class DictionaryController extends ChangeNotifier {
         levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
         partOfSpeech: getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
         hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
+        hasAudio: getEffectiveHasAudio(), // Pass has_audio filter (1, 0, or null)
         isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
       );
 
@@ -765,6 +813,7 @@ class DictionaryController extends ChangeNotifier {
         levels: getEffectiveLevels(), // Pass level filter (null if all levels selected)
         partOfSpeech: getEffectivePartOfSpeech(), // Pass POS filter (null if all POS selected)
         hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
+        hasAudio: getEffectiveHasAudio(), // Pass has_audio filter (1, 0, or null)
         isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
       );
       

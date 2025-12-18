@@ -32,6 +32,7 @@ class DictionaryService {
     List<String>? levels,
     List<String>? partOfSpeech,
     int? hasImages,
+    int? hasAudio,
     int? isComplete,
   }) =>
       DictionaryQueryService.getDictionary(
@@ -48,6 +49,7 @@ class DictionaryService {
         levels: levels,
         partOfSpeech: partOfSpeech,
         hasImages: hasImages,
+        hasAudio: hasAudio,
         isComplete: isComplete,
       );
 

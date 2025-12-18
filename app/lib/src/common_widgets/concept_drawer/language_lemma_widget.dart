@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:archipelago/src/utils/html_entity_decoder.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
-import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
+import 'package:archipelago/src/common_widgets/lemma_audio_player.dart';
 
 class LanguageLemmaWidget extends StatefulWidget {
   final DictionaryCard card;
@@ -34,69 +33,6 @@ class LanguageLemmaWidget extends StatefulWidget {
 }
 
 class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlayingAudio = false;
-
-  String? _getFullAudioUrl(String? audioPath) {
-    if (audioPath == null || audioPath.isEmpty) return null;
-    if (audioPath.startsWith('http://') || audioPath.startsWith('https://')) {
-      return audioPath;
-    }
-    return '${ApiConfig.baseUrl}$audioPath';
-  }
-
-  Future<void> _playAudio() async {
-    if (widget.card.audioPath == null || widget.card.audioPath!.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No audio available')),
-        );
-      }
-      return;
-    }
-
-    setState(() {
-      _isPlayingAudio = true;
-    });
-
-    try {
-      final audioUrl = _getFullAudioUrl(widget.card.audioPath);
-      if (audioUrl != null) {
-        await _audioPlayer.play(UrlSource(audioUrl));
-        _audioPlayer.onPlayerComplete.listen((_) {
-          if (mounted) {
-            setState(() {
-              _isPlayingAudio = false;
-            });
-          }
-        });
-      } else {
-        setState(() {
-          _isPlayingAudio = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No audio available')),
-          );
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _isPlayingAudio = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error playing audio: $e')),
-        );
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    super.dispose();
-  }
 
   TextStyle _getTitleTextStyle(BuildContext context) {
     // Count how many sections are hidden
@@ -191,45 +127,14 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                             alignment: PlaceholderAlignment.middle,
                             child: Padding(
                               padding: const EdgeInsets.only(left: 0),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: _isPlayingAudio 
-                                      ? null 
-                                      : () {
-                                          if (widget.card.audioPath == null || 
-                                              widget.card.audioPath!.isEmpty) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('No audio available')),
-                                            );
-                                          } else {
-                                            _playAudio();
-                                          }
-                                        },
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4),
-                                    child: _isPlayingAudio
-                                        ? SizedBox(
-                                            width: 14,
-                                            height: 14,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(
-                                                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                                              ),
-                                            ),
-                                          )
-                                        : Icon(
-                                            Icons.volume_up,
-                                            size: 16,
-                                            color: (widget.card.audioPath == null || 
-                                                    widget.card.audioPath!.isEmpty)
-                                                ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
-                                                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                                          ),
-                                  ),
-                                ),
+                              child: LemmaAudioPlayer(
+                                lemmaId: widget.card.id,
+                                audioPath: widget.card.audioPath,
+                                term: widget.card.translation,
+                                description: widget.card.description,
+                                languageCode: widget.languageCode,
+                                iconSize: 16.0,
+                                showLoadingIndicator: true,
                               ),
                             ),
                           ),

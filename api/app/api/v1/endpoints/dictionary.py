@@ -43,6 +43,7 @@ async def get_dictionary(
     levels: Optional[str] = None,  # Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
     part_of_speech: Optional[str] = None,  # Comma-separated list of part of speech values to filter by
     has_images: Optional[int] = None,  # 1 = include only concepts with images, 0 = include only concepts without images, null = include all
+    has_audio: Optional[int] = None,  # 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
     is_complete: Optional[int] = None,  # 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
     session: Session = Depends(get_session)
 ):
@@ -64,6 +65,7 @@ async def get_dictionary(
         levels: Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
         part_of_speech: Comma-separated list of part of speech values to filter by
         has_images: 1 = include only concepts with images, 0 = include only concepts without images, null = include all
+        has_audio: 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
         is_complete: 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
     """
     # Validate and parse parameters
@@ -84,6 +86,7 @@ async def get_dictionary(
         level_list=level_list,
         pos_list=pos_list,
         has_images=has_images,
+        has_audio=has_audio,
         is_complete=is_complete,
         visible_language_codes=visible_language_codes,
         search=search
@@ -187,6 +190,7 @@ async def get_dictionary(
             level_list=level_list,
             pos_list=pos_list,
             has_images=has_images,
+            has_audio=has_audio,
             is_complete=is_complete,
             search=search
         )

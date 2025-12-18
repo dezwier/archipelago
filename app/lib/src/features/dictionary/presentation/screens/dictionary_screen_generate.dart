@@ -104,6 +104,7 @@ mixin DictionaryScreenGenerate<T extends StatefulWidget> on State<T> {
           levels: effectiveLevels,
           partOfSpeech: effectivePOS,
           hasImages: controller.getEffectiveHasImages(),
+          hasAudio: controller.getEffectiveHasAudio(),
           isComplete: controller.getEffectiveIsComplete(),
         );
         
@@ -303,6 +304,7 @@ mixin DictionaryScreenGenerate<T extends StatefulWidget> on State<T> {
           levels: effectiveLevels,
           partOfSpeech: effectivePOS,
           hasImages: controller.getEffectiveHasImages(),
+          hasAudio: controller.getEffectiveHasAudio(),
           isComplete: controller.getEffectiveIsComplete(),
         );
         

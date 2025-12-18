@@ -50,6 +50,8 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
   bool? _pendingIncludePhrases;
   bool? _pendingHasImages;
   bool? _pendingHasNoImages;
+  bool? _pendingHasAudio;
+  bool? _pendingHasNoAudio;
   bool? _pendingIsComplete;
   bool? _pendingIsIncomplete;
 
@@ -74,6 +76,8 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
     _pendingIncludePhrases = widget.controller.includePhrases;
     _pendingHasImages = widget.controller.hasImages;
     _pendingHasNoImages = widget.controller.hasNoImages;
+    _pendingHasAudio = widget.controller.hasAudio;
+    _pendingHasNoAudio = widget.controller.hasNoAudio;
     _pendingIsComplete = widget.controller.isComplete;
     _pendingIsIncomplete = widget.controller.isIncomplete;
   }
@@ -90,6 +94,8 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
       includePhrases: _pendingIncludePhrases,
       hasImages: _pendingHasImages,
       hasNoImages: _pendingHasNoImages,
+      hasAudio: _pendingHasAudio,
+      hasNoAudio: _pendingHasNoAudio,
       isComplete: _pendingIsComplete,
       isIncomplete: _pendingIsIncomplete,
     );
@@ -283,6 +289,8 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
                     builder: (context, setMenuState) {
                       final currentHasImages = _pendingHasImages ?? widget.controller.hasImages;
                       final currentHasNoImages = _pendingHasNoImages ?? widget.controller.hasNoImages;
+                      final currentHasAudio = _pendingHasAudio ?? widget.controller.hasAudio;
+                      final currentHasNoAudio = _pendingHasNoAudio ?? widget.controller.hasNoAudio;
                       final currentIsComplete = _pendingIsComplete ?? widget.controller.isComplete;
                       final currentIsIncomplete = _pendingIsIncomplete ?? widget.controller.isIncomplete;
                       return Column(
@@ -359,6 +367,68 @@ class _DictionaryFilterSheetState extends State<DictionaryFilterSheet> {
                                       'No Image',
                                       style: TextStyle(
                                         color: currentHasNoImages
+                                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Has Audio button
+                                GestureDetector(
+                                  onTap: () {
+                                    setMenuState(() {
+                                      _pendingHasAudio = !currentHasAudio;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: currentHasAudio
+                                          ? Theme.of(context).colorScheme.primaryContainer
+                                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: currentHasAudio
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                        width: currentHasAudio ? 1 : 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Audio',
+                                      style: TextStyle(
+                                        color: currentHasAudio
+                                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Has no Audio button
+                                GestureDetector(
+                                  onTap: () {
+                                    setMenuState(() {
+                                      _pendingHasNoAudio = !currentHasNoAudio;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: currentHasNoAudio
+                                          ? Theme.of(context).colorScheme.primaryContainer
+                                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: currentHasNoAudio
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                        width: currentHasNoAudio ? 1 : 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'No Audio',
+                                      style: TextStyle(
+                                        color: currentHasNoAudio
                                             ? Theme.of(context).colorScheme.onPrimaryContainer
                                             : Theme.of(context).colorScheme.onSurface,
                                       ),

@@ -13,4 +13,5 @@ pillow
 reportlab
 arabic-reshaper
 python-bidi
+google-cloud-texttospeech
 

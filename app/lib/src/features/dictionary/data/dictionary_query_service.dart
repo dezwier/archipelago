@@ -30,6 +30,7 @@ class DictionaryQueryService {
     List<String>? levels, // Filter by CEFR levels (A1, A2, B1, B2, C1, C2)
     List<String>? partOfSpeech, // Filter by part of speech values
     int? hasImages, // 1 = include only concepts with images, 0 = include only concepts without images, null = include all
+    int? hasAudio, // 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
     int? isComplete, // 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
   }) async {
     final queryParams = <String, String>{
@@ -86,6 +87,11 @@ class DictionaryQueryService {
     // Add has_images parameter - 1 = include only concepts with images, 0 = include only concepts without images, null = include all
     if (hasImages != null) {
       queryParams['has_images'] = hasImages.toString();
+    }
+    
+    // Add has_audio parameter - 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
+    if (hasAudio != null) {
+      queryParams['has_audio'] = hasAudio.toString();
     }
     
     // Add is_complete parameter - 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all

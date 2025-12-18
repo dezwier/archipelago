@@ -184,6 +184,43 @@ def apply_has_images_filter(query, has_images: Optional[int]):
     return query
 
 
+def apply_has_audio_filter(query, has_audio: Optional[int], visible_language_codes: Optional[List[str]]):
+    """Apply has_audio filter to concept query.
+    
+    Audio is stored in lemmas (audio_url field), so we need to check if any lemma
+    for a concept has audio. If visible_language_codes is provided, only check
+    lemmas for those languages.
+    """
+    if has_audio is None:
+        # If has_audio is None, include all (no filter)
+        return query
+    
+    # Build subquery to find concepts with audio
+    audio_lemma_subquery = select(Lemma.concept_id).where(
+        and_(
+            Lemma.audio_url.isnot(None),
+            Lemma.audio_url != ""
+        )
+    )
+    
+    # If visible languages are specified, filter to those languages
+    if visible_language_codes:
+        audio_lemma_subquery = audio_lemma_subquery.where(
+            Lemma.language_code.in_(visible_language_codes)
+        )
+    
+    audio_lemma_subquery = audio_lemma_subquery.distinct().subquery()
+    
+    if has_audio == 1:
+        # Include only concepts with audio (have at least one lemma with audio_url)
+        return query.where(Concept.id.in_(select(audio_lemma_subquery.c.concept_id)))
+    elif has_audio == 0:
+        # Include only concepts without audio (do NOT have any lemma with audio_url)
+        return query.where(~Concept.id.in_(select(audio_lemma_subquery.c.concept_id)))
+    
+    return query
+
+
 def build_incomplete_lemma_subquery(visible_language_codes: Optional[List[str]]):
     """Build subquery to find concepts with incomplete lemmas."""
     base_query = select(Lemma.concept_id).where(
@@ -285,6 +322,7 @@ def build_base_filtered_query(
     level_list: Optional[List[CEFRLevel]],
     pos_list: Optional[List[str]],
     has_images: Optional[int],
+    has_audio: Optional[int],
     is_complete: Optional[int],
     visible_language_codes: Optional[List[str]],
     search: Optional[str]
@@ -297,6 +335,7 @@ def build_base_filtered_query(
     query = apply_levels_filter(query, level_list)
     query = apply_part_of_speech_filter(query, pos_list)
     query = apply_has_images_filter(query, has_images)
+    query = apply_has_audio_filter(query, has_audio, visible_language_codes)
     query = apply_is_complete_filter(query, is_complete, visible_language_codes)
     query = apply_search_filter(query, search, visible_language_codes)
     return query
@@ -510,6 +549,7 @@ def calculate_concepts_with_all_visible_languages(
     level_list: Optional[List[CEFRLevel]],
     pos_list: Optional[List[str]],
     has_images: Optional[int],
+    has_audio: Optional[int],
     is_complete: Optional[int],
     search: Optional[str]
 ) -> int:
@@ -524,6 +564,7 @@ def calculate_concepts_with_all_visible_languages(
         level_list=level_list,
         pos_list=pos_list,
         has_images=has_images,
+        has_audio=has_audio,
         is_complete=is_complete,
         visible_language_codes=visible_language_codes,
         search=search
