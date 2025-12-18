@@ -2,17 +2,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/create/data/card_generation_background_service.dart';
 
+enum GenerationType { lemmas, images }
+
 class CardGenerationState extends ChangeNotifier {
-  // Progress tracking for lemma generation
+  // Progress tracking for lemma/image generation
   int? _totalConcepts;
   int _currentConceptIndex = 0;
   String? _currentConceptTerm;
   List<String> _currentConceptMissingLanguages = [];
   int _conceptsProcessed = 0;
   int _cardsCreated = 0;
+  int _imagesCreated = 0;
   List<String> _errors = [];
   bool _isCancelled = false;
   bool _isGeneratingCards = false;
+  GenerationType _generationType = GenerationType.lemmas;
   double _sessionCostUsd = 0.0;
   
   Timer? _progressPollTimer;
@@ -24,9 +28,11 @@ class CardGenerationState extends ChangeNotifier {
   List<String> get currentConceptMissingLanguages => _currentConceptMissingLanguages;
   int get conceptsProcessed => _conceptsProcessed;
   int get cardsCreated => _cardsCreated;
+  int get imagesCreated => _imagesCreated;
   List<String> get errors => _errors;
   bool get isCancelled => _isCancelled;
   bool get isGeneratingCards => _isGeneratingCards;
+  GenerationType get generationType => _generationType;
   double get sessionCostUsd => _sessionCostUsd;
 
   Future<void> loadExistingTaskState() async {
@@ -117,9 +123,11 @@ class CardGenerationState extends ChangeNotifier {
     _currentConceptMissingLanguages = [];
     _conceptsProcessed = 0;
     _cardsCreated = 0;
+    _imagesCreated = 0;
     _errors = [];
     _isCancelled = false;
     _isGeneratingCards = false;
+    _generationType = GenerationType.lemmas;
     _sessionCostUsd = 0.0;
     notifyListeners();
   }
@@ -127,7 +135,9 @@ class CardGenerationState extends ChangeNotifier {
   Future<void> handleCancel() async {
     // Stop polling immediately
     _progressPollTimer?.cancel();
-    await CardGenerationBackgroundService.cancelTask();
+    if (_generationType == GenerationType.lemmas) {
+      await CardGenerationBackgroundService.cancelTask();
+    }
     _isCancelled = true;
     _isGeneratingCards = false;
     notifyListeners();
@@ -138,17 +148,38 @@ class CardGenerationState extends ChangeNotifier {
     required List<int> conceptIds,
     required Map<int, String> conceptTerms,
     required Map<int, List<String>> conceptMissingLanguages,
+    GenerationType type = GenerationType.lemmas,
   }) {
     _isGeneratingCards = true;
     _isCancelled = false;
+    _generationType = type;
     _totalConcepts = totalConcepts;
     _currentConceptIndex = 0;
     _currentConceptTerm = null;
     _currentConceptMissingLanguages = [];
     _conceptsProcessed = 0;
     _cardsCreated = 0;
+    _imagesCreated = 0;
     _errors = [];
     _sessionCostUsd = 0.0;
+    notifyListeners();
+  }
+
+  void updateImageGenerationProgress({
+    required int currentIndex,
+    required String? currentTerm,
+    required int imagesCreated,
+    required List<String> errors,
+    bool isComplete = false,
+  }) {
+    _currentConceptIndex = currentIndex;
+    _currentConceptTerm = currentTerm;
+    _imagesCreated = imagesCreated;
+    _conceptsProcessed = currentIndex;
+    _errors = errors;
+    if (isComplete) {
+      _isGeneratingCards = false;
+    }
     notifyListeners();
   }
 

@@ -6,12 +6,14 @@ import 'package:archipelago/src/features/dictionary/presentation/controllers/car
 class GenerateLemmasDrawer extends StatefulWidget {
   final CardGenerationState cardGenerationState;
   final Future<void> Function() onConfirmGenerate;
+  final Future<void> Function() onConfirmGenerateImages;
   final List<String> visibleLanguageCodes;
 
   const GenerateLemmasDrawer({
     super.key,
     required this.cardGenerationState,
     required this.onConfirmGenerate,
+    required this.onConfirmGenerateImages,
     required this.visibleLanguageCodes,
   });
 
@@ -20,7 +22,8 @@ class GenerateLemmasDrawer extends StatefulWidget {
 }
 
 class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
-  bool _isLoading = false;
+  bool _isLoadingLemmas = false;
+  bool _isLoadingImages = false;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +61,7 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
             child: Row(
               children: [
                 Text(
-                  'Generate Lemmas',
+                  'Generate with AI',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -95,9 +98,11 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                         currentConceptMissingLanguages: widget.cardGenerationState.currentConceptMissingLanguages,
                         conceptsProcessed: widget.cardGenerationState.conceptsProcessed,
                         cardsCreated: widget.cardGenerationState.cardsCreated,
+                        imagesCreated: widget.cardGenerationState.imagesCreated,
                         errors: widget.cardGenerationState.errors,
                         sessionCostUsd: widget.cardGenerationState.sessionCostUsd,
                         isGenerating: widget.cardGenerationState.isGeneratingCards,
+                        generationType: widget.cardGenerationState.generationType,
                         isCancelled: widget.cardGenerationState.isCancelled,
                         onCancel: widget.cardGenerationState.isGeneratingCards 
                             ? () => widget.cardGenerationState.handleCancel()
@@ -147,7 +152,7 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'This will generate lemmas (cards) for concepts that are missing translations in the currently visible languages.',
+                            'This will generate lemmas or images for concepts that are missing translations in the currently visible languages.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           const SizedBox(height: 8),
@@ -184,15 +189,15 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                     ),
                     const SizedBox(height: 24),
                     
-                    // Generate button
+                    // Generate Lemmas button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: (_isLoading || widget.visibleLanguageCodes.isEmpty) 
+                        onPressed: ((_isLoadingLemmas || _isLoadingImages) || widget.visibleLanguageCodes.isEmpty) 
                             ? null 
                             : () async {
                                 setState(() {
-                                  _isLoading = true;
+                                  _isLoadingLemmas = true;
                                 });
                                 
                                 try {
@@ -200,13 +205,13 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                                   // Don't close drawer - let progress show
                                   if (mounted) {
                                     setState(() {
-                                      _isLoading = false;
+                                      _isLoadingLemmas = false;
                                     });
                                   }
                                 } catch (e) {
                                   if (mounted) {
                                     setState(() {
-                                      _isLoading = false;
+                                      _isLoadingLemmas = false;
                                     });
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
@@ -223,7 +228,7 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: _isLoading
+                        child: _isLoadingLemmas
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
@@ -239,6 +244,68 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                                   const SizedBox(width: 8),
                                   const Text(
                                     'Generate Lemmas',
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // Generate Images button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: (_isLoadingLemmas || _isLoadingImages) 
+                            ? null 
+                            : () async {
+                                setState(() {
+                                  _isLoadingImages = true;
+                                });
+                                
+                                try {
+                                  await widget.onConfirmGenerateImages();
+                                  if (mounted) {
+                                    setState(() {
+                                      _isLoadingImages = false;
+                                    });
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    setState(() {
+                                      _isLoadingImages = false;
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Error: ${e.toString()}'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isLoadingImages
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.image),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Generate Images',
                                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                                   ),
                                 ],
@@ -266,6 +333,7 @@ void showGenerateLemmasDrawer({
   required BuildContext context,
   required CardGenerationState cardGenerationState,
   required Future<void> Function() onConfirmGenerate,
+  required Future<void> Function() onConfirmGenerateImages,
   required List<String> visibleLanguageCodes,
 }) {
   showModalBottomSheet(
@@ -277,6 +345,7 @@ void showGenerateLemmasDrawer({
     builder: (context) => GenerateLemmasDrawer(
       cardGenerationState: cardGenerationState,
       onConfirmGenerate: onConfirmGenerate,
+      onConfirmGenerateImages: onConfirmGenerateImages,
       visibleLanguageCodes: visibleLanguageCodes,
     ),
   );

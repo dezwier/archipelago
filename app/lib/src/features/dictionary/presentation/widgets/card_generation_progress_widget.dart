@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 
 class CardGenerationProgressWidget extends StatelessWidget {
   final int? totalConcepts;
@@ -8,10 +9,12 @@ class CardGenerationProgressWidget extends StatelessWidget {
   final List<String> currentConceptMissingLanguages;
   final int conceptsProcessed;
   final int cardsCreated;
+  final int imagesCreated;
   final List<String> errors;
   final double sessionCostUsd;
   final bool isGenerating;
   final bool isCancelled;
+  final GenerationType generationType;
   final VoidCallback? onCancel;
   final VoidCallback? onDismiss;
 
@@ -23,9 +26,11 @@ class CardGenerationProgressWidget extends StatelessWidget {
     required this.currentConceptMissingLanguages,
     required this.conceptsProcessed,
     required this.cardsCreated,
+    required this.imagesCreated,
     required this.errors,
     required this.sessionCostUsd,
     required this.isGenerating,
+    required this.generationType,
     this.isCancelled = false,
     this.onCancel,
     this.onDismiss,
@@ -63,7 +68,9 @@ class CardGenerationProgressWidget extends StatelessWidget {
               Expanded(
                 child: Text(
                   isGenerating 
-                      ? 'Generating Lemmas' 
+                      ? (generationType == GenerationType.images 
+                          ? 'Generating Images' 
+                          : 'Generating Lemmas')
                       : (isCancelled ? 'Generation Cancelled' : 'Generation Complete'),
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -107,7 +114,9 @@ class CardGenerationProgressWidget extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Found $totalConcepts concept(s) without missing languages',
+                  generationType == GenerationType.images
+                      ? 'Found $totalConcepts concept(s) without images'
+                      : 'Found $totalConcepts concept(s) without missing languages',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.w600,
@@ -232,14 +241,18 @@ class CardGenerationProgressWidget extends StatelessWidget {
               Column(
                 children: [
                   Text(
-                    '$cardsCreated',
+                    generationType == GenerationType.images 
+                        ? '$imagesCreated' 
+                        : '$cardsCreated',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.secondary,
                     ),
                   ),
                   Text(
-                    'Lemmas Created',
+                    generationType == GenerationType.images 
+                        ? 'Images Created' 
+                        : 'Lemmas Created',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
