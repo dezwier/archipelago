@@ -17,26 +17,11 @@ import io
 from app.core.database import get_session
 from app.core.config import settings
 from app.models.models import Concept, Topic
+from app.schemas.concept import GenerateImageRequest, GenerateImagePreviewRequest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/concept-image", tags=["concept-image"])
-
-
-class GenerateImageRequest(BaseModel):
-    """Request schema for generating a concept image."""
-    concept_id: int = Field(..., description="The concept ID")
-    term: Optional[str] = Field(None, description="The concept term (will use concept.term if not provided)")
-    description: Optional[str] = Field(None, description="The concept description (will use concept.description if not provided)")
-    topic_id: Optional[int] = Field(None, description="The topic ID (will use concept.topic_id if not provided)")
-    topic_description: Optional[str] = Field(None, description="The topic description (will use topic.description if not provided)")
-
-
-class GenerateImagePreviewRequest(BaseModel):
-    """Request schema for generating an image preview without a concept."""
-    term: str = Field(..., description="The term or phrase")
-    description: Optional[str] = Field(None, description="The description")
-    topic_description: Optional[str] = Field(None, description="The topic description")
 
 
 def crop_to_square_and_resize(img: PILImage.Image, target_size: int = 300) -> PILImage.Image:

@@ -14,7 +14,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen.textobject import PDFTextObject
 
 from app.models.models import Concept, Lemma, Topic
-from .flashcard_export_helpers import (
+from app.services.flashcard_service import (
     register_unicode_fonts,
     register_flashcard_fonts,
     download_image,

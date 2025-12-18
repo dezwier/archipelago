@@ -1,5 +1,5 @@
 """
-Helper functions for generating LLM prompts.
+Service for generating LLM prompts.
 """
 from typing import Optional
 

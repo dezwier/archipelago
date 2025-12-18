@@ -10,7 +10,7 @@ from typing import Optional
 from app.core.database import get_session
 from app.models.models import Concept, Lemma
 from app.schemas.concept import DictionaryResponse
-from app.api.v1.endpoints.dictionary_helpers import (
+from app.services.dictionary_service import (
     validate_request_parameters,
     parse_visible_languages,
     parse_topic_ids,

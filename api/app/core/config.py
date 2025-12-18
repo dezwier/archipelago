@@ -84,32 +84,6 @@ class Settings(BaseSettings):
 # Create settings instance
 settings = Settings()
 
-# Fallback: if database_url is still empty, try reading DATABASE_URL directly
-if not settings.database_url:
-    settings.database_url = os.getenv("DATABASE_URL", "")
-
+# Validate required DATABASE_URL
 if not settings.database_url:
     raise ValueError("DATABASE_URL environment variable is required")
-
-# Fallback: if google_translate_api_key is still empty, try reading directly from environment
-if not settings.google_translate_api_key:
-    settings.google_translate_api_key = os.getenv("GOOGLE_TRANSLATE_API_KEY", "")
-    # Also try uppercase version (some systems use uppercase env vars)
-    if not settings.google_translate_api_key:
-        settings.google_translate_api_key = os.getenv("GOOGLE_TRANSLATE_API_KEY", "")
-
-# Fallback: if google_gemini_api_key is still empty, try reading directly from environment
-if not settings.google_gemini_api_key:
-    settings.google_gemini_api_key = os.getenv("GOOGLE_GEMINI_API_KEY", "")
-
-# Fallback: if google_custom_search_api_key is still empty, try reading directly from environment
-if not settings.google_custom_search_api_key:
-    settings.google_custom_search_api_key = os.getenv("GOOGLE_CUSTOM_SEARCH_API_KEY", "")
-
-# Fallback: if google_custom_search_engine_id is still empty, try reading directly from environment
-if not settings.google_custom_search_engine_id:
-    settings.google_custom_search_engine_id = os.getenv("GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "")
-
-# Fallback: if assets_path is still empty, try reading directly from environment
-if not settings.assets_path:
-    settings.assets_path = os.getenv("ASSETS_PATH", "")

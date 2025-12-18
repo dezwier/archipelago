@@ -18,12 +18,12 @@ from app.schemas.lemma import (
 import json
 import logging
 
-from app.api.v1.endpoints.llm_helpers import call_gemini_api
-from app.api.v1.endpoints.prompt_helpers import (
+from app.services.llm_service import call_gemini_api
+from app.services.prompt_service import (
     generate_lemma_system_instruction,
     generate_lemma_user_prompt
 )
-from app.api.v1.endpoints.utils import normalize_lemma_term
+from app.utils.text_utils import normalize_lemma_term
 
 logger = logging.getLogger(__name__)
 

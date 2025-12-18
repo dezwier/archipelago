@@ -13,40 +13,24 @@ from pathlib import Path
 import logging
 from app.core.database import get_session
 from app.core.config import settings
-from app.models.models import Concept, Lemma, Language, CEFRLevel
+from app.models.models import Concept, Lemma, Language
 from app.schemas.concept import (
     ConceptResponse, ConceptCountResponse, CreateConceptOnlyRequest,
     GetConceptsWithMissingLanguagesRequest, ConceptsWithMissingLanguagesResponse,
-    ConceptWithMissingLanguages
+    ConceptWithMissingLanguages, UpdateConceptRequest
 )
 from app.schemas.utils import normalize_part_of_speech
-from app.api.v1.endpoints.dictionary_helpers import (
-    parse_visible_languages,
+from app.services.dictionary_service import (
     parse_topic_ids,
     parse_levels,
     parse_part_of_speech,
     build_base_filtered_query,
 )
 from typing import List, Optional
-from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/concepts", tags=["concepts"])
-
-
-class UpdateConceptRequest(BaseModel):
-    """Request schema for updating a concept."""
-    term: Optional[str] = Field(None, min_length=1, description="The term (cannot be empty if provided)")
-    description: Optional[str] = None
-    part_of_speech: Optional[str] = None
-    topic_id: Optional[int] = None
-    
-    @field_validator('part_of_speech')
-    @classmethod
-    def validate_part_of_speech(cls, v):
-        """Validate and normalize part_of_speech field, converting deprecated values to None."""
-        return normalize_part_of_speech(v)
 
 
 @router.get("", response_model=List[ConceptResponse])

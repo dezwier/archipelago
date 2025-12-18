@@ -6,46 +6,17 @@ Topics endpoint.
 # pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, status
 from sqlmodel import Session, select
+from typing import Optional
 from app.core.database import get_session
 from app.models.models import Topic
-from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
+from app.schemas.topic import (
+    TopicResponse,
+    CreateTopicRequest,
+    UpdateTopicRequest,
+    TopicsResponse
+)
 
 router = APIRouter(prefix="/topics", tags=["topics"])
-
-
-class TopicResponse(BaseModel):
-    """Topic response schema."""
-    id: int
-    name: str
-    description: Optional[str] = None
-    icon: Optional[str] = None
-    user_id: int
-    created_at: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
-
-
-class CreateTopicRequest(BaseModel):
-    """Request schema for creating a topic."""
-    name: str
-    description: Optional[str] = None
-    icon: Optional[str] = None
-    user_id: int
-
-
-class UpdateTopicRequest(BaseModel):
-    """Request schema for updating a topic."""
-    name: Optional[str] = None
-    description: Optional[str] = None
-    icon: Optional[str] = None
-
-
-class TopicsResponse(BaseModel):
-    """Response schema for topics list."""
-    topics: List[TopicResponse]
 
 
 @router.get("", response_model=TopicsResponse)

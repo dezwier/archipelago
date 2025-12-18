@@ -21,9 +21,9 @@ from app.schemas.concept import (
     GenerateLemmasForConceptsRequest,
     GenerateLemmasForConceptsResponse
 )
-from app.api.v1.endpoints.utils import ensure_capitalized, normalize_lemma_term
-from app.api.v1.endpoints.llm_helpers import call_gemini_api
-from app.api.v1.endpoints.prompt_helpers import (
+from app.utils.text_utils import ensure_capitalized, normalize_lemma_term
+from app.services.llm_service import call_gemini_api
+from app.services.prompt_service import (
     generate_lemma_system_instruction,
     generate_lemma_user_prompt
 )

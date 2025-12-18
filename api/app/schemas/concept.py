@@ -76,6 +76,36 @@ class UpdateConceptImageRequest(BaseModel):
     """Request schema for updating a concept image."""
     image_url: str = Field(..., description="Image URL (can be empty string to clear)")
 
+
+class UpdateConceptRequest(BaseModel):
+    """Request schema for updating a concept."""
+    term: Optional[str] = Field(None, min_length=1, description="The term (cannot be empty if provided)")
+    description: Optional[str] = None
+    part_of_speech: Optional[str] = None
+    topic_id: Optional[int] = None
+    
+    @field_validator('part_of_speech')
+    @classmethod
+    def validate_part_of_speech(cls, v):
+        """Validate and normalize part_of_speech field, converting deprecated values to None."""
+        return normalize_part_of_speech(v)
+
+
+class GenerateImageRequest(BaseModel):
+    """Request schema for generating a concept image."""
+    concept_id: int = Field(..., description="The concept ID")
+    term: Optional[str] = Field(None, description="The concept term (will use concept.term if not provided)")
+    description: Optional[str] = Field(None, description="The concept description (will use concept.description if not provided)")
+    topic_id: Optional[int] = Field(None, description="The topic ID (will use concept.topic_id if not provided)")
+    topic_description: Optional[str] = Field(None, description="The topic description (will use topic.description if not provided)")
+
+
+class GenerateImagePreviewRequest(BaseModel):
+    """Request schema for generating an image preview without a concept."""
+    term: str = Field(..., description="The term or phrase")
+    description: Optional[str] = Field(None, description="The description")
+    topic_description: Optional[str] = Field(None, description="The topic description")
+
 # Models for concept generation endpoint
 class CreateConceptRequest(BaseModel):
     """Request schema for creating a concept with lemmas."""

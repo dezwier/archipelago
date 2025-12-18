@@ -17,7 +17,7 @@ sys.path.insert(0, str(api_dir))
 
 from app.core.database import engine
 from app.models.models import Concept, Lemma, Language
-from app.api.v1.endpoints.utils import normalize_lemma_term
+from app.utils.text_utils import normalize_lemma_term
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

@@ -1,6 +1,5 @@
 """
-Helper functions for dictionary endpoint.
-These functions extract complex logic from the main dictionary endpoint for better maintainability.
+Dictionary service for querying and filtering concepts and lemmas.
 """
 from fastapi import HTTPException, status
 from sqlmodel import select, func, or_
@@ -11,7 +10,7 @@ from app.models.models import Concept, Lemma, CEFRLevel
 from app.schemas.lemma import LemmaResponse
 from app.schemas.concept import PairedDictionaryItem
 from app.schemas.utils import normalize_part_of_speech
-from app.api.v1.endpoints.utils import ensure_capitalized
+from app.utils.text_utils import ensure_capitalized
 
 
 # ============================================================================

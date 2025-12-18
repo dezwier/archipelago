@@ -30,6 +30,14 @@ class UpdateLemmaRequest(BaseModel):
     description: Optional[str] = Field(None, description="Updated description text")
 
 
+class GenerateAudioRequest(BaseModel):
+    """Request schema for generating lemma audio."""
+    lemma_id: int = Field(..., description="The lemma ID")
+    term: Optional[str] = Field(None, description="The term to generate audio for (will use lemma.term if not provided)")
+    description: Optional[str] = Field(None, description="Optional description for context (may help with pronunciation)")
+    language_code: Optional[str] = Field(None, description="The language code for TTS (will use lemma.language_code if not provided)")
+
+
 class LLMLemmaData(BaseModel):
     """Pydantic model for lemma data from LLM."""
     language_code: str

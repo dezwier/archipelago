@@ -1,5 +1,5 @@
 """
-Utility functions for endpoint operations.
+Text utility functions.
 """
 
 
@@ -48,3 +48,4 @@ def normalize_lemma_term(term: str) -> str:
     normalized = normalized.strip()
     
     return normalized
+

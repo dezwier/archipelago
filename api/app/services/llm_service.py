@@ -1,5 +1,5 @@
 """
-Helper functions for LLM API calls.
+LLM service for API calls.
 """
 import requests
 import json

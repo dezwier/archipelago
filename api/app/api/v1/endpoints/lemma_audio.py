@@ -4,8 +4,6 @@ Endpoint for generating audio recordings for lemmas.
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
-from typing import Optional
-from pydantic import BaseModel, Field
 import logging
 from pathlib import Path
 from datetime import datetime, timezone
@@ -13,19 +11,12 @@ import os
 
 from app.core.database import get_session
 from app.core.config import settings
-from app.models.models import Lemma, Language
+from app.models.models import Lemma
+from app.schemas.lemma import GenerateAudioRequest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/lemma-audio", tags=["lemma-audio"])
-
-
-class GenerateAudioRequest(BaseModel):
-    """Request schema for generating lemma audio."""
-    lemma_id: int = Field(..., description="The lemma ID")
-    term: Optional[str] = Field(None, description="The term to generate audio for (will use lemma.term if not provided)")
-    description: Optional[str] = Field(None, description="Optional description for context (may help with pronunciation)")
-    language_code: Optional[str] = Field(None, description="The language code for TTS (will use lemma.language_code if not provided)")
 
 
 def ensure_assets_directory() -> Path:

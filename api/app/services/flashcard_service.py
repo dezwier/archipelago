@@ -1,24 +1,18 @@
 """
-Helper functions for flashcard PDF export.
+Flashcard service for PDF export utilities.
 """
 import logging
 import os
 import html
 from io import BytesIO
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 import requests
 from PIL import Image, ImageDraw
-from reportlab.lib.pagesizes import A5
-from reportlab.lib.units import mm
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-from reportlab.lib.colors import HexColor
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 from app.core.config import settings
-from app.models.models import Concept, Lemma, Topic
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +36,7 @@ _ipa_font_name = None
 
 def _build_font_search_paths():
     """Common font search paths (bundled first, then system)."""
-    api_root = Path(__file__).parent.parent.parent.parent.parent
+    api_root = Path(__file__).parent.parent.parent
     bundled_fonts_dir = api_root / "fonts"
     assets_fonts_dir = api_root / "assets" / "fonts"
     
@@ -129,7 +123,7 @@ def register_unicode_fonts():
         logger.info("Found Arabic font candidates: %s", arabic_fonts)
         
         # Also check for exact filename match in common locations
-        api_root = Path(__file__).parent.parent.parent.parent.parent
+        api_root = Path(__file__).parent.parent.parent
         exact_paths = [
             api_root / "assets" / "fonts" / "NotoSansArabic-Regular.ttf",
             api_root / "fonts" / "NotoSansArabic-Regular.ttf",
@@ -459,7 +453,7 @@ def get_image_path(image_url: Optional[str]) -> Optional[Path]:
         if settings.assets_path:
             assets_dir = Path(settings.assets_path)
         else:
-            api_root = Path(__file__).parent.parent.parent.parent.parent
+            api_root = Path(__file__).parent.parent.parent
             assets_dir = api_root / "assets"
         
         image_filename = image_url.replace("/assets/", "")
@@ -480,7 +474,7 @@ def get_language_flag_image_path(language_code: str) -> Optional[Path]:
         possible_paths.append(Path(settings.assets_path) / "images" / "languages" / f"{language_code.lower()}.png")
     
     # 2. Check local development path (relative to this file)
-    api_root = Path(__file__).parent.parent.parent.parent.parent
+    api_root = Path(__file__).parent.parent.parent
     possible_paths.append(api_root / "assets" / "images" / "languages" / f"{language_code.lower()}.png")
     
     # 3. Check alternative local paths
@@ -583,5 +577,4 @@ def apply_rounded_corners(image: Image.Image, corner_radius_px: int) -> Image.Im
     image.putalpha(mask)
     
     return image
-
 
