@@ -184,39 +184,57 @@ def apply_has_images_filter(query, has_images: Optional[int]):
     return query
 
 
+def build_audio_lemma_subquery(visible_language_codes: List[str]):
+    """Build subquery to find concepts with audio for all visible languages."""
+    return (
+        select(Lemma.concept_id)
+        .where(
+            Lemma.language_code.in_(visible_language_codes),
+            Lemma.audio_url.isnot(None),
+            Lemma.audio_url != ""
+        )
+        .group_by(Lemma.concept_id)
+        .having(func.count(func.distinct(Lemma.language_code)) == len(visible_language_codes))
+        .subquery()
+    )
+
+
 def apply_has_audio_filter(query, has_audio: Optional[int], visible_language_codes: Optional[List[str]]):
     """Apply has_audio filter to concept query.
     
-    Audio is stored in lemmas (audio_url field), so we need to check if any lemma
-    for a concept has audio. If visible_language_codes is provided, only check
-    lemmas for those languages.
+    Audio is stored in lemmas (audio_url field). If visible_language_codes is provided,
+    checks that ALL visible languages have audio. Otherwise checks if any lemma has audio.
     """
     if has_audio is None:
         # If has_audio is None, include all (no filter)
         return query
     
-    # Build subquery to find concepts with audio
-    audio_lemma_subquery = select(Lemma.concept_id).where(
-        and_(
-            Lemma.audio_url.isnot(None),
-            Lemma.audio_url != ""
-        )
-    )
-    
-    # If visible languages are specified, filter to those languages
-    if visible_language_codes:
-        audio_lemma_subquery = audio_lemma_subquery.where(
-            Lemma.language_code.in_(visible_language_codes)
-        )
-    
-    audio_lemma_subquery = audio_lemma_subquery.distinct().subquery()
-    
-    if has_audio == 1:
-        # Include only concepts with audio (have at least one lemma with audio_url)
-        return query.where(Concept.id.in_(select(audio_lemma_subquery.c.concept_id)))
-    elif has_audio == 0:
-        # Include only concepts without audio (do NOT have any lemma with audio_url)
-        return query.where(~Concept.id.in_(select(audio_lemma_subquery.c.concept_id)))
+    if visible_language_codes and len(visible_language_codes) > 0:
+        # Check that all visible languages have audio
+        audio_lemma_subquery = build_audio_lemma_subquery(visible_language_codes)
+        
+        if has_audio == 1:
+            # Include only concepts with audio for ALL visible languages
+            return query.where(Concept.id.in_(select(audio_lemma_subquery.c.concept_id)))
+        elif has_audio == 0:
+            # Include only concepts without audio for at least one visible language
+            # (i.e., concepts NOT in the "all audio" subquery)
+            return query.where(~Concept.id.in_(select(audio_lemma_subquery.c.concept_id)))
+    else:
+        # No visible languages specified - check if any lemma has audio
+        audio_lemma_subquery = select(Lemma.concept_id).where(
+            and_(
+                Lemma.audio_url.isnot(None),
+                Lemma.audio_url != ""
+            )
+        ).distinct().subquery()
+        
+        if has_audio == 1:
+            # Include only concepts with audio (have at least one lemma with audio_url)
+            return query.where(Concept.id.in_(select(audio_lemma_subquery.c.concept_id)))
+        elif has_audio == 0:
+            # Include only concepts without audio (do NOT have any lemma with audio_url)
+            return query.where(~Concept.id.in_(select(audio_lemma_subquery.c.concept_id)))
     
     return query
 
