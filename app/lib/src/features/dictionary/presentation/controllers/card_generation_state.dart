@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/create/data/card_generation_background_service.dart';
 
-enum GenerationType { lemmas, images }
+enum GenerationType { lemmas, images, audio }
 
 class CardGenerationState extends ChangeNotifier {
   // Progress tracking for lemma/image generation
@@ -13,6 +13,7 @@ class CardGenerationState extends ChangeNotifier {
   int _conceptsProcessed = 0;
   int _cardsCreated = 0;
   int _imagesCreated = 0;
+  int _audioCreated = 0;
   List<String> _errors = [];
   bool _isCancelled = false;
   bool _isGeneratingCards = false;
@@ -29,6 +30,7 @@ class CardGenerationState extends ChangeNotifier {
   int get conceptsProcessed => _conceptsProcessed;
   int get cardsCreated => _cardsCreated;
   int get imagesCreated => _imagesCreated;
+  int get audioCreated => _audioCreated;
   List<String> get errors => _errors;
   bool get isCancelled => _isCancelled;
   bool get isGeneratingCards => _isGeneratingCards;
@@ -124,6 +126,7 @@ class CardGenerationState extends ChangeNotifier {
     _conceptsProcessed = 0;
     _cardsCreated = 0;
     _imagesCreated = 0;
+    _audioCreated = 0;
     _errors = [];
     _isCancelled = false;
     _isGeneratingCards = false;
@@ -160,6 +163,7 @@ class CardGenerationState extends ChangeNotifier {
     _conceptsProcessed = 0;
     _cardsCreated = 0;
     _imagesCreated = 0;
+    _audioCreated = 0;
     _errors = [];
     _sessionCostUsd = 0.0;
     notifyListeners();
@@ -175,6 +179,24 @@ class CardGenerationState extends ChangeNotifier {
     _currentConceptIndex = currentIndex;
     _currentConceptTerm = currentTerm;
     _imagesCreated = imagesCreated;
+    _conceptsProcessed = currentIndex;
+    _errors = errors;
+    if (isComplete) {
+      _isGeneratingCards = false;
+    }
+    notifyListeners();
+  }
+
+  void updateAudioGenerationProgress({
+    required int currentIndex,
+    required String? currentTerm,
+    required int audioCreated,
+    required List<String> errors,
+    bool isComplete = false,
+  }) {
+    _currentConceptIndex = currentIndex;
+    _currentConceptTerm = currentTerm;
+    _audioCreated = audioCreated;
     _conceptsProcessed = currentIndex;
     _errors = errors;
     if (isComplete) {

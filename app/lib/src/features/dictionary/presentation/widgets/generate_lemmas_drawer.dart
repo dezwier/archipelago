@@ -7,6 +7,7 @@ class GenerateLemmasDrawer extends StatefulWidget {
   final CardGenerationState cardGenerationState;
   final Future<void> Function() onConfirmGenerate;
   final Future<void> Function() onConfirmGenerateImages;
+  final Future<void> Function() onConfirmGenerateAudio;
   final List<String> visibleLanguageCodes;
 
   const GenerateLemmasDrawer({
@@ -14,6 +15,7 @@ class GenerateLemmasDrawer extends StatefulWidget {
     required this.cardGenerationState,
     required this.onConfirmGenerate,
     required this.onConfirmGenerateImages,
+    required this.onConfirmGenerateAudio,
     required this.visibleLanguageCodes,
   });
 
@@ -24,6 +26,7 @@ class GenerateLemmasDrawer extends StatefulWidget {
 class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
   bool _isLoadingLemmas = false;
   bool _isLoadingImages = false;
+  bool _isLoadingAudio = false;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +102,7 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                         conceptsProcessed: widget.cardGenerationState.conceptsProcessed,
                         cardsCreated: widget.cardGenerationState.cardsCreated,
                         imagesCreated: widget.cardGenerationState.imagesCreated,
+                        audioCreated: widget.cardGenerationState.audioCreated,
                         errors: widget.cardGenerationState.errors,
                         sessionCostUsd: widget.cardGenerationState.sessionCostUsd,
                         isGenerating: widget.cardGenerationState.isGeneratingCards,
@@ -193,7 +197,7 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: ((_isLoadingLemmas || _isLoadingImages) || widget.visibleLanguageCodes.isEmpty) 
+                        onPressed: ((_isLoadingLemmas || _isLoadingImages || _isLoadingAudio) || widget.visibleLanguageCodes.isEmpty) 
                             ? null 
                             : () async {
                                 setState(() {
@@ -256,7 +260,7 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: (_isLoadingLemmas || _isLoadingImages) 
+                        onPressed: (_isLoadingLemmas || _isLoadingImages || _isLoadingAudio) 
                             ? null 
                             : () async {
                                 setState(() {
@@ -312,6 +316,68 @@ class _GenerateLemmasDrawerState extends State<GenerateLemmasDrawer> {
                               ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    
+                    // Generate Audio button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: (_isLoadingLemmas || _isLoadingImages || _isLoadingAudio) 
+                            ? null 
+                            : () async {
+                                setState(() {
+                                  _isLoadingAudio = true;
+                                });
+                                
+                                try {
+                                  await widget.onConfirmGenerateAudio();
+                                  if (mounted) {
+                                    setState(() {
+                                      _isLoadingAudio = false;
+                                    });
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    setState(() {
+                                      _isLoadingAudio = false;
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Error: ${e.toString()}'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isLoadingAudio
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.volume_up),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Generate Audio',
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
                   ],
                   
                   // Bottom padding
@@ -334,6 +400,7 @@ void showGenerateLemmasDrawer({
   required CardGenerationState cardGenerationState,
   required Future<void> Function() onConfirmGenerate,
   required Future<void> Function() onConfirmGenerateImages,
+  required Future<void> Function() onConfirmGenerateAudio,
   required List<String> visibleLanguageCodes,
 }) {
   showModalBottomSheet(
@@ -346,6 +413,7 @@ void showGenerateLemmasDrawer({
       cardGenerationState: cardGenerationState,
       onConfirmGenerate: onConfirmGenerate,
       onConfirmGenerateImages: onConfirmGenerateImages,
+      onConfirmGenerateAudio: onConfirmGenerateAudio,
       visibleLanguageCodes: visibleLanguageCodes,
     ),
   );

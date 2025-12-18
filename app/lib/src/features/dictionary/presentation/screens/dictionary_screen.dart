@@ -6,13 +6,16 @@ import 'package:archipelago/src/features/dictionary/presentation/widgets/diction
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_search_bar.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_fab_buttons.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/dictionary_empty_search_state.dart';
+import 'package:archipelago/src/features/dictionary/presentation/widgets/generate_lemmas_drawer.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/features/create/data/topic_service.dart';
 import 'dictionary_screen_data.dart';
 import 'dictionary_screen_export.dart';
-import 'dictionary_screen_generate.dart';
+import 'dictionary_screen_generate_lemma.dart';
+import 'dictionary_screen_generate_image.dart';
+import 'dictionary_screen_generate_audio.dart';
 import 'dictionary_screen_handlers.dart';
 
 class DictionaryScreen extends StatefulWidget {
@@ -31,7 +34,9 @@ class _DictionaryScreenState extends State<DictionaryScreen>
     with
         DictionaryScreenData,
         DictionaryScreenExport,
-        DictionaryScreenGenerate,
+        DictionaryScreenGenerateLemma,
+        DictionaryScreenGenerateImage,
+        DictionaryScreenGenerateAudio,
         DictionaryScreenHandlers {
   late final DictionaryController _controller;
   late final CardGenerationState _cardGenerationState;
@@ -182,6 +187,30 @@ class _DictionaryScreenState extends State<DictionaryScreen>
 
   @override
   void onCardGenerationComplete() => _onCardGenerationComplete();
+  
+  // Override to provide access to image and audio handlers
+  void openGenerateLemmasDrawer(BuildContext context) {
+    final visibleLanguages = languageVisibilityManager.getVisibleLanguageCodes();
+    
+    if (visibleLanguages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one visible language'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    showGenerateLemmasDrawer(
+      context: context,
+      cardGenerationState: cardGenerationState,
+      onConfirmGenerate: () => handleGenerateLemmas(context),
+      onConfirmGenerateImages: () => handleGenerateImages(context),
+      onConfirmGenerateAudio: () => handleGenerateAudio(context),
+      visibleLanguageCodes: visibleLanguages,
+    );
+  }
 
   void _onScroll() {
     if (_scrollController.position.pixels >= 

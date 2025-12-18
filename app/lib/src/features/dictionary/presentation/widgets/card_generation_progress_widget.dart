@@ -10,6 +10,7 @@ class CardGenerationProgressWidget extends StatelessWidget {
   final int conceptsProcessed;
   final int cardsCreated;
   final int imagesCreated;
+  final int audioCreated;
   final List<String> errors;
   final double sessionCostUsd;
   final bool isGenerating;
@@ -27,6 +28,7 @@ class CardGenerationProgressWidget extends StatelessWidget {
     required this.conceptsProcessed,
     required this.cardsCreated,
     required this.imagesCreated,
+    required this.audioCreated,
     required this.errors,
     required this.sessionCostUsd,
     required this.isGenerating,
@@ -70,7 +72,9 @@ class CardGenerationProgressWidget extends StatelessWidget {
                   isGenerating 
                       ? (generationType == GenerationType.images 
                           ? 'Generating Images' 
-                          : 'Generating Lemmas')
+                          : generationType == GenerationType.audio
+                              ? 'Generating Audio'
+                              : 'Generating Lemmas')
                       : (isCancelled ? 'Generation Cancelled' : 'Generation Complete'),
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -116,7 +120,9 @@ class CardGenerationProgressWidget extends StatelessWidget {
                 Text(
                   generationType == GenerationType.images
                       ? 'Found $totalConcepts concept(s) without images'
-                      : 'Found $totalConcepts concept(s) without missing languages',
+                      : generationType == GenerationType.audio
+                          ? 'Found $totalConcepts lemma(s) without audio'
+                          : 'Found $totalConcepts concept(s) without missing languages',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.w600,
@@ -243,7 +249,9 @@ class CardGenerationProgressWidget extends StatelessWidget {
                   Text(
                     generationType == GenerationType.images 
                         ? '$imagesCreated' 
-                        : '$cardsCreated',
+                        : generationType == GenerationType.audio
+                            ? '$audioCreated'
+                            : '$cardsCreated',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.secondary,
@@ -252,7 +260,9 @@ class CardGenerationProgressWidget extends StatelessWidget {
                   Text(
                     generationType == GenerationType.images 
                         ? 'Images Created' 
-                        : 'Lemmas Created',
+                        : generationType == GenerationType.audio
+                            ? 'Audio Created'
+                            : 'Lemmas Created',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],

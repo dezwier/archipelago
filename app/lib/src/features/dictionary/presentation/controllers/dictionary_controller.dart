@@ -96,6 +96,7 @@ class DictionaryController extends ChangeNotifier {
   
   // Language filter getters
   List<String> get languageCodes => _languageCodes;
+  List<String> get visibleLanguageCodes => _visibleLanguageCodes;
   int? get totalConceptCount => _totalConceptCount;
   
   // Own lemmas filter getter
