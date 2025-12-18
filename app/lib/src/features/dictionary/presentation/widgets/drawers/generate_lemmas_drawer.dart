@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/card_generation_progress_widget.dart';
+import 'package:archipelago/src/features/dictionary/presentation/widgets/common/card_generation_progress.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 
 /// Bottom drawer widget for generating lemmas for concepts with missing languages

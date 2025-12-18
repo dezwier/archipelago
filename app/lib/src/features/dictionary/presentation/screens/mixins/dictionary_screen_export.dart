@@ -3,7 +3,7 @@ import 'package:archipelago/src/features/dictionary/presentation/controllers/dic
     show DictionaryController, SortOption;
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/export_flashcards_drawer.dart';
+import 'package:archipelago/src/features/dictionary/presentation/widgets/drawers/export_flashcards_drawer.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 
 /// Mixin for export functionality in DictionaryScreen
@@ -133,7 +133,7 @@ mixin DictionaryScreenExport<T extends StatefulWidget> on State<T> {
       showExportFlashcardsDrawer(
         context: context,
         conceptIds: conceptIds,
-        completedConceptsCount: 0,
+        completedConceptsCount: conceptIds.length,
         availableLanguages: allLanguages,
         visibleLanguageCodes: visibleLanguageCodes,
       );
