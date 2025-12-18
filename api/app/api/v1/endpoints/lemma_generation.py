@@ -5,6 +5,7 @@ Lemma generation endpoint - unified endpoint for generating translations.
 # pyright: reportCallIssue=false
 # pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel import Session
 from app.core.database import get_session
 from app.models.models import Concept
 from app.schemas.lemma import (
