@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart' show Topic, TopicService;
+import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/create/data/topic_service.dart' show TopicService;
 
 class TopicDrawer extends StatefulWidget {
   final List<Topic> topics;

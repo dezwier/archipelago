@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart';
+import 'package:archipelago/src/features/create/domain/topic.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
 
 /// Constants for filter options

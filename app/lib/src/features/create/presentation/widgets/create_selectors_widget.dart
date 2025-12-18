@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart' show Topic;
+import 'package:archipelago/src/features/create/domain/topic.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/common_widgets/language_selection_widget.dart';
-import 'topic_drawer.dart';
+import 'drawers/topic_drawer.dart';
 
 class CreateSelectorsWidget extends StatelessWidget {
   final List<Topic> topics;

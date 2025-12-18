@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'features/create/presentation/create_screen.dart';
+import 'features/create/presentation/screens/create_screen.dart';
 import 'features/practice_flashcards/presentation/practice_flashcards_screen.dart';
 import 'features/dictionary/presentation/screens/dictionary_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';

@@ -8,7 +8,7 @@ import 'package:archipelago/src/features/dictionary/presentation/screens/edit_co
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_delete.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart';
+import 'package:archipelago/src/features/create/domain/topic.dart';
 
 /// Mixin for event handlers in DictionaryScreen
 mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {

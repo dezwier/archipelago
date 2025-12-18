@@ -3,7 +3,8 @@ import 'package:archipelago/src/features/dictionary/presentation/controllers/dic
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
 import 'package:archipelago/src/features/profile/data/language_service.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart';
+import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/create/data/topic_service.dart' show TopicService;
 import 'package:archipelago/src/features/profile/domain/user.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';

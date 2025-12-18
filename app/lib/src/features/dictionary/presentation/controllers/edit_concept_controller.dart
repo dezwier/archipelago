@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart';
+import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/create/data/topic_service.dart' show TopicService;
 import 'package:archipelago/src/features/profile/domain/user.dart';
 
 class EditConceptController extends ChangeNotifier {

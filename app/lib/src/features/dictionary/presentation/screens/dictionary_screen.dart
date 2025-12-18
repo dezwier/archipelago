@@ -10,7 +10,7 @@ import 'package:archipelago/src/features/dictionary/presentation/widgets/drawers
 import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart';
+import 'package:archipelago/src/features/create/domain/topic.dart';
 import 'mixins/dictionary_screen_data.dart';
 import 'mixins/dictionary_screen_export.dart';
 import 'mixins/dictionary_screen_generate_lemma.dart';

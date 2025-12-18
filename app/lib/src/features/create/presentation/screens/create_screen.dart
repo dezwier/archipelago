@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'widgets/create_concept_section.dart';
+import '../widgets/create_concept_section.dart';
 
 class GenerateFlashcardsScreen extends StatefulWidget {
   final Function(Function())? onRefreshCallbackReady;
