@@ -18,30 +18,15 @@ from app.models.models import Concept, Lemma, Topic
 from app.schemas.flashcard import FlashcardExportRequest
 import logging
 
-from .flashcard_layouts import generate_pdf, generate_pdf_a4_layout
+from app.services.flashcard_pdf_layout_service import (
+    generate_pdf,
+    generate_pdf_a4_layout,
+    get_page_format,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/flashcard-export", tags=["flashcard-export"])
-
-
-def get_page_format(format_str: str):
-    """Map format string to reportlab page size tuple.
-    
-    Args:
-        format_str: Format string ('a4', 'a5', 'a6', etc.)
-    
-    Returns:
-        Tuple of (width, height) in points
-    """
-    format_lower = format_str.lower()
-    format_map = {
-        'a4': A4,
-        'a5': A5,
-        'a6': A6,
-        'a8': A8,
-    }
-    return format_map.get(format_lower, A6)  # Default to A6 if unknown
 
 
 @router.post("/pdf")

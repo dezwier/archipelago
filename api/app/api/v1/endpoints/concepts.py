@@ -236,27 +236,6 @@ async def update_concept(
     return ConceptResponse.model_validate(concept)
 
 
-def _get_assets_directory() -> Path:
-    """
-    Get the assets directory path.
-    
-    Uses ASSETS_PATH environment variable if set (for Railway volumes),
-    otherwise falls back to api/assets directory.
-    
-    Returns:
-        Path to the assets directory
-    """
-    # Check if ASSETS_PATH is configured (for Railway volumes)
-    if settings.assets_path:
-        assets_dir = Path(settings.assets_path)
-    else:
-        # Fallback to API root/assets for local development
-        api_root = Path(__file__).parent.parent.parent.parent.parent
-        assets_dir = api_root / "assets"
-    
-    return assets_dir
-
-
 @router.delete("/{concept_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_concept(
     concept_id: int,
@@ -279,7 +258,7 @@ async def delete_concept(
     
     # Delete image file from assets directory if it exists
     if concept.image_url and concept.image_url.startswith("/assets/"):
-        assets_dir = _get_assets_directory()
+        assets_dir = get_assets_directory()
         image_filename = concept.image_url.replace("/assets/", "")
         image_path = assets_dir / image_filename
         
@@ -302,7 +281,7 @@ async def delete_concept(
     # Delete image files from assets directory for each image record
     for image in images:
         if image.url and image.url.startswith("/assets/"):
-            assets_dir = _get_assets_directory()
+            assets_dir = get_assets_directory()
             image_filename = image.url.replace("/assets/", "")
             image_path = assets_dir / image_filename
             
