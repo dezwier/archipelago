@@ -17,8 +17,36 @@ depends_on = None
 
 def upgrade() -> None:
     # Drop the images table
-    op.drop_index(op.f('ix_images_concept_id'), table_name='images')
-    op.drop_table('images')
+    # First, drop any foreign key constraints explicitly to avoid issues
+    op.execute(sa.text("""
+        DO $$
+        DECLARE
+            r RECORD;
+        BEGIN
+            -- Check if images table exists
+            IF EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'images'
+            ) THEN
+                -- Drop any foreign key constraints on the images table
+                FOR r IN (
+                    SELECT conname
+                    FROM pg_constraint
+                    WHERE conrelid = 'images'::regclass
+                    AND contype = 'f'
+                ) LOOP
+                    EXECUTE 'ALTER TABLE images DROP CONSTRAINT IF EXISTS ' || quote_ident(r.conname);
+                END LOOP;
+            END IF;
+        END $$;
+    """))
+    
+    # Drop the index if it exists (before dropping table)
+    op.execute(sa.text("DROP INDEX IF EXISTS ix_images_concept_id"))
+    
+    # Drop the table (this will also drop any remaining constraints)
+    op.execute(sa.text("DROP TABLE IF EXISTS images"))
 
 
 def downgrade() -> None:

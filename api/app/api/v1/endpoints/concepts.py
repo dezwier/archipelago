@@ -24,6 +24,7 @@ from app.services.dictionary_service import (
     parse_part_of_speech,
     build_base_filtered_query,
 )
+from app.services.concept_service import delete_concept_and_associated_resources
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
