@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/lesson_card_widget.dart';
 
 /// Widget that displays a carousel of lesson cards with navigation
-class LessonCarouselWidget extends StatelessWidget {
+class LessonCarouselWidget extends StatefulWidget {
   final List<Map<String, dynamic>> concepts;
   final int currentIndex;
   final String? nativeLanguage;
@@ -24,25 +24,82 @@ class LessonCarouselWidget extends StatelessWidget {
     this.onDismiss,
   });
 
-  bool get isFirstCard => currentIndex == 0;
-  bool get isLastCard => currentIndex >= concepts.length - 1;
-  int get totalCards => concepts.length;
+  @override
+  State<LessonCarouselWidget> createState() => _LessonCarouselWidgetState();
+}
+
+class _LessonCarouselWidgetState extends State<LessonCarouselWidget> {
+  bool _shouldAutoPlay = false;
+  int? _lastAutoPlayedIndex; // Track which card index we've autoplayed for
+
+  @override
+  void initState() {
+    super.initState();
+    // Autoplay the first card when lesson starts
+    if (widget.currentIndex == 0) {
+      _shouldAutoPlay = true;
+      _lastAutoPlayedIndex = 0;
+      // Reset after build so it doesn't autoplay when toggling languages
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _shouldAutoPlay = false;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(LessonCarouselWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Check if we navigated forward (to next card)
+    // Only autoplay when navigating forward from an existing card (not on initial load)
+    if (widget.currentIndex > oldWidget.currentIndex && oldWidget.currentIndex >= 0) {
+      // Only autoplay if we haven't autoplayed for this card index yet
+      if (_lastAutoPlayedIndex != widget.currentIndex) {
+        _shouldAutoPlay = true;
+        _lastAutoPlayedIndex = widget.currentIndex;
+      } else {
+        _shouldAutoPlay = false;
+      }
+    } else {
+      _shouldAutoPlay = false;
+    }
+  }
+
+  bool get isFirstCard => widget.currentIndex == 0;
+  bool get isLastCard => widget.currentIndex >= widget.concepts.length - 1;
+  int get totalCards => widget.concepts.length;
 
   @override
   Widget build(BuildContext context) {
-    if (concepts.isEmpty) {
+    // Capture autoplay flag for this build and reset it immediately
+    // This ensures autoPlay is only true for one build cycle, preventing autoplay when toggling languages
+    final shouldAutoPlayThisBuild = _shouldAutoPlay;
+    if (_shouldAutoPlay) {
+      // Reset immediately after capturing, but schedule the state update for after build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _shouldAutoPlay = false;
+          });
+        }
+      });
+    }
+    if (widget.concepts.isEmpty) {
       return const Center(
         child: Text('No cards available'),
       );
     }
 
-    if (currentIndex < 0 || currentIndex >= concepts.length) {
+    if (widget.currentIndex < 0 || widget.currentIndex >= widget.concepts.length) {
       return const Center(
         child: Text('Invalid card index'),
       );
     }
 
-    final currentConcept = concepts[currentIndex];
+    final currentConcept = widget.concepts[widget.currentIndex];
 
     return Column(
       children: [
@@ -53,15 +110,15 @@ class LessonCarouselWidget extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Card ${currentIndex + 1} of $totalCards',
+                'Card ${widget.currentIndex + 1} of $totalCards',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
-              if (onDismiss != null) ...[
+              if (widget.onDismiss != null) ...[
                 const SizedBox(width: 12),
                 IconButton(
-                  onPressed: onDismiss,
+                  onPressed: widget.onDismiss,
                   icon: Icon(
                     Icons.close,
                     size: 18,
@@ -86,7 +143,7 @@ class LessonCarouselWidget extends StatelessWidget {
           ),
           child: FractionallySizedBox(
             alignment: Alignment.centerLeft,
-            widthFactor: (currentIndex + 1) / totalCards,
+            widthFactor: (widget.currentIndex + 1) / totalCards,
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(2),
@@ -101,10 +158,11 @@ class LessonCarouselWidget extends StatelessWidget {
         // Card Content
         Expanded(
           child: LessonCardWidget(
-            key: ValueKey('lesson_card_$currentIndex'),
+            key: ValueKey('lesson_card_${widget.currentIndex}'),
             concept: currentConcept,
-            nativeLanguage: nativeLanguage,
-            learningLanguage: learningLanguage,
+            nativeLanguage: widget.nativeLanguage,
+            learningLanguage: widget.learningLanguage,
+            autoPlay: shouldAutoPlayThisBuild,
           ),
         ),
 
@@ -117,7 +175,7 @@ class LessonCarouselWidget extends StatelessWidget {
               children: [
                 // Previous Button
                 ElevatedButton.icon(
-                  onPressed: isFirstCard ? null : onPrevious,
+                  onPressed: isFirstCard ? null : widget.onPrevious,
                   icon: const Icon(Icons.arrow_back),
                   label: const Text('Previous'),
                   style: ElevatedButton.styleFrom(
@@ -127,7 +185,7 @@ class LessonCarouselWidget extends StatelessWidget {
 
                 // Next/Finish Button
                 ElevatedButton.icon(
-                  onPressed: isLastCard ? onFinish : onNext,
+                  onPressed: isLastCard ? widget.onFinish : widget.onNext,
                   icon: Icon(isLastCard ? Icons.check : Icons.arrow_forward),
                   label: Text(isLastCard ? 'Finish' : 'Next'),
                   style: ElevatedButton.styleFrom(

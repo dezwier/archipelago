@@ -133,7 +133,7 @@ class _TopicDrawerState extends State<TopicDrawer> {
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? Theme.of(context).colorScheme.primaryContainer
-                                : Colors.white,
+                                : Theme.of(context).colorScheme.surface,
                             border: Border.all(
                               color: isSelected
                                   ? Theme.of(context).colorScheme.primary
@@ -233,7 +233,7 @@ class _TopicDrawerState extends State<TopicDrawer> {
           child: Container(
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               border: Border.all(
                 color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
                 width: 1,
@@ -268,7 +268,7 @@ class _TopicDrawerState extends State<TopicDrawer> {
       child: Container(
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           border: Border.all(
             color: Theme.of(context).colorScheme.primary,
             width: 1,

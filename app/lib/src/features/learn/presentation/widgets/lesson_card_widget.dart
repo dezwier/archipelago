@@ -8,12 +8,14 @@ class LessonCardWidget extends StatefulWidget {
   final Map<String, dynamic> concept; // Concept with learning_lemma, native_lemma, and image_url
   final String? nativeLanguage;
   final String? learningLanguage;
+  final bool autoPlay; // Whether to automatically play audio when the card is shown
 
   const LessonCardWidget({
     super.key,
     required this.concept,
     this.nativeLanguage,
     this.learningLanguage,
+    this.autoPlay = false,
   });
 
   @override
@@ -22,6 +24,7 @@ class LessonCardWidget extends StatefulWidget {
 
 class _LessonCardWidgetState extends State<LessonCardWidget> {
   bool _showingLearningLanguage = true; // Start with learning language
+  bool _hasAutoPlayed = false; // Track if we've autoplayed for this card instance
 
   /// Get the full image URL
   String? _getImageUrl() {
@@ -47,11 +50,33 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
   }
 
   @override
+  void didUpdateWidget(LessonCardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reset autoplay flag if we navigated to a different card (concept changed)
+    // This allows autoplay to work when navigating to a new card
+    if (widget.concept['id'] != oldWidget.concept['id']) {
+      _hasAutoPlayed = false;
+    }
+    // If autoPlay changed from false to true, reset the flag to allow autoplay
+    if (widget.autoPlay && !oldWidget.autoPlay) {
+      _hasAutoPlayed = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final learningLemma = widget.concept['learning_lemma'] as Map<String, dynamic>?;
     final nativeLemma = widget.concept['native_lemma'] as Map<String, dynamic>?;
     final imageUrl = _getImageUrl();
     final canToggle = nativeLemma != null;
+    
+    // Determine if we should autoplay for this build
+    // Only autoplay if autoPlay is true and we haven't autoplayed for this card yet
+    final shouldAutoPlay = widget.autoPlay && !_hasAutoPlayed;
+    // Mark as autoplayed immediately so it doesn't autoplay again when toggling languages
+    if (shouldAutoPlay) {
+      _hasAutoPlayed = true;
+    }
 
     // Debug: Print image URL to help diagnose issues
     if (imageUrl != null) {
@@ -163,12 +188,14 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
                         if (learningLemmaId != null) ...[
                           const SizedBox(width: 6),
                           LemmaAudioPlayer(
+                            key: ValueKey('audio_${widget.concept['id']}_$learningLemmaId'),
                             lemmaId: learningLemmaId,
                             audioPath: learningAudioPath,
                             term: learningTerm,
                             description: learningDescription,
                             languageCode: learningLanguageCode,
                             iconSize: 18.0,
+                            autoPlay: shouldAutoPlay,
                           ),
                         ],
                       ],

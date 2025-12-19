@@ -32,6 +32,9 @@ class LemmaAudioPlayer extends StatefulWidget {
   
   /// Whether to show a loading indicator when generating/playing audio
   final bool showLoadingIndicator;
+  
+  /// Whether to automatically play audio when the widget is first built
+  final bool autoPlay;
 
   const LemmaAudioPlayer({
     super.key,
@@ -43,6 +46,7 @@ class LemmaAudioPlayer extends StatefulWidget {
     this.onAudioUrlUpdated,
     this.iconSize = 16.0,
     this.showLoadingIndicator = true,
+    this.autoPlay = false,
   });
 
   @override
@@ -54,6 +58,21 @@ class _LemmaAudioPlayerState extends State<LemmaAudioPlayer> {
   bool _isPlayingAudio = false;
   bool _isGeneratingAudio = false;
   String? _generatedAudioPath; // Track generated audio path internally
+  bool _hasAutoPlayed = false; // Track if we've already autoplayed for this widget instance
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-play audio if requested (only once per widget instance)
+    if (widget.autoPlay && !_hasAutoPlayed) {
+      _hasAutoPlayed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _playAudio();
+        }
+      });
+    }
+  }
 
   @override
   void didUpdateWidget(LemmaAudioPlayer oldWidget) {
@@ -63,6 +82,20 @@ class _LemmaAudioPlayerState extends State<LemmaAudioPlayer> {
         widget.audioPath!.isNotEmpty && 
         widget.audioPath != oldWidget.audioPath) {
       _generatedAudioPath = null;
+    }
+    // Auto-play if autoPlay changed from false to true and we haven't autoplayed yet
+    // This handles the case when navigating to a new card
+    if (widget.autoPlay && !oldWidget.autoPlay && !_hasAutoPlayed) {
+      _hasAutoPlayed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _playAudio();
+        }
+      });
+    }
+    // Reset autoplay flag if autoPlay becomes false (e.g., when navigating backward)
+    if (!widget.autoPlay && oldWidget.autoPlay) {
+      _hasAutoPlayed = false;
     }
   }
 
