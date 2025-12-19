@@ -7,13 +7,14 @@ Lemma CRUD endpoints.
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from datetime import datetime, timezone
 from typing import List, Optional
 import logging
+import random
 from app.core.database import get_session
-from app.models.models import Lemma, Concept
-from app.schemas.lemma import LemmaResponse, UpdateLemmaRequest
+from app.models.models import Lemma, Concept, Card, User
+from app.schemas.lemma import LemmaResponse, UpdateLemmaRequest, NewCardsResponse, ConceptWithLemmas
 from app.schemas.concept import (
     CreateConceptRequest,
     CreateConceptResponse,
@@ -489,6 +490,174 @@ async def _generate_lemmas_for_concepts_list(
         total_concepts=len(concepts),
         session_cost_usd=total_cost_usd,
         total_tokens=total_tokens
+    )
+
+
+@router.get("/new-cards", response_model=NewCardsResponse)
+async def get_new_cards(
+    user_id: int,
+    language: str,  # Learning language
+    lemma_ids: str,  # Comma-separated list of lemma IDs (required)
+    native_language: Optional[str] = None,  # Native language (optional, will use user's if not provided)
+    max_n: Optional[int] = None,  # Randomly select n concepts to return
+    session: Session = Depends(get_session)
+):
+    """
+    Get lemmas from the given lemma_ids that don't have a card for the user in Card table.
+    Only checks for cards in the learning language (not native language).
+    Returns random n concepts with both learning and native language lemmas coupled together.
+    
+    Args:
+        user_id: The user ID (required)
+        language: Learning language code (required)
+        native_language: Native language code (optional, will use user's native language if not provided)
+        lemma_ids: Comma-separated list of lemma IDs to filter by (required)
+        max_n: Optional maximum number of concepts to randomly return. If not provided, returns all matching concepts.
+    
+    Returns:
+        NewCardsResponse containing lemmas grouped by concept (both learning and native language) that don't have cards for the user
+    """
+    learning_language_code = language.lower()
+    
+    # Validate learning language code exists
+    validate_language_codes(session, [learning_language_code])
+    
+    # Get user to retrieve native language if not provided
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Use provided native_language or fall back to user's native language
+    native_language_code = (native_language or user.lang_native).lower()
+    
+    # Validate native language code exists
+    validate_language_codes(session, [native_language_code])
+    
+    # Parse lemma_ids
+    try:
+        lemma_id_list = [int(l.strip()) for l in lemma_ids.split(',') if l.strip()]
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="lemma_ids must be a comma-separated list of integers"
+        )
+    
+    if not lemma_id_list:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="lemma_ids cannot be empty"
+        )
+    
+    # Build query: get learning language lemmas that don't have cards for this user
+    # Only check for cards in learning language (not native)
+    query = (
+        select(Lemma)
+        .outerjoin(
+            Card,
+            and_(
+                Card.lemma_id == Lemma.id,
+                Card.user_id == user_id
+            )
+        )
+        .where(
+            Lemma.id.in_(lemma_id_list),  # type: ignore[attr-defined]
+            Lemma.language_code == learning_language_code,
+            Card.id.is_(None)  # type: ignore[attr-defined] # No card exists for this user (learning language only)
+        )
+    )
+    
+    # If max_n is provided, order randomly and limit by concept (not lemma)
+    # We need to randomly select concepts, so we'll do it after getting the lemmas
+    if max_n is not None and max_n < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="max_n must be >= 1"
+        )
+    
+    # Execute query to get learning language lemmas that don't have cards
+    learning_lemmas = session.exec(query).all()
+    
+    # Get unique concept IDs from the learning language lemmas
+    concept_ids = list({lemma.concept_id for lemma in learning_lemmas})
+    
+    # Randomly select n concepts if max_n is provided
+    if max_n is not None and len(concept_ids) > max_n:
+        concept_ids = random.sample(concept_ids, max_n)
+    
+    # Filter learning lemmas to only those from selected concepts
+    selected_concept_ids = set(concept_ids)
+    learning_lemmas = [lemma for lemma in learning_lemmas if lemma.concept_id in selected_concept_ids]
+    
+    # Get native language lemmas for the same concepts
+    native_lemmas_query = (
+        select(Lemma)
+        .where(
+            Lemma.concept_id.in_(concept_ids),  # type: ignore[attr-defined]
+            Lemma.language_code == native_language_code
+        )
+    )
+    native_lemmas = session.exec(native_lemmas_query).all()
+    
+    # Create a map of concept_id -> native lemma for quick lookup
+    native_lemma_map = {lemma.concept_id: lemma for lemma in native_lemmas}
+    
+    # Convert to response format - each item is a concept with both lemmas
+    concept_responses = []
+    for learning_lemma in learning_lemmas:
+        # Create learning language lemma response
+        learning_lemma_response = LemmaResponse(
+            id=learning_lemma.id,
+            concept_id=learning_lemma.concept_id,
+            language_code=learning_lemma.language_code,
+            translation=ensure_capitalized(learning_lemma.term),
+            description=learning_lemma.description,
+            ipa=learning_lemma.ipa,
+            audio_path=learning_lemma.audio_url,
+            gender=learning_lemma.gender,
+            article=learning_lemma.article,
+            plural_form=learning_lemma.plural_form,
+            verb_type=learning_lemma.verb_type,
+            auxiliary_verb=learning_lemma.auxiliary_verb,
+            formality_register=learning_lemma.formality_register,
+            notes=learning_lemma.notes
+        )
+        
+        # Get native language lemma if it exists
+        native_lemma = native_lemma_map.get(learning_lemma.concept_id)
+        native_lemma_response = None
+        if native_lemma:
+            native_lemma_response = LemmaResponse(
+                id=native_lemma.id,
+                concept_id=native_lemma.concept_id,
+                language_code=native_lemma.language_code,
+                translation=ensure_capitalized(native_lemma.term),
+                description=native_lemma.description,
+                ipa=native_lemma.ipa,
+                audio_path=native_lemma.audio_url,
+                gender=native_lemma.gender,
+                article=native_lemma.article,
+                plural_form=native_lemma.plural_form,
+                verb_type=native_lemma.verb_type,
+                auxiliary_verb=native_lemma.auxiliary_verb,
+                formality_register=native_lemma.formality_register,
+                notes=native_lemma.notes
+            )
+        
+        # Create concept with both lemmas
+        concept_responses.append(
+            ConceptWithLemmas(
+                concept_id=learning_lemma.concept_id,
+                learning_lemma=learning_lemma_response,
+                native_lemma=native_lemma_response
+            )
+        )
+    
+    return NewCardsResponse(
+        concepts=concept_responses,
+        native_language=user.lang_native
     )
 
 

@@ -5,13 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archipelago/src/features/profile/domain/user.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
+import 'package:archipelago/src/common_widgets/filter_interface.dart';
 
 enum SortOption {
   alphabetical,
   timeCreatedRecentFirst,
   random,
 }
-class DictionaryController extends ChangeNotifier {
+class DictionaryController extends ChangeNotifier implements FilterState {
   User? _currentUser;
   List<PairedDictionaryItem> _pairedItems = [];
   bool _isLoading = true;

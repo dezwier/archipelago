@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'features/create/presentation/screens/create_screen.dart';
-import 'features/practice_flashcards/presentation/practice_flashcards_screen.dart';
+import 'features/learn/presentation/screens/learn_screen.dart';
 import 'features/dictionary/presentation/screens/dictionary_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/profile/domain/user.dart';
@@ -47,7 +47,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
           _refreshDictionaryTopicsCallback = callback;
         },
       ),
-      const PracticeFlashcardsScreen(),
+      const LearnScreen(),
       ProfileScreen(
         key: const ValueKey('profile_screen'),
         onLogout: () {
@@ -238,7 +238,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
           final surfaceColor = Theme.of(context).colorScheme.surface;
           
           // Determine title based on current screen
-          final List<String> screenTitles = ['Create', 'Dictionary', 'Practice', 'Profile'];
+          final List<String> screenTitles = ['Create', 'Dictionary', 'Learn', 'Profile'];
           final currentTitle = screenTitles[_currentIndex];
           
           return Scaffold(
@@ -546,7 +546,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                 NavigationDestination(
                   icon: Icon(Icons.school_outlined),
                   selectedIcon: Icon(Icons.school),
-                  label: 'Practice',
+                  label: 'Learn',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.person_outline),

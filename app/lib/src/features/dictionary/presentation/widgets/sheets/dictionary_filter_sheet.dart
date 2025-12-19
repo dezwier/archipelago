@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/create/domain/topic.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
+import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 
 /// Constants for filter options
 class FilterConstants {
@@ -857,17 +858,40 @@ void showDictionaryFilterSheet({
   required List<Topic> topics,
   bool isLoadingTopics = false,
 }) {
-  showModalBottomSheet(
+  showFilterSheet(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    isDismissible: true,
-    enableDrag: true,
-    builder: (context) => DictionaryFilterSheet(
-      controller: controller,
-      topics: topics,
-      isLoadingTopics: isLoadingTopics,
-    ),
+    filterState: controller,
+    onApplyFilters: ({
+      Set<int>? topicIds,
+      bool? showLemmasWithoutTopic,
+      Set<String>? levels,
+      Set<String>? partOfSpeech,
+      bool? includeLemmas,
+      bool? includePhrases,
+      bool? hasImages,
+      bool? hasNoImages,
+      bool? hasAudio,
+      bool? hasNoAudio,
+      bool? isComplete,
+      bool? isIncomplete,
+    }) {
+      controller.batchUpdateFilters(
+        topicIds: topicIds,
+        showLemmasWithoutTopic: showLemmasWithoutTopic,
+        levels: levels,
+        partOfSpeech: partOfSpeech,
+        includeLemmas: includeLemmas,
+        includePhrases: includePhrases,
+        hasImages: hasImages,
+        hasNoImages: hasNoImages,
+        hasAudio: hasAudio,
+        hasNoAudio: hasNoAudio,
+        isComplete: isComplete,
+        isIncomplete: isIncomplete,
+      );
+    },
+    topics: topics,
+    isLoadingTopics: isLoadingTopics,
   );
 }
 

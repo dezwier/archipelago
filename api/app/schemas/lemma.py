@@ -136,3 +136,16 @@ class GenerateLemmasBatchResponse(BaseModel):
     lemmas: List[GenerateLemmaResponse] = Field(..., description="List of generated lemmas, one per target language")
     total_token_usage: Optional[dict] = Field(None, description="Total token usage across all generations")
 
+
+class ConceptWithLemmas(BaseModel):
+    """A concept with its lemmas in both native and learning languages."""
+    concept_id: int = Field(..., description="The concept ID")
+    learning_lemma: LemmaResponse = Field(..., description="Lemma in the learning language")
+    native_lemma: Optional[LemmaResponse] = Field(None, description="Lemma in the native language (if available)")
+
+
+class NewCardsResponse(BaseModel):
+    """Response schema for new cards endpoint."""
+    concepts: List[ConceptWithLemmas] = Field(..., description="List of concepts with both native and learning language lemmas")
+    native_language: str = Field(..., description="The user's native language code")
+
