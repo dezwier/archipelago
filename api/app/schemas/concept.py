@@ -112,7 +112,7 @@ class CreateConceptRequest(BaseModel):
     term: str = Field(..., min_length=1, description="The term to create a concept for")
     topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
     user_id: Optional[int] = Field(None, description="User ID who created the concept")
-    part_of_speech: Optional[str] = Field(None, description="Part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection. If not provided, will be inferred from the term.")
+    part_of_speech: Optional[str] = Field(None, description="Part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Numeral. If not provided, will be inferred from the term.")
     core_meaning_en: Optional[str] = Field(None, description="Core meaning in English")
     excluded_senses: Optional[List[str]] = Field(default=[], description="List of excluded senses")
     languages: List[str] = Field(..., min_items=1, description="List of language codes to generate lemmas for")

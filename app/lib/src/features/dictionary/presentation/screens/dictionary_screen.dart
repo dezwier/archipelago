@@ -226,7 +226,8 @@ class _DictionaryScreenState extends State<DictionaryScreen>
     return ListenableBuilder(
       listenable: _controller,
       builder: (context, _) {
-        if (_controller.isLoading) {
+        // Show loading state only on initial load (not when refreshing)
+        if (_controller.isLoading && !_controller.isRefreshing) {
           return const Scaffold(
             body: Center(
               child: CircularProgressIndicator(),

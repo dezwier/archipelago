@@ -10,6 +10,7 @@ class LessonCarouselWidget extends StatelessWidget {
   final VoidCallback? onPrevious;
   final VoidCallback? onNext;
   final VoidCallback? onFinish;
+  final VoidCallback? onDismiss;
 
   const LessonCarouselWidget({
     super.key,
@@ -20,6 +21,7 @@ class LessonCarouselWidget extends StatelessWidget {
     this.onPrevious,
     this.onNext,
     this.onFinish,
+    this.onDismiss,
   });
 
   bool get isFirstCard => currentIndex == 0;
@@ -44,9 +46,9 @@ class LessonCarouselWidget extends StatelessWidget {
 
     return Column(
       children: [
-        // Progress Indicator
+        // Progress Indicator with Dismiss Button
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -56,6 +58,20 @@ class LessonCarouselWidget extends StatelessWidget {
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
+              if (onDismiss != null) ...[
+                const SizedBox(width: 12),
+                IconButton(
+                  onPressed: onDismiss,
+                  icon: Icon(
+                    Icons.close,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Dismiss lesson',
+                ),
+              ],
             ],
           ),
         ),
@@ -80,11 +96,12 @@ class LessonCarouselWidget extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
 
         // Card Content
         Expanded(
           child: LessonCardWidget(
+            key: ValueKey('lesson_card_$currentIndex'),
             concept: currentConcept,
             nativeLanguage: nativeLanguage,
             learningLanguage: learningLanguage,

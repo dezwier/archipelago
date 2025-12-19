@@ -107,20 +107,6 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
                             ),
                           );
                         },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                              ),
-                            ),
-                          );
-                        },
                       )
                     : Container(
                         color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -135,12 +121,16 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
           ),
 
           // Tappable content area that toggles between learning and native language
-          GestureDetector(
+          InkWell(
             onTap: canToggle ? _toggleLanguage : null,
-            child: Padding(
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            child: Container(
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   // Show learning or native language based on state
                   if (_showingLearningLanguage) ...[
@@ -155,13 +145,13 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
                               children: [
                                 TextSpan(
                                   text: '${LanguageEmoji.getEmoji(learningLanguageCode)} ',
-                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 TextSpan(
                                   text: learningTerm,
-                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -190,7 +180,7 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
                       Text(
                         '/$learningIpa/',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
                           fontStyle: FontStyle.italic,
                         ),
@@ -203,7 +193,7 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
                       Text(
                         learningDescription,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
@@ -216,13 +206,13 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
                           children: [
                             TextSpan(
                               text: '${LanguageEmoji.getEmoji(nativeLanguageCode)} ',
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             TextSpan(
                               text: nativeTerm ?? 'Unknown',
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -234,7 +224,7 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
                       Text(
                         nativeTerm ?? 'Unknown',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -245,7 +235,7 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
                       Text(
                         '/$nativeIpa/',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
                           fontStyle: FontStyle.italic,
                         ),
@@ -258,7 +248,7 @@ class _LessonCardWidgetState extends State<LessonCardWidget> {
                       Text(
                         nativeDescription,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),

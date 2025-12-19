@@ -18,6 +18,7 @@ class FilterConstants {
     'Conjunction',
     'Determiner / Article',
     'Interjection',
+    'Numeral',
   ];
 }
 
@@ -84,19 +85,21 @@ class _FilterSheetState extends State<FilterSheet> {
 
   void _applyPendingChanges() {
     // Apply all pending filter changes via callback
+    // Use pending values if set, otherwise fall back to current filter state
+    // This ensures all filters are explicitly passed and topic selection doesn't affect other filters
     widget.onApplyFilters(
-      topicIds: _pendingTopicIds,
-      showLemmasWithoutTopic: _pendingShowLemmasWithoutTopic,
-      levels: _pendingLevels,
-      partOfSpeech: _pendingPartOfSpeech,
-      includeLemmas: _pendingIncludeLemmas,
-      includePhrases: _pendingIncludePhrases,
-      hasImages: _pendingHasImages,
-      hasNoImages: _pendingHasNoImages,
-      hasAudio: _pendingHasAudio,
-      hasNoAudio: _pendingHasNoAudio,
-      isComplete: _pendingIsComplete,
-      isIncomplete: _pendingIsIncomplete,
+      topicIds: _pendingTopicIds ?? widget.filterState.selectedTopicIds,
+      showLemmasWithoutTopic: _pendingShowLemmasWithoutTopic ?? widget.filterState.showLemmasWithoutTopic,
+      levels: _pendingLevels ?? widget.filterState.selectedLevels,
+      partOfSpeech: _pendingPartOfSpeech ?? widget.filterState.selectedPartOfSpeech,
+      includeLemmas: _pendingIncludeLemmas ?? widget.filterState.includeLemmas,
+      includePhrases: _pendingIncludePhrases ?? widget.filterState.includePhrases,
+      hasImages: _pendingHasImages ?? widget.filterState.hasImages,
+      hasNoImages: _pendingHasNoImages ?? widget.filterState.hasNoImages,
+      hasAudio: _pendingHasAudio ?? widget.filterState.hasAudio,
+      hasNoAudio: _pendingHasNoAudio ?? widget.filterState.hasNoAudio,
+      isComplete: _pendingIsComplete ?? widget.filterState.isComplete,
+      isIncomplete: _pendingIsIncomplete ?? widget.filterState.isIncomplete,
     );
   }
 

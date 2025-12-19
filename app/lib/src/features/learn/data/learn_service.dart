@@ -12,6 +12,7 @@ class LearnService {
   /// - 'success': bool
   /// - 'concepts': List<Map<String, dynamic>> (if successful) - list of concepts, each with learning_lemma and native_lemma
   /// - 'native_language': String (if successful) - user's native language code
+  /// - 'total_concepts_count': int (if successful) - total number of concepts visible to the user
   /// - 'filtered_concepts_count': int (if successful) - number of concepts after dictionary filtering
   /// - 'concepts_with_both_languages_count': int (if successful) - number of concepts with lemmas in both languages
   /// - 'concepts_without_cards_count': int (if successful) - number of concepts without cards for user
@@ -53,13 +54,9 @@ class LearnService {
       queryParams['search'] = search;
     }
     
-    if (!includeLemmas) {
-      queryParams['include_lemmas'] = 'false';
-    }
-    
-    if (!includePhrases) {
-      queryParams['include_phrases'] = 'false';
-    }
+    // Explicitly send include_lemmas and include_phrases to ensure they're processed correctly
+    queryParams['include_lemmas'] = includeLemmas.toString();
+    queryParams['include_phrases'] = includePhrases.toString();
     
     if (topicIds != null && topicIds.isNotEmpty) {
       queryParams['topic_ids'] = topicIds.join(',');
@@ -98,6 +95,7 @@ class LearnService {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         final conceptsList = responseData['concepts'] as List<dynamic>;
         final nativeLanguage = responseData['native_language'] as String?;
+        final totalConceptsCount = responseData['total_concepts_count'] as int? ?? 0;
         final filteredConceptsCount = responseData['filtered_concepts_count'] as int? ?? 0;
         final conceptsWithBothLanguagesCount = responseData['concepts_with_both_languages_count'] as int? ?? 0;
         final conceptsWithoutCardsCount = responseData['concepts_without_cards_count'] as int? ?? 0;
@@ -105,6 +103,7 @@ class LearnService {
           'success': true,
           'concepts': conceptsList.map((concept) => concept as Map<String, dynamic>).toList(),
           'native_language': nativeLanguage,
+          'total_concepts_count': totalConceptsCount,
           'filtered_concepts_count': filteredConceptsCount,
           'concepts_with_both_languages_count': conceptsWithBothLanguagesCount,
           'concepts_without_cards_count': conceptsWithoutCardsCount,

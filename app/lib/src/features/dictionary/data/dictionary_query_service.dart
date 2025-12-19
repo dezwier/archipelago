@@ -54,15 +54,9 @@ class DictionaryQueryService {
       queryParams['visible_languages'] = visibleLanguageCodes.join(',');
     }
     
-    // Add include_lemmas parameter - include lemmas (is_phrase is false)
-    if (!includeLemmas) {
-      queryParams['include_lemmas'] = 'false';
-    }
-    
-    // Add include_phrases parameter - include phrases (is_phrase is true)
-    if (!includePhrases) {
-      queryParams['include_phrases'] = 'false';
-    }
+    // Explicitly send include_lemmas and include_phrases to ensure they're processed correctly
+    queryParams['include_lemmas'] = includeLemmas.toString();
+    queryParams['include_phrases'] = includePhrases.toString();
     
     // Add topic_ids parameter - filters to concepts with these topic IDs
     if (topicIds != null && topicIds.isNotEmpty) {

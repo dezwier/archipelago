@@ -149,6 +149,7 @@ class NewCardsResponse(BaseModel):
     """Response schema for new cards endpoint."""
     concepts: List[ConceptWithLemmas] = Field(..., description="List of concepts with both native and learning language lemmas")
     native_language: str = Field(..., description="The user's native language code")
+    total_concepts_count: int = Field(..., description="Total number of concepts visible to the user")
     filtered_concepts_count: int = Field(..., description="Number of concepts after applying dictionary filters")
     concepts_with_both_languages_count: int = Field(..., description="Number of concepts with lemmas in both native and learning languages")
     concepts_without_cards_count: int = Field(..., description="Number of concepts without cards for user in learning language")

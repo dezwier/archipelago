@@ -3,17 +3,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:archipelago/src/features/profile/domain/user.dart';
 import 'package:archipelago/src/common_widgets/filter_interface.dart';
+import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/features/learn/data/learn_service.dart';
 
 class LearnController extends ChangeNotifier implements FilterState {
   User? _currentUser;
   List<Map<String, dynamic>> _concepts = []; // List of concepts, each with learning_lemma and native_lemma
   bool _isLoading = true;
+  bool _isRefreshing = false;
   String? _errorMessage;
   String? _learningLanguage;
   String? _nativeLanguage;
   
   // Counts for cascading display
+  int _totalConceptsCount = 0;
   int _filteredConceptsCount = 0;
   int _conceptsWithBothLanguagesCount = 0;
   int _conceptsWithoutCardsCount = 0;
@@ -28,7 +31,7 @@ class LearnController extends ChangeNotifier implements FilterState {
   Set<String> _selectedLevels = {'A1', 'A2', 'B1', 'B2', 'C1', 'C2'};
   Set<String> _selectedPartOfSpeech = {
     'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
-    'Conjunction', 'Determiner / Article', 'Interjection'
+    'Conjunction', 'Determiner / Article', 'Interjection', 'Numeral'
   };
   bool _includeLemmas = true;
   bool _includePhrases = true;
@@ -43,11 +46,13 @@ class LearnController extends ChangeNotifier implements FilterState {
   User? get currentUser => _currentUser;
   List<Map<String, dynamic>> get concepts => _concepts; // List of concepts with both lemmas
   bool get isLoading => _isLoading;
+  bool get isRefreshing => _isRefreshing;
   String? get errorMessage => _errorMessage;
   String? get learningLanguage => _learningLanguage;
   String? get nativeLanguage => _nativeLanguage;
   
   // Count getters
+  int get totalConceptsCount => _totalConceptsCount;
   int get filteredConceptsCount => _filteredConceptsCount;
   int get conceptsWithBothLanguagesCount => _conceptsWithBothLanguagesCount;
   int get conceptsWithoutCardsCount => _conceptsWithoutCardsCount;
@@ -211,7 +216,10 @@ class LearnController extends ChangeNotifier implements FilterState {
   
   /// Get effective part of speech to pass to API
   List<String>? getEffectivePartOfSpeech() {
-    if (_selectedPartOfSpeech.isEmpty || _selectedPartOfSpeech.length == 9) {
+    final allPOS = FilterConstants.partOfSpeechValues.toSet();
+    if (_selectedPartOfSpeech.isEmpty || 
+        (_selectedPartOfSpeech.length == allPOS.length && 
+         _selectedPartOfSpeech.containsAll(allPOS))) {
       return null; // All POS selected
     }
     return _selectedPartOfSpeech.toList();
@@ -242,15 +250,20 @@ class LearnController extends ChangeNotifier implements FilterState {
   }
   
   /// Load new cards based on current filters
-  Future<void> loadNewCards() async {
+  Future<void> loadNewCards({bool isRefresh = false}) async {
     if (_currentUser == null || _learningLanguage == null) {
       _isLoading = false;
+      _isRefreshing = false;
       _errorMessage = 'Please set your learning language in Profile settings';
       notifyListeners();
       return;
     }
     
-    _isLoading = true;
+    if (isRefresh) {
+      _isRefreshing = true;
+    } else {
+      _isLoading = true;
+    }
     _errorMessage = null;
     notifyListeners();
     
@@ -278,11 +291,13 @@ class LearnController extends ChangeNotifier implements FilterState {
       );
       
       _isLoading = false;
+      _isRefreshing = false;
       
       if (result['success'] == true) {
         final conceptsList = result['concepts'] as List<dynamic>?;
         _concepts = conceptsList?.map((concept) => concept as Map<String, dynamic>).toList() ?? [];
         _nativeLanguage = result['native_language'] as String?;
+        _totalConceptsCount = result['total_concepts_count'] as int? ?? 0;
         _filteredConceptsCount = result['filtered_concepts_count'] as int? ?? 0;
         _conceptsWithBothLanguagesCount = result['concepts_with_both_languages_count'] as int? ?? 0;
         _conceptsWithoutCardsCount = result['concepts_without_cards_count'] as int? ?? 0;
@@ -299,6 +314,7 @@ class LearnController extends ChangeNotifier implements FilterState {
       } else {
         _concepts = [];
         _nativeLanguage = null;
+        _totalConceptsCount = 0;
         _filteredConceptsCount = 0;
         _conceptsWithBothLanguagesCount = 0;
         _conceptsWithoutCardsCount = 0;
@@ -309,6 +325,7 @@ class LearnController extends ChangeNotifier implements FilterState {
       }
     } catch (e) {
       _isLoading = false;
+      _isRefreshing = false;
       _concepts = [];
       _errorMessage = 'Error loading new cards: ${e.toString()}';
     }
@@ -322,7 +339,7 @@ class LearnController extends ChangeNotifier implements FilterState {
     if (_currentUser != null && _currentUser!.langLearning != null && _currentUser!.langLearning!.isNotEmpty) {
       _learningLanguage = _currentUser!.langLearning;
     }
-    await loadNewCards();
+    await loadNewCards(isRefresh: true);
   }
   
   /// Start the lesson

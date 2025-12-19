@@ -6,6 +6,7 @@ import 'package:archipelago/src/features/profile/domain/user.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
 import 'package:archipelago/src/common_widgets/filter_interface.dart';
+import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 
 enum SortOption {
   alphabetical,
@@ -16,6 +17,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   User? _currentUser;
   List<PairedDictionaryItem> _pairedItems = [];
   bool _isLoading = true;
+  bool _isRefreshing = false;
   bool _isLoadingMore = false;
   String? _errorMessage;
   String? _sourceLanguageCode;
@@ -68,7 +70,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   Set<String> _selectedLevels = {'A1', 'A2', 'B1', 'B2', 'C1', 'C2'}; // Selected CEFR levels (default: all selected)
   Set<String> _selectedPartOfSpeech = {
     'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
-    'Conjunction', 'Determiner / Article', 'Interjection'
+    'Conjunction', 'Determiner / Article', 'Interjection', 'Numeral'
   }; // Selected part of speech values (default: all selected)
   
   // Concept counts - fetched separately and not affected by search
@@ -78,6 +80,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   User? get currentUser => _currentUser;
   List<PairedDictionaryItem> get pairedItems => _pairedItems;
   bool get isLoading => _isLoading;
+  bool get isRefreshing => _isRefreshing;
   bool get isLoadingMore => _isLoadingMore;
   String? get errorMessage => _errorMessage;
   String? get sourceLanguageCode => _sourceLanguageCode;
@@ -418,10 +421,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   // Get effective part of speech values to pass to API
   // Returns null if all POS are selected (no filter needed)
   List<String>? getEffectivePartOfSpeech() {
-    const allPOS = {
-      'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
-      'Conjunction', 'Determiner / Article', 'Interjection'
-    };
+    final allPOS = FilterConstants.partOfSpeechValues.toSet();
     // If all POS are selected, return null (show all)
     if (_selectedPartOfSpeech.length == allPOS.length && 
         _selectedPartOfSpeech.containsAll(allPOS)) {
@@ -493,8 +493,13 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     }
   }
 
-  Future<void> _loadUserAndDictionary({bool reset = false, bool showLoading = true}) async {
-    if (reset) {
+  Future<void> _loadUserAndDictionary({bool reset = false, bool showLoading = true, bool isRefresh = false}) async {
+    if (isRefresh) {
+      _isRefreshing = true;
+      _errorMessage = null;
+      _currentPage = 1;
+      notifyListeners();
+    } else if (reset) {
       if (showLoading) {
         _isLoading = true;
       }
@@ -565,19 +570,25 @@ class DictionaryController extends ChangeNotifier implements FilterState {
         _currentPage = result['page'] as int;
         _totalItems = result['total'] as int;
         _hasNextPage = result['has_next'] as bool;
-        if (showLoading) {
+        if (isRefresh) {
+          _isRefreshing = false;
+        } else if (showLoading) {
           _isLoading = false;
         }
         _errorMessage = null;
       } else {
         _errorMessage = result['message'] as String? ?? 'Failed to load dictionary';
-        if (showLoading) {
+        if (isRefresh) {
+          _isRefreshing = false;
+        } else if (showLoading) {
           _isLoading = false;
         }
       }
     } catch (e) {
       _errorMessage = 'Error loading dictionary: ${e.toString()}';
-      if (showLoading) {
+      if (isRefresh) {
+        _isRefreshing = false;
+      } else if (showLoading) {
         _isLoading = false;
       }
     }
@@ -657,9 +668,11 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     }
   }
 
-  Future<void> refresh() {
-    // Load user and dictionary first (this will update user state and reload concept count if user changed)
-    return _loadUserAndDictionary(reset: true);
+  Future<void> refresh() async {
+    // Load concept count first to ensure it's updated on refresh
+    await _loadConceptCountTotal();
+    // Load user and dictionary (this will update user state and reload concept count if user changed)
+    return _loadUserAndDictionary(reset: true, isRefresh: true);
   }
 
   void initialize() {

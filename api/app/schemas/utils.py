@@ -41,7 +41,8 @@ def normalize_part_of_speech(v: Optional[str]) -> Optional[str]:
         'determiner / article': 'Determiner / Article',
         'determiner': 'Determiner / Article',
         'article': 'Determiner / Article',
-        'interjection': 'Interjection'
+        'interjection': 'Interjection',
+        'numeral': 'Numeral'
     }
     
     # Try to normalize
@@ -49,7 +50,7 @@ def normalize_part_of_speech(v: Optional[str]) -> Optional[str]:
         return pos_map[v_lower]
     
     # If already in proper format, check if valid
-    valid_values = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 'Conjunction', 'Determiner / Article', 'Interjection']
+    valid_values = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 'Conjunction', 'Determiner / Article', 'Interjection', 'Numeral']
     if v_normalized in valid_values:
         return v_normalized
     

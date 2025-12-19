@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 /// Widget that displays a start screen for the lesson
 class LessonStartWidget extends StatelessWidget {
   final int cardCount;
+  final int totalConceptsCount;
   final int filteredConceptsCount;
   final int conceptsWithBothLanguagesCount;
   final int conceptsWithoutCardsCount;
@@ -11,6 +12,7 @@ class LessonStartWidget extends StatelessWidget {
   const LessonStartWidget({
     super.key,
     required this.cardCount,
+    required this.totalConceptsCount,
     required this.filteredConceptsCount,
     required this.conceptsWithBothLanguagesCount,
     required this.conceptsWithoutCardsCount,
@@ -51,7 +53,7 @@ class LessonStartWidget extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest,
+                color: colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -66,37 +68,44 @@ class LessonStartWidget extends StatelessWidget {
                   const SizedBox(height: 12),
                   _buildCountRow(
                     context: context,
-                    label: 'Concepts matching filters',
-                    count: filteredConceptsCount,
-                    color: colorScheme.onSurface.withValues(alpha: 0.8),
+                    label: 'Concepts in dictionary',
+                    count: totalConceptsCount,
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                   ),
                   const SizedBox(height: 8),
                   _buildCountRow(
                     context: context,
-                    label: 'With lemmas in both languages',
-                    count: conceptsWithBothLanguagesCount,
-                    color: colorScheme.onSurface.withValues(alpha: 0.7),
+                    label: 'Concepts after filtering',
+                    count: filteredConceptsCount,
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                     indent: 16,
                   ),
                   const SizedBox(height: 8),
                   _buildCountRow(
                     context: context,
-                    label: 'Not yet learned',
-                    count: conceptsWithoutCardsCount,
-                    color: colorScheme.primary,
+                    label: 'Concepts with languages available',
+                    count: conceptsWithBothLanguagesCount,
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                     indent: 32,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildCountRow(
+                    context: context,
+                    label: 'Concepts not yet learned',
+                    count: conceptsWithoutCardsCount,
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    indent: 48,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildCountRow(
+                    context: context,
+                    label: cardCount == 1 ? 'Card ready for this lesson' : 'Cards ready for this lesson',
+                    count: cardCount,
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    indent: 64,
                     isHighlighted: true,
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              cardCount == 1
-                  ? '1 card ready for this lesson'
-                  : '$cardCount cards ready for this lesson',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 16),
@@ -140,16 +149,16 @@ class LessonStartWidget extends StatelessWidget {
               label,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: color,
-                fontWeight: isHighlighted ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: isHighlighted ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ),
           const SizedBox(width: 16),
           Text(
             count.toString(),
-            style: theme.textTheme.bodyLarge?.copyWith(
+            style: theme.textTheme.bodyMedium?.copyWith(
               color: color,
-              fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
+              fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w500,
             ),
           ),
         ],

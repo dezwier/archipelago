@@ -19,6 +19,7 @@ class FilterConstants {
     'Conjunction',
     'Determiner / Article',
     'Interjection',
+    'Numeral',
   ];
 }
 

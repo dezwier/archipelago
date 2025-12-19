@@ -109,8 +109,8 @@ class _LearnScreenState extends State<LearnScreen> {
       body: ListenableBuilder(
         listenable: _controller,
         builder: (context, _) {
-          // Show loading or error states
-          if (_controller.isLoading) {
+          // Show loading state only on initial load (not when refreshing)
+          if (_controller.isLoading && !_controller.isRefreshing) {
             return RefreshIndicator(
               onRefresh: _controller.refresh,
               child: SingleChildScrollView(
@@ -215,6 +215,7 @@ class _LearnScreenState extends State<LearnScreen> {
               onPrevious: _controller.previousCard,
               onNext: _controller.nextCard,
               onFinish: _controller.finishLesson,
+              onDismiss: _controller.finishLesson,
             );
           }
 
@@ -223,6 +224,7 @@ class _LearnScreenState extends State<LearnScreen> {
             onRefresh: _controller.refresh,
             child: LessonStartWidget(
               cardCount: _controller.concepts.length,
+              totalConceptsCount: _controller.totalConceptsCount,
               filteredConceptsCount: _controller.filteredConceptsCount,
               conceptsWithBothLanguagesCount: _controller.conceptsWithBothLanguagesCount,
               conceptsWithoutCardsCount: _controller.conceptsWithoutCardsCount,

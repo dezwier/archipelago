@@ -4,10 +4,10 @@ Lemma CRUD endpoints.
 # pyright: reportAttributeAccessIssue=false
 # pyright: reportCallIssue=false
 # pyright: reportArgumentType=false
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
 from datetime import datetime, timezone
 from typing import List, Optional
 import logging
@@ -506,8 +506,8 @@ async def get_new_cards(
     native_language: Optional[str] = None,  # Native language (optional, will use user's if not provided)
     max_n: Optional[int] = None,  # Randomly select n concepts to return
     search: Optional[str] = None,  # Optional search query for concept.term and lemma.term
-    include_lemmas: bool = True,  # Include lemmas (concept.is_phrase is False)
-    include_phrases: bool = True,  # Include phrases (concept.is_phrase is True)
+    include_lemmas: bool = Query(True, description="Include lemmas (concept.is_phrase is False)"),
+    include_phrases: bool = Query(True, description="Include phrases (concept.is_phrase is True)"),
     topic_ids: Optional[str] = None,  # Comma-separated list of topic IDs to filter by
     include_without_topic: bool = True,  # Include concepts without a topic (topic_id is null)
     levels: Optional[str] = None,  # Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
@@ -568,6 +568,16 @@ async def get_new_cards(
             detail="max_n must be >= 1"
         )
     
+    # Count 0: Total concepts visible to user (before any filtering)
+    # Count public concepts (user_id IS NULL) OR concepts belonging to this user
+    total_concepts_query = select(func.count(Concept.id)).where(
+        or_(
+            Concept.user_id.is_(None),
+            Concept.user_id == user_id
+        )
+    )
+    total_concepts_count = session.exec(total_concepts_query).one()
+    
     # Parse filter parameters (same as dictionary endpoint)
     topic_id_list = parse_topic_ids(topic_ids)
     level_list = parse_levels(levels)
@@ -575,6 +585,12 @@ async def get_new_cards(
     
     # Set visible_languages to [native_language, learning_language] for filtering
     visible_language_codes = [native_language_code, learning_language_code]
+    
+    # Log filter parameters for debugging
+    logger.info(
+        "get_new_cards: user_id=%s, language=%s, include_lemmas=%s, include_phrases=%s, topic_ids=%s, include_without_topic=%s",
+        user_id, learning_language_code, include_lemmas, include_phrases, topic_ids, include_without_topic
+    )
     
     # Build base filtered query using dictionary logic
     concept_query = build_base_filtered_query(
@@ -608,11 +624,13 @@ async def get_new_cards(
     
     # Count 1: Concepts after dictionary filtering
     filtered_concepts_count = len(filtered_concepts)
+    logger.info("After dictionary filtering: %s concepts found", filtered_concepts_count)
     
     if not concept_ids:
         return NewCardsResponse(
             concepts=[],
             native_language=user.lang_native,
+            total_concepts_count=total_concepts_count,
             filtered_concepts_count=filtered_concepts_count,
             concepts_with_both_languages_count=0,
             concepts_without_cards_count=0
@@ -646,11 +664,13 @@ async def get_new_cards(
     
     # Count 2: Concepts with lemmas in both languages
     concepts_with_both_languages_count = len(concepts_with_both_languages)
+    logger.info("Concepts with lemmas in both languages: %s", concepts_with_both_languages_count)
     
     if not concepts_with_both_languages:
         return NewCardsResponse(
             concepts=[],
             native_language=user.lang_native,
+            total_concepts_count=total_concepts_count,
             filtered_concepts_count=filtered_concepts_count,
             concepts_with_both_languages_count=concepts_with_both_languages_count,
             concepts_without_cards_count=0
@@ -682,6 +702,7 @@ async def get_new_cards(
     
     # Count 3: Concepts without cards for user in learning language
     concepts_without_cards_count = len(eligible_concept_ids)
+    logger.info("Concepts without cards for user: %s", concepts_without_cards_count)
     
     # Randomly select n concepts if max_n is provided
     if max_n is not None and len(eligible_concept_ids) > max_n:
@@ -766,6 +787,7 @@ async def get_new_cards(
     return NewCardsResponse(
         concepts=concept_responses,
         native_language=user.lang_native,
+        total_concepts_count=total_concepts_count,
         filtered_concepts_count=filtered_concepts_count,
         concepts_with_both_languages_count=concepts_with_both_languages_count,
         concepts_without_cards_count=concepts_without_cards_count
