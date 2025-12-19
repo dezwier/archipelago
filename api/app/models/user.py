@@ -20,8 +20,8 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    user_cards: List["UserCard"] = Relationship(back_populates="user")
-    practices: List["UserPractice"] = Relationship(back_populates="user")
+    cards: List["Card"] = Relationship(back_populates="user")
+    practices: List["Practice"] = Relationship(back_populates="user")
     
     @staticmethod
     def hash_password(password: str) -> str:

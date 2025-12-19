@@ -618,7 +618,7 @@ async def delete_lemma(
     session: Session = Depends(get_session)
 ):
     """
-    Delete a lemma and all its associated user_cards.
+    Delete a lemma and all its associated cards.
     
     Args:
         lemma_id: The lemma ID
@@ -630,14 +630,14 @@ async def delete_lemma(
             detail="Lemma not found"
         )
     
-    # Delete all UserCards that reference this lemma
-    from app.models.models import UserCard
-    user_cards = session.exec(
-        select(UserCard).where(UserCard.lemma_id == lemma_id)
+    # Delete all Cards that reference this lemma
+    from app.models.models import Card
+    cards = session.exec(
+        select(Card).where(Card.lemma_id == lemma_id)
     ).all()
     
-    for user_card in user_cards:
-        session.delete(user_card)
+    for card in cards:
+        session.delete(card)
     
     # Delete the lemma
     session.delete(lemma)

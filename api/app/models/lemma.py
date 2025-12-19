@@ -37,5 +37,5 @@ class Lemma(SQLModel, table=True):
     # Relationships
     concept: "Concept" = Relationship(back_populates="lemmas")
     language: "Language" = Relationship(back_populates="lemmas")
-    user_cards: List["UserCard"] = Relationship(back_populates="lemma")
+    cards: List["Card"] = Relationship(back_populates="lemma")
 
