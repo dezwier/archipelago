@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/presentation/controllers/learn_controller.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/common/learn_lemma_list.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/lesson_start_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/lesson_carousel_widget.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/common_widgets/filter_fab_buttons.dart';
 import 'package:archipelago/src/features/create/data/topic_service.dart';
 import 'package:archipelago/src/features/create/domain/topic.dart';
-import 'package:archipelago/src/utils/language_emoji.dart';
 
 class LearnScreen extends StatefulWidget {
   const LearnScreen({super.key});
@@ -109,20 +109,139 @@ class _LearnScreenState extends State<LearnScreen> {
       body: ListenableBuilder(
         listenable: _controller,
         builder: (context, _) {
-          return RefreshIndicator(
-            onRefresh: _controller.refresh,
-            child: LearnLemmaList(
+          // Show loading or error states
+          if (_controller.isLoading) {
+            return RefreshIndicator(
+              onRefresh: _controller.refresh,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          if (_controller.errorMessage != null) {
+            return RefreshIndicator(
+              onRefresh: _controller.refresh,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _controller.errorMessage!,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          // Show empty state if no concepts
+          if (_controller.concepts.isEmpty) {
+            return RefreshIndicator(
+              onRefresh: _controller.refresh,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.school_outlined,
+                            size: 64,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No new cards available',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Try adjusting your filters',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          // Show lesson carousel if lesson is active
+          if (_controller.isLessonActive) {
+            return LessonCarouselWidget(
               concepts: _controller.concepts,
-              isLoading: _controller.isLoading,
-              errorMessage: _controller.errorMessage,
+              currentIndex: _controller.currentLessonIndex,
               nativeLanguage: _controller.nativeLanguage,
               learningLanguage: _controller.learningLanguage,
+              onPrevious: _controller.previousCard,
+              onNext: _controller.nextCard,
+              onFinish: _controller.finishLesson,
+            );
+          }
+
+          // Show start screen if lesson is not active
+          return RefreshIndicator(
+            onRefresh: _controller.refresh,
+            child: LessonStartWidget(
+              cardCount: _controller.concepts.length,
+              filteredConceptsCount: _controller.filteredConceptsCount,
+              conceptsWithBothLanguagesCount: _controller.conceptsWithBothLanguagesCount,
+              conceptsWithoutCardsCount: _controller.conceptsWithoutCardsCount,
+              onStartLesson: _controller.startLesson,
             ),
           );
         },
       ),
-      floatingActionButton: FilterFabButtons(
-        onFilterPressed: _showFilterSheet,
+      floatingActionButton: ListenableBuilder(
+        listenable: _controller,
+        builder: (context, _) {
+          // Only show filter button when lesson is not active
+          if (!_controller.isLessonActive) {
+            return FilterFabButtons(
+              onFilterPressed: _showFilterSheet,
+            );
+          }
+          return const SizedBox.shrink();
+        },
       ),
     );
   }
