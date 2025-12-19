@@ -6,7 +6,7 @@ import logging
 from io import BytesIO
 from typing import List, Optional, Tuple
 from PIL import Image
-from reportlab.lib.pagesizes import A5, A8
+from reportlab.lib.pagesizes import A5, A6, A8
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -82,6 +82,10 @@ def draw_card_side(
     # A5 dimensions: 148mm x 210mm = 419.53 x 595.28 points (at 72 DPI)
     ref_width, _ = A5
     
+    # Check if this is A6 size (with tolerance for floating point comparison)
+    a6_width, a6_height = A6
+    is_a6 = abs(width - a6_width) < 1.0 and abs(height - a6_height) < 1.0
+    
     # Calculate scale factor based on width ratio (width is primary dimension for scaling)
     scale_factor = width / ref_width
     
@@ -89,25 +93,71 @@ def draw_card_side(
     # Base values (for A5 reference size)
     base_margin = 10 * mm
     base_title_font_size = 14
-    base_desc_font_size = 8
+    # For A6 prints with title, make description bigger
+    base_desc_font_size = 9 if (is_a6 and include_title) else 8
     base_icon_size = 16
     base_image_margin_top = 10 * mm
-    base_image_margin_bottom = 20 * mm
+    base_image_margin_bottom = 16 * mm
     base_flag_spacing = 8
     base_line_spacing = 2
     base_language_spacing = 28
     base_corner_radius = 6 * mm
     
+    # Calculate font scaling based on number of languages and image presence
+    # Count languages that will actually be displayed (have lemmas)
+    num_languages = sum(1 for lang_code in languages 
+                       if next((l for l in lemmas if l.language_code.lower() == lang_code.lower()), None) is not None)
+    
+    # Check if image will be displayed
+    has_image = include_image and concept.image_url is not None
+    
+    # Calculate language-based font scale factor
+    # If image given: 3 languages = 1.0, 2 = bigger, 1 = even bigger
+    # If image not given: 5 languages = 1.0, 4 = bigger, 3 = even bigger, etc.
+    if has_image:
+        # With image: 3 languages is baseline (1.0), scale up for fewer languages
+        if num_languages >= 3:
+            language_font_scale = 0.95
+        elif num_languages == 2:
+            # Scale linearly bigger: 3 -> 2 is 1.5x the difference
+            language_font_scale = 1.0 + (1.0 / 3.0)  # 1.333...
+        elif num_languages == 1:
+            # Even bigger: 3 -> 1 is 2x the difference
+            language_font_scale = 1.0 + (2.0 / 3.0)  # 1.667...
+        else:
+            language_font_scale = 1.0
+    else:
+        # Without image: 5 languages is baseline (1.0), scale up for fewer languages
+        if num_languages >= 5:
+            language_font_scale = 1.0
+        elif num_languages == 4:
+            # Scale linearly bigger: 5 -> 4 is 1.25x
+            language_font_scale = 1.0 + (1.0 / 5.0)  # 1.2
+        elif num_languages == 3:
+            # 5 -> 3 is 1.4x
+            language_font_scale = 1.0 + (2.0 / 5.0)  # 1.4
+        elif num_languages == 2:
+            # 5 -> 2 is 1.6x
+            language_font_scale = 1.0 + (3.0 / 5.0)  # 1.6
+        elif num_languages == 1:
+            # 5 -> 1 is 1.8x
+            language_font_scale = 1.0 + (4.0 / 5.0)  # 1.8
+        else:
+            language_font_scale = 1.0
+    
     # Scaled values
     margin = base_margin * scale_factor
-    title_font_size = base_title_font_size * scale_factor
-    desc_font_size = base_desc_font_size * scale_factor
+    title_font_size = base_title_font_size * scale_factor * language_font_scale
+    desc_font_size = base_desc_font_size * scale_factor * language_font_scale
     icon_size = base_icon_size * scale_factor
     image_margin_top = base_image_margin_top * scale_factor
-    image_margin_bottom = base_image_margin_bottom * scale_factor
+    # Scale image margin bottom (spacing between image and content) with language count
+    image_margin_bottom = base_image_margin_bottom * scale_factor * language_font_scale
     flag_spacing = base_flag_spacing * scale_factor
-    line_spacing = base_line_spacing * scale_factor
-    language_spacing = base_language_spacing * scale_factor
+    # Scale line spacing (between title/description/IPA lines) with language count
+    line_spacing = base_line_spacing * scale_factor * language_font_scale
+    # Scale language spacing (between languages) with language count
+    language_spacing = base_language_spacing * scale_factor * language_font_scale
     
     # Image width is 40% of page width
     image_width = width * 0.4
@@ -344,10 +394,7 @@ def draw_card_side(
                 lines.append(current_line)
             
             # Draw translation lines with flag image prefix
-            min_y_threshold = offset_y + margin + (20 * mm * scale_factor)
             for line_idx, line in enumerate(lines):
-                if y < min_y_threshold:
-                    break
                 
                 # Calculate total width (flag + space + text)
                 text_width = c.stringWidth(line, title_font_to_use, title_font_size)
@@ -413,11 +460,10 @@ def draw_card_side(
             y -= line_spacing  # Scaled spacing before IPA
         elif not include_title and (include_ipa or include_description):
             # Add some spacing if title is not included but other elements will be
-            y -= 5 * scale_factor
+            y -= 5 * scale_factor * language_font_scale
         
         # IPA - centered, using Unicode font, same size as description
-        min_y_for_ipa = offset_y + margin + (15 * mm * scale_factor)
-        if include_ipa and lemma.ipa and y > min_y_for_ipa:
+        if include_ipa and lemma.ipa:
             ipa_text = f"/{decode_html_entities(lemma.ipa)}/"
             ipa_drawn = False
             
@@ -460,11 +506,10 @@ def draw_card_side(
                     logger.warning("Failed to draw IPA with Helvetica: %s", str(e))
             
             if ipa_drawn:
-                y -= desc_font_size + (10 * scale_factor)  # Scaled space before description
+                y -= desc_font_size + (10 * scale_factor * language_font_scale)  # Scaled space before description
         
         # Description - wrapped in container for better text wrapping
-        min_y_for_desc = offset_y + margin + (10 * mm * scale_factor)
-        if include_description and lemma.description and y > min_y_for_desc:
+        if include_description and lemma.description:
             desc = decode_html_entities(lemma.description)
             
             # Process Arabic text for proper rendering
@@ -563,11 +608,7 @@ def draw_card_side(
                     desc_lines.append(current_line)
                 
                 # Draw description lines with flag image prefix
-                max_desc_lines = int((y - offset_y - margin) / (desc_font_size + line_spacing))
-                min_y_for_desc_lines = offset_y + margin + (5 * mm * scale_factor)
-                for line_idx, line in enumerate(desc_lines[:max_desc_lines]):
-                    if y < min_y_for_desc_lines:
-                        break
+                for line_idx, line in enumerate(desc_lines):
                     
                     # Calculate total width (flag + space + text) within 80% container
                     text_width = c.stringWidth(line, desc_font_to_use, desc_font_size)
@@ -636,12 +677,8 @@ def draw_card_side(
                 if current_line:
                     desc_lines.append(current_line)
                 
-                # Draw description lines (centered within container, limit to available space)
-                max_desc_lines = int((y - offset_y - margin) / (desc_font_size + line_spacing))
-                min_y_for_desc_lines = offset_y + margin + (5 * mm * scale_factor)
-                for line in desc_lines[:max_desc_lines]:
-                    if y < min_y_for_desc_lines:
-                        break
+                # Draw description lines (centered within container)
+                for line in desc_lines:
                     line_width = c.stringWidth(line, desc_font_to_use, desc_font_size)
                     line_x = offset_x + (width - line_width) / 2
                     
@@ -729,22 +766,67 @@ def draw_card_side_a8_landscape(
     base_language_spacing = 32
     base_corner_radius = 3 * mm
     
+    # Calculate font scaling based on number of languages and image presence
+    # Count languages that will actually be displayed (have lemmas)
+    num_languages = sum(1 for lang_code in languages 
+                       if next((l for l in lemmas if l.language_code.lower() == lang_code.lower()), None) is not None)
+    
+    # Check if image will be displayed
+    has_image = include_image and concept.image_url is not None
+    
+    # Calculate language-based font scale factor
+    # If image given: 3 languages = 1.0, 2 = bigger, 1 = even bigger
+    # If image not given: 5 languages = 1.0, 4 = bigger, 3 = even bigger, etc.
+    if has_image:
+        # With image: 3 languages is baseline (1.0), scale up for fewer languages
+        if num_languages >= 3:
+            language_font_scale = 1.0
+        elif num_languages == 2:
+            # Scale linearly bigger: 3 -> 2 is 1.5x the difference
+            language_font_scale = 1.0 + (1.0 / 3.0)  # 1.333...
+        elif num_languages == 1:
+            # Even bigger: 3 -> 1 is 2x the difference
+            language_font_scale = 1.0 + (2.0 / 3.0)  # 1.667...
+        else:
+            language_font_scale = 1.0
+    else:
+        # Without image: 5 languages is baseline (1.0), scale up for fewer languages
+        if num_languages >= 5:
+            language_font_scale = 1.0
+        elif num_languages == 4:
+            # Scale linearly bigger: 5 -> 4 is 1.25x
+            language_font_scale = 1.0 + (1.0 / 5.0)  # 1.2
+        elif num_languages == 3:
+            # 5 -> 3 is 1.4x
+            language_font_scale = 1.0 + (2.0 / 5.0)  # 1.4
+        elif num_languages == 2:
+            # 5 -> 2 is 1.6x
+            language_font_scale = 1.0 + (3.0 / 5.0)  # 1.6
+        elif num_languages == 1:
+            # 5 -> 1 is 1.8x
+            language_font_scale = 1.0 + (4.0 / 5.0)  # 1.8
+        else:
+            language_font_scale = 1.0
+    
     # Scaled values
     margin = base_margin * scale_factor
-    title_font_size = base_title_font_size * scale_factor
+    title_font_size = base_title_font_size * scale_factor * language_font_scale
     # IPA font size is 50% of title font size
     ipa_font_size = title_font_size * 0.7
     # Description font size: 50% of title if title is present, 80% if not
     desc_font_size = title_font_size * (0.7 if include_title else 0.9)
     icon_size = base_icon_size * scale_factor
     flag_spacing = base_flag_spacing * scale_factor
-    line_spacing = base_line_spacing * scale_factor
-    language_spacing = base_language_spacing * scale_factor
+    # Scale line spacing (between title/description/IPA lines) with language count
+    line_spacing = base_line_spacing * scale_factor * language_font_scale
+    # Scale language spacing (between languages) with language count
+    language_spacing = base_language_spacing * scale_factor * language_font_scale
     
     # Layout: Image at top (60% width, centered), content below
     image_width_percent = 0.80  # 70% of page width (increased from 50% to reduce side whitespace)
     image_margin_top = margin * 2  # Reduced from 2.5 (less whitespace above)
-    image_margin_bottom = margin * 2  # Increased from 1.5 (more space between image and text)
+    # Scale image margin bottom (spacing between image and content) with language count
+    image_margin_bottom = margin * 2 * language_font_scale  # Increased from 1.5 (more space between image and text)
     content_margin = margin * 0.95
     
     # Register Unicode fonts for IPA symbols and emojis
@@ -941,10 +1023,7 @@ def draw_card_side_a8_landscape(
                 lines.append(current_line)
             
             # Draw translation lines with flag image prefix (centered)
-            min_y_threshold = offset_y + margin + (10 * mm * scale_factor)
             for line_idx, line in enumerate(lines):
-                if y < min_y_threshold:
-                    break
                 
                 # Calculate total width (flag + space + text)
                 text_width = c.stringWidth(line, title_font_to_use, title_font_size)
@@ -986,11 +1065,10 @@ def draw_card_side_a8_landscape(
             
             y -= line_spacing
         elif not include_title and (include_ipa or include_description):
-            y -= 3 * scale_factor
+            y -= 3 * scale_factor * language_font_scale
         
         # IPA - left-aligned, using Unicode font, with word wrapping
-        min_y_for_ipa = offset_y + margin + (8 * mm * scale_factor)
-        if include_ipa and lemma.ipa and y > min_y_for_ipa:
+        if include_ipa and lemma.ipa:
             ipa_text = f"/{decode_html_entities(lemma.ipa)}/"
             ipa_drawn = False
             
@@ -1040,10 +1118,7 @@ def draw_card_side_a8_landscape(
                     ipa_lines.append(current_line)
                 
                 # Draw IPA lines (centered) - ensure proper wrapping
-                min_y_for_ipa_lines = offset_y + margin + (5 * mm * scale_factor)
                 for line in ipa_lines:
-                    if y < min_y_for_ipa_lines:
-                        break
                     c.setFont(ipa_font_to_use, ipa_font_size)
                     c.setFillColor(HexColor("#aaaaaa"))
                     ipa_line_width = c.stringWidth(line, ipa_font_to_use, ipa_font_size)
@@ -1056,7 +1131,7 @@ def draw_card_side_a8_landscape(
                 logger.warning("Failed to draw IPA: %s", str(e))
             
             if ipa_drawn:
-                y -= (4 * scale_factor)  # Space before description
+                y -= (4 * scale_factor * language_font_scale)  # Space before description
         
         # Description - left-aligned, wrapped
         if include_description and lemma.description:

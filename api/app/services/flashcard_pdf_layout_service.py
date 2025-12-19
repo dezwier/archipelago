@@ -174,6 +174,18 @@ def generate_pdf_a4_layout(
                     cross_x, cross_y + cross_arm_length
                 )
     
+    # For A6 and A8 formats, add empty front and back pages at the start
+    if card_format == A6 or card_format == A8:
+        # Empty front page
+        c.setFillColor(HexColor("#FFFFFF"))
+        c.rect(0, 0, a4_width, a4_height, fill=1, stroke=0)
+        c.showPage()
+        
+        # Empty back page
+        c.setFillColor(HexColor("#FFFFFF"))
+        c.rect(0, 0, a4_width, a4_height, fill=1, stroke=0)
+        c.showPage()
+    
     # Process concepts in groups
     total_cards_drawn = 0
     for group_start in range(0, len(concepts), cards_per_page):
@@ -314,6 +326,18 @@ def generate_pdf(
     """
     # Page dimensions from format parameter
     page_width, page_height = page_format
+    
+    # For A6 and A8 formats, add empty front and back pages at the start
+    if page_format == A6 or page_format == A8:
+        # Empty front page
+        c.setFillColor(HexColor("#FFFFFF"))
+        c.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+        c.showPage()
+        
+        # Empty back page
+        c.setFillColor(HexColor("#FFFFFF"))
+        c.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+        c.showPage()
     
     total_cards_drawn = 0
     
