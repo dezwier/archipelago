@@ -33,6 +33,7 @@ class ExerciseCarouselWidget extends StatefulWidget {
 class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
   bool _shouldAutoPlay = false;
   int? _lastAutoPlayedIndex;
+  final GlobalKey _matchImageInfoKey = GlobalKey();
 
   @override
   void initState() {
@@ -86,6 +87,25 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
   }
 
   void _handleNext() {
+    final currentExercise = widget.exercises[widget.currentIndex];
+    
+    // For matchReverse exercises with audio-only variant, check answer first if not checked
+    if (currentExercise.type == ExerciseType.matchReverse) {
+      final state = _matchImageInfoKey.currentState;
+      if (state != null) {
+        // Use dynamic to call the method (state is _MatchImageInfoExerciseWidgetState)
+        try {
+          final result = (state as dynamic).checkAnswerIfNeeded();
+          if (result == true) {
+            // Answer was checked, don't proceed yet (will proceed after feedback)
+            return;
+          }
+        } catch (e) {
+          // Method doesn't exist or error, proceed normally
+        }
+      }
+    }
+    
     // Move to next exercise
     if (widget.currentIndex < widget.exercises.length - 1) {
       if (widget.onNext != null) {
@@ -168,6 +188,7 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
                 learningLanguage: widget.learningLanguage,
                 autoPlay: shouldAutoPlayThisBuild,
                 onComplete: _handleExerciseComplete,
+                matchImageInfoKey: currentExercise.type == ExerciseType.matchReverse ? _matchImageInfoKey : null,
               ),
             ),
           ],
@@ -217,9 +238,8 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
               ),
             ),
           ),
-        // Floating Next/Finish Button - Bottom Right
-        if (currentExercise.type != ExerciseType.match)
-          Positioned(
+        // Floating Next/Finish Button - Bottom Right (show for all exercises now)
+        Positioned(
             right: 16,
             bottom: 0,
             child: SafeArea(

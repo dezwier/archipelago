@@ -30,6 +30,9 @@ class LemmaAudioPlayer extends StatefulWidget {
   /// Callback when audio playback completes
   final VoidCallback? onPlaybackComplete;
   
+  /// Callback when audio playback starts
+  final VoidCallback? onPlayStart;
+  
   /// The icon size
   final double iconSize;
   
@@ -48,6 +51,7 @@ class LemmaAudioPlayer extends StatefulWidget {
     this.languageCode,
     this.onAudioUrlUpdated,
     this.onPlaybackComplete,
+    this.onPlayStart,
     this.iconSize = 16.0,
     this.showLoadingIndicator = true,
     this.autoPlay = false,
@@ -136,6 +140,8 @@ class _LemmaAudioPlayerState extends State<LemmaAudioPlayer> {
       final audioUrl = _getFullAudioUrl(audioPath);
       if (audioUrl != null) {
         await _audioPlayer.play(UrlSource(audioUrl));
+        // Notify that playback started
+        widget.onPlayStart?.call();
         _audioPlayer.onPlayerComplete.listen((_) {
           if (mounted) {
             setState(() {
@@ -222,6 +228,8 @@ class _LemmaAudioPlayerState extends State<LemmaAudioPlayer> {
       final fullAudioUrl = _getFullAudioUrl(audioUrl);
       if (fullAudioUrl != null) {
         await _audioPlayer.play(UrlSource(fullAudioUrl));
+        // Notify that playback started
+        widget.onPlayStart?.call();
         _audioPlayer.onPlayerComplete.listen((_) {
           if (mounted) {
             setState(() {

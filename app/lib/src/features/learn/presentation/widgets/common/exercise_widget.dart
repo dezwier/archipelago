@@ -3,8 +3,8 @@ import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/discovery_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/discovery_summary_exercise_widget.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_title_image_exercise_widget.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_image_title_exercise_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_info_image_exercise_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_image_info_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/scaffold_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/produce_exercise_widget.dart';
 
@@ -15,6 +15,7 @@ class ExerciseWidget extends StatelessWidget {
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete; // Called when exercise is completed
+  final GlobalKey? matchImageInfoKey; // For accessing matchReverse widget state
 
   const ExerciseWidget({
     super.key,
@@ -23,6 +24,7 @@ class ExerciseWidget extends StatelessWidget {
     this.learningLanguage,
     this.autoPlay = false,
     required this.onComplete,
+    this.matchImageInfoKey,
   });
 
   @override
@@ -47,24 +49,27 @@ class ExerciseWidget extends StatelessWidget {
       case ExerciseType.match:
         // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
         final conceptId = exercise.concept['id'] ?? exercise.concept['concept_id'];
-        return MatchTitleImageExerciseWidget(
+        return MatchInfoImageExerciseWidget(
           key: ValueKey('match_${exercise.id}_${conceptId}'),
           exercise: exercise,
           nativeLanguage: nativeLanguage,
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          variant: MatchInfoImageVariant.audioOnly,
         );
       case ExerciseType.matchReverse:
         // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
+        // Use provided GlobalKey if available, otherwise use ValueKey
         final conceptIdReverse = exercise.concept['id'] ?? exercise.concept['concept_id'];
-        return MatchImageTitleExerciseWidget(
-          key: ValueKey('matchReverse_${exercise.id}_${conceptIdReverse}'),
+        return MatchImageInfoExerciseWidget(
+          key: matchImageInfoKey ?? ValueKey('matchReverse_${exercise.id}_${conceptIdReverse}'),
           exercise: exercise,
           nativeLanguage: nativeLanguage,
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          variant: MatchImageInfoVariant.audioOnly,
         );
       case ExerciseType.scaffold:
         return ScaffoldExerciseWidget(

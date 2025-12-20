@@ -2,31 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/common/concept_content_card_widget.dart';
+import 'package:archipelago/src/common_widgets/lemma_audio_player.dart';
 
-/// Widget that displays a Match Title Image exercise
-/// Shows a grid of all lesson images (2 per row) and one phrase from the exercise's concept
+/// Variant type for the match info image exercise
+enum MatchInfoImageVariant {
+  /// Shows the full concept content card (title, IPA, description, audio)
+  title,
+  /// Shows only description at top and bigger centralized audio button
+  audioOnly,
+}
+
+/// Widget that displays a Match Info Image exercise
+/// Shows a grid of all lesson images (2 per row) and concept information
 /// User selects the matching image from the grid
-class MatchTitleImageExerciseWidget extends StatefulWidget {
+class MatchInfoImageExerciseWidget extends StatefulWidget {
   final Exercise exercise;
   final String? nativeLanguage;
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
+  final MatchInfoImageVariant variant;
 
-  const MatchTitleImageExerciseWidget({
+  const MatchInfoImageExerciseWidget({
     super.key,
     required this.exercise,
     this.nativeLanguage,
     this.learningLanguage,
     this.autoPlay = false,
     required this.onComplete,
+    this.variant = MatchInfoImageVariant.audioOnly,
   });
 
   @override
-  State<MatchTitleImageExerciseWidget> createState() => _MatchTitleImageExerciseWidgetState();
+  State<MatchInfoImageExerciseWidget> createState() => _MatchInfoImageExerciseWidgetState();
 }
 
-class _MatchTitleImageExerciseWidgetState extends State<MatchTitleImageExerciseWidget> {
+class _MatchInfoImageExerciseWidgetState extends State<MatchInfoImageExerciseWidget> {
   int? _selectedImageIndex;
   bool _isCorrect = false;
   bool _hasAnswered = false;
@@ -46,7 +57,7 @@ class _MatchTitleImageExerciseWidgetState extends State<MatchTitleImageExerciseW
   }
 
   @override
-  void didUpdateWidget(MatchTitleImageExerciseWidget oldWidget) {
+  void didUpdateWidget(MatchInfoImageExerciseWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Reset state when exercise changes (check both ID and concept ID)
     final oldConceptId = _getConceptId(oldWidget.exercise.concept);
@@ -164,6 +175,74 @@ class _MatchTitleImageExerciseWidgetState extends State<MatchTitleImageExerciseW
     }
   }
 
+  /// Build the concept info section based on variant
+  Widget _buildConceptInfo() {
+    final exerciseConcept = widget.exercise.concept;
+    final learningLemma = exerciseConcept['learning_lemma'] as Map<String, dynamic>?;
+    if (learningLemma == null) {
+      return const SizedBox.shrink();
+    }
+
+    final nativeLemma = exerciseConcept['native_lemma'] as Map<String, dynamic>?;
+    final conceptId = _getConceptId(exerciseConcept);
+    
+    // Determine if we should autoplay for this build
+    final shouldAutoPlay = widget.autoPlay && !_hasAutoPlayed;
+    if (shouldAutoPlay) {
+      _hasAutoPlayed = true;
+    }
+
+    if (widget.variant == MatchInfoImageVariant.title) {
+      // Original variant: show full concept content card
+      return ConceptContentCardWidget(
+        learningLemma: learningLemma,
+        nativeLemma: nativeLemma,
+        conceptId: conceptId,
+        autoPlay: shouldAutoPlay,
+      );
+    } else {
+      // Audio-only variant: show description at top and bigger centralized audio button
+      final learningDescription = learningLemma['description'] as String?;
+      final learningLanguageCode = (learningLemma['language_code'] as String? ?? '').toLowerCase();
+      final learningAudioPath = learningLemma['audio_path'] as String?;
+      final learningLemmaId = learningLemma['id'] as int?;
+      final learningTerm = learningLemma['translation'] as String? ?? 'Unknown';
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Description at the top
+            if (learningDescription != null && learningDescription.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24.0),
+                child: Text(
+                  learningDescription,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            // Bigger centralized audio button
+            if (learningLemmaId != null)
+              LemmaAudioPlayer(
+                key: ValueKey('audio_${conceptId}_$learningLemmaId'),
+                lemmaId: learningLemmaId,
+                audioPath: learningAudioPath,
+                term: learningTerm,
+                description: learningDescription,
+                languageCode: learningLanguageCode,
+                iconSize: 32.0, // Bigger icon size
+                autoPlay: shouldAutoPlay,
+              ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Safeguard: Ensure state is reset if exercise concept changed
@@ -216,26 +295,12 @@ class _MatchTitleImageExerciseWidgetState extends State<MatchTitleImageExerciseW
       return const SizedBox.shrink();
     }
 
-    final nativeLemma = exerciseConcept['native_lemma'] as Map<String, dynamic>?;
-    final conceptId = _getConceptId(exerciseConcept);
-    
-    // Determine if we should autoplay for this build
-    final shouldAutoPlay = widget.autoPlay && !_hasAutoPlayed;
-    if (shouldAutoPlay) {
-      _hasAutoPlayed = true;
-    }
-
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Phrase card
-          ConceptContentCardWidget(
-            learningLemma: learningLemma,
-            nativeLemma: nativeLemma,
-            conceptId: conceptId,
-            autoPlay: shouldAutoPlay,
-          ),
+          // Concept info section (varies by variant)
+          _buildConceptInfo(),
 
           const SizedBox(height: 12),
 
