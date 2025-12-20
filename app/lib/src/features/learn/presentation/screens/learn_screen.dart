@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/presentation/controllers/learn_controller.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/lesson_start_widget.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/lesson_carousel_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/exercises/exercise_carousel_widget.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
-import 'package:archipelago/src/common_widgets/filter_fab_buttons.dart';
 import 'package:archipelago/src/features/create/data/topic_service.dart';
 import 'package:archipelago/src/features/create/domain/topic.dart';
 
@@ -205,10 +204,10 @@ class _LearnScreenState extends State<LearnScreen> {
             );
           }
 
-          // Show lesson carousel if lesson is active
+          // Show exercise carousel if lesson is active
           if (_controller.isLessonActive) {
-            return LessonCarouselWidget(
-              concepts: _controller.concepts,
+            return ExerciseCarouselWidget(
+              exercises: _controller.exercises,
               currentIndex: _controller.currentLessonIndex,
               nativeLanguage: _controller.nativeLanguage,
               learningLanguage: _controller.learningLanguage,
@@ -228,21 +227,19 @@ class _LearnScreenState extends State<LearnScreen> {
               filteredConceptsCount: _controller.filteredConceptsCount,
               conceptsWithBothLanguagesCount: _controller.conceptsWithBothLanguagesCount,
               conceptsWithoutCardsCount: _controller.conceptsWithoutCardsCount,
+              cardsToLearn: _controller.cardsToLearn,
+              onCardsToLearnChanged: _controller.setCardsToLearn,
+              onFilterPressed: _showFilterSheet,
               onStartLesson: _controller.startLesson,
+              onGenerateWorkout: (cardsToLearn, includeNewCards, includeLearnedCards) {
+                _controller.generateWorkout(
+                  cardsToLearn: cardsToLearn,
+                  includeNewCards: includeNewCards,
+                  includeLearnedCards: includeLearnedCards,
+                );
+              },
             ),
           );
-        },
-      ),
-      floatingActionButton: ListenableBuilder(
-        listenable: _controller,
-        builder: (context, _) {
-          // Only show filter button when lesson is not active
-          if (!_controller.isLessonActive) {
-            return FilterFabButtons(
-              onFilterPressed: _showFilterSheet,
-            );
-          }
-          return const SizedBox.shrink();
         },
       ),
     );

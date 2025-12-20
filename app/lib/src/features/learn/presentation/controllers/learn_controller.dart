@@ -5,10 +5,13 @@ import 'package:archipelago/src/features/profile/domain/user.dart';
 import 'package:archipelago/src/common_widgets/filter_interface.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/features/learn/data/learn_service.dart';
+import 'package:archipelago/src/features/learn/domain/exercise.dart';
+import 'package:archipelago/src/features/learn/services/exercise_generator_service.dart';
 
 class LearnController extends ChangeNotifier implements FilterState {
   User? _currentUser;
   List<Map<String, dynamic>> _concepts = []; // List of concepts, each with learning_lemma and native_lemma
+  List<Exercise> _exercises = []; // List of exercises generated from concepts
   bool _isLoading = true;
   bool _isRefreshing = false;
   String? _errorMessage;
@@ -23,7 +26,8 @@ class LearnController extends ChangeNotifier implements FilterState {
   
   // Lesson state
   bool _isLessonActive = false;
-  int _currentLessonIndex = 0;
+  int _currentLessonIndex = 0; // Now tracks exercise index
+  int _cardsToLearn = 4; // Number of cards to learn
   
   // Filter state
   Set<int> _selectedTopicIds = {};
@@ -45,6 +49,7 @@ class LearnController extends ChangeNotifier implements FilterState {
   // Getters
   User? get currentUser => _currentUser;
   List<Map<String, dynamic>> get concepts => _concepts; // List of concepts with both lemmas
+  List<Exercise> get exercises => _exercises; // List of exercises
   bool get isLoading => _isLoading;
   bool get isRefreshing => _isRefreshing;
   String? get errorMessage => _errorMessage;
@@ -60,6 +65,7 @@ class LearnController extends ChangeNotifier implements FilterState {
   // Lesson state getters
   bool get isLessonActive => _isLessonActive;
   int get currentLessonIndex => _currentLessonIndex;
+  int get cardsToLearn => _cardsToLearn;
   
   // FilterState interface implementation
   @override
@@ -126,7 +132,7 @@ class LearnController extends ChangeNotifier implements FilterState {
     }
   }
   
-  /// Batch update filters and reload cards
+  /// Batch update filters (without reloading cards - cards are only loaded when Generate Workout is pressed)
   void batchUpdateFilters({
     Set<int>? topicIds,
     bool? showLemmasWithoutTopic,
@@ -194,7 +200,7 @@ class LearnController extends ChangeNotifier implements FilterState {
     
     if (hasChanges) {
       notifyListeners();
-      loadNewCards();
+      // Don't call loadNewCards() here - only update when Generate Workout button is pressed
     }
   }
   
@@ -278,7 +284,7 @@ class LearnController extends ChangeNotifier implements FilterState {
         userId: _currentUser!.id,
         language: _learningLanguage!,
         nativeLanguage: _currentUser!.langNative,
-        maxN: 10,
+        maxN: _cardsToLearn,
         includeLemmas: _includeLemmas,
         includePhrases: _includePhrases,
         topicIds: getEffectiveTopicIds(),
@@ -303,6 +309,9 @@ class LearnController extends ChangeNotifier implements FilterState {
         _conceptsWithoutCardsCount = result['concepts_without_cards_count'] as int? ?? 0;
         _errorMessage = null;
         
+        // Generate exercises from concepts
+        _exercises = ExerciseGeneratorService.generateExercises(_concepts);
+        
         // If no concepts found, show helpful message
         if (_concepts.isEmpty) {
           _errorMessage = 'No new cards found matching the current filters. Try adjusting your filters or ensure you have concepts with lemmas in both your native and learning languages that you haven\'t learned yet.';
@@ -313,6 +322,7 @@ class LearnController extends ChangeNotifier implements FilterState {
         _currentLessonIndex = 0;
       } else {
         _concepts = [];
+        _exercises = [];
         _nativeLanguage = null;
         _totalConceptsCount = 0;
         _filteredConceptsCount = 0;
@@ -327,6 +337,7 @@ class LearnController extends ChangeNotifier implements FilterState {
       _isLoading = false;
       _isRefreshing = false;
       _concepts = [];
+      _exercises = [];
       _errorMessage = 'Error loading new cards: ${e.toString()}';
     }
     
@@ -344,22 +355,22 @@ class LearnController extends ChangeNotifier implements FilterState {
   
   /// Start the lesson
   void startLesson() {
-    if (_concepts.isNotEmpty) {
+    if (_exercises.isNotEmpty) {
       _isLessonActive = true;
       _currentLessonIndex = 0;
       notifyListeners();
     }
   }
   
-  /// Navigate to next card
+  /// Navigate to next exercise
   void nextCard() {
-    if (_currentLessonIndex < _concepts.length - 1) {
+    if (_currentLessonIndex < _exercises.length - 1) {
       _currentLessonIndex++;
       notifyListeners();
     }
   }
   
-  /// Navigate to previous card
+  /// Navigate to previous exercise
   void previousCard() {
     if (_currentLessonIndex > 0) {
       _currentLessonIndex--;
@@ -372,6 +383,26 @@ class LearnController extends ChangeNotifier implements FilterState {
     _isLessonActive = false;
     _currentLessonIndex = 0;
     notifyListeners();
+  }
+  
+  /// Update the number of cards to learn (without loading cards)
+  void setCardsToLearn(int count) {
+    if (count != _cardsToLearn && count > 0) {
+      _cardsToLearn = count;
+      notifyListeners();
+    }
+  }
+  
+  /// Generate workout with specified parameters
+  Future<void> generateWorkout({
+    required int cardsToLearn,
+    required bool includeNewCards,
+    required bool includeLearnedCards,
+  }) async {
+    _cardsToLearn = cardsToLearn;
+    // TODO: Implement includeLearnedCards support in backend if needed
+    // For now, we only support new cards (which is what the endpoint returns)
+    await loadNewCards();
   }
 }
 
