@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/exercise_widget.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/exercises/exercise_feedback_widget.dart';
 
-/// Widget that displays a carousel of exercises with input and feedback screens
+/// Widget that displays a carousel of exercises
 class ExerciseCarouselWidget extends StatefulWidget {
   final List<Exercise> exercises;
   final int currentIndex;
@@ -34,7 +33,6 @@ class ExerciseCarouselWidget extends StatefulWidget {
 class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
   bool _shouldAutoPlay = false;
   int? _lastAutoPlayedIndex;
-  bool _showingFeedback = false; // Track if we're showing feedback for current exercise
 
   @override
   void initState() {
@@ -56,10 +54,6 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
   @override
   void didUpdateWidget(ExerciseCarouselWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reset feedback state when moving to a new exercise
-    if (widget.currentIndex != oldWidget.currentIndex) {
-      _showingFeedback = false;
-    }
     // Check if we navigated forward (to next exercise)
     if (widget.currentIndex > oldWidget.currentIndex && oldWidget.currentIndex >= 0) {
       if (_lastAutoPlayedIndex != widget.currentIndex) {
@@ -73,25 +67,12 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
     }
   }
 
-  bool get isFirstExercise => widget.currentIndex == 0 && !_showingFeedback;
-  bool get isLastExercise => widget.currentIndex >= widget.exercises.length - 1 && _showingFeedback;
+  bool get isFirstExercise => widget.currentIndex == 0;
+  bool get isLastExercise => widget.currentIndex >= widget.exercises.length - 1;
   int get totalExercises => widget.exercises.length;
 
   void _handleExerciseComplete() {
-    final currentExercise = widget.exercises[widget.currentIndex];
-    // For discovery and match exercises, skip feedback and go directly to next exercise
-    if (currentExercise.type == ExerciseType.discovery || currentExercise.type == ExerciseType.match) {
-      _handleFeedbackContinue();
-    } else {
-      // Show feedback screen for other exercise types
-      setState(() {
-        _showingFeedback = true;
-      });
-    }
-  }
-
-  void _handleFeedbackContinue() {
-    // Move to next exercise
+    // Move to next exercise when exercise completes
     if (widget.currentIndex < widget.exercises.length - 1) {
       if (widget.onNext != null) {
         widget.onNext!();
@@ -105,31 +86,21 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
   }
 
   void _handleNext() {
-    final currentExercise = widget.exercises[widget.currentIndex];
-    if (_showingFeedback) {
-      // On feedback screen, continue to next exercise
-      _handleFeedbackContinue();
+    // Move to next exercise
+    if (widget.currentIndex < widget.exercises.length - 1) {
+      if (widget.onNext != null) {
+        widget.onNext!();
+      }
     } else {
-      // On input screen, show feedback first (or skip directly to next for discovery/match)
-      // For Discovery and Match exercises, skip feedback and go directly to next
-      if (currentExercise.type == ExerciseType.discovery || currentExercise.type == ExerciseType.match) {
-        _handleFeedbackContinue();
-      } else {
-        // For other exercises, show feedback first
-        setState(() {
-          _showingFeedback = true;
-        });
+      // Last exercise, finish lesson
+      if (widget.onFinish != null) {
+        widget.onFinish!();
       }
     }
   }
 
   void _handlePrevious() {
-    if (_showingFeedback) {
-      // Go back to input screen
-      setState(() {
-        _showingFeedback = false;
-      });
-    } else if (widget.currentIndex > 0) {
+    if (widget.currentIndex > 0) {
       // Go to previous exercise
       if (widget.onPrevious != null) {
         widget.onPrevious!();
@@ -188,23 +159,16 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
               ),
             ),
 
-            // Exercise Content (Input or Feedback)
+            // Exercise Content
             Expanded(
-              child: _showingFeedback && currentExercise.type != ExerciseType.discovery && currentExercise.type != ExerciseType.match
-                  ? ExerciseFeedbackWidget(
-                      key: ValueKey('feedback_${currentExercise.id}'),
-                      exercise: currentExercise,
-                      isCorrect: true, // For Discovery, always correct
-                      onContinue: _handleFeedbackContinue,
-                    )
-                  : ExerciseWidget(
-                      key: ValueKey('exercise_${currentExercise.id}'),
-                      exercise: currentExercise,
-                      nativeLanguage: widget.nativeLanguage,
-                      learningLanguage: widget.learningLanguage,
-                      autoPlay: shouldAutoPlayThisBuild,
-                      onComplete: _handleExerciseComplete,
-                    ),
+              child: ExerciseWidget(
+                key: ValueKey('exercise_${currentExercise.id}'),
+                exercise: currentExercise,
+                nativeLanguage: widget.nativeLanguage,
+                learningLanguage: widget.learningLanguage,
+                autoPlay: shouldAutoPlayThisBuild,
+                onComplete: _handleExerciseComplete,
+              ),
             ),
           ],
         ),
@@ -275,18 +239,14 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            (_showingFeedback && isLastExercise) || (!_showingFeedback && widget.currentIndex >= widget.exercises.length - 1)
-                                ? 'Finish'
-                                : 'Next',
+                            isLastExercise ? 'Finish' : 'Next',
                             style: Theme.of(context).textTheme.labelLarge?.copyWith(
                               color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Icon(
-                            (_showingFeedback && isLastExercise) || (!_showingFeedback && widget.currentIndex >= widget.exercises.length - 1)
-                                ? Icons.check
-                                : Icons.arrow_forward,
+                            isLastExercise ? Icons.check : Icons.arrow_forward,
                             color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ],

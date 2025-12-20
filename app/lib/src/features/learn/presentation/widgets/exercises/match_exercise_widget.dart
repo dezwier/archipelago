@@ -278,19 +278,25 @@ class _MatchExerciseWidgetState extends State<MatchExerciseWidget> {
                   borderColor = Theme.of(context).colorScheme.primary;
                 }
 
+                const double borderRadius = 12.0;
+                const double borderWidth = 3.0;
+                final bool hasBorder = borderColor != null;
+                // When border is present, inner content radius should account for border width
+                final double imageRadius = hasBorder ? borderRadius - borderWidth : borderRadius;
+
                 return GestureDetector(
                   onTap: () => _handleImageTap(index),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(borderRadius),
                       border: Border.all(
                         color: borderColor ?? Colors.transparent,
-                        width: borderColor != null ? 3 : 0,
+                        width: hasBorder ? borderWidth : 0,
                       ),
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(imageRadius),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
@@ -321,6 +327,24 @@ class _MatchExerciseWidgetState extends State<MatchExerciseWidget> {
                           if (isSelected && (!_hasAnswered || (_hasAnswered && !_isCorrect)))
                             Container(
                               color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                            ),
+                          // Feedback icon (green for correct, red for incorrect)
+                          if (_hasAnswered && isSelected)
+                            Center(
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: _isCorrect 
+                                      ? Colors.green.withValues(alpha: 0.8)
+                                      : Colors.red.withValues(alpha: 0.4),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _isCorrect ? Icons.check : Icons.close,
+                                  color: Colors.white,
+                                  size: 32,
+                                ),
+                              ),
                             ),
                         ],
                       ),

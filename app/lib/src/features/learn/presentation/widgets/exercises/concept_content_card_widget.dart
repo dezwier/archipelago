@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:archipelago/src/common_widgets/lemma_audio_player.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 
-/// Widget that displays concept content (term, IPA, description) in a card
+/// Widget that displays concept content (term, IPA, description)
 /// with toggle functionality between learning and native language
 class ConceptContentCardWidget extends StatefulWidget {
   final Map<String, dynamic> learningLemma;
@@ -80,161 +80,138 @@ class _ConceptContentCardWidgetState extends State<ConceptContentCardWidget> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 42.0),
       child: InkWell(
         onTap: canToggle ? _toggleLanguage : null,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16.0),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-              // Show learning or native language based on state
-              if (_showingLearningLanguage) ...[
-                // Learning Term with Language Emoji and Audio Button
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: '${LanguageEmoji.getEmoji(learningLanguageCode)} ',
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Show learning or native language based on state
+            if (_showingLearningLanguage) ...[
+              // Learning Term with Language Emoji and Audio Button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${LanguageEmoji.getEmoji(learningLanguageCode)} ',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
                             ),
-                            TextSpan(
-                              text: learningTerm,
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          ),
+                          TextSpan(
+                            text: learningTerm,
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
                             ),
-                          ],
-                        ),
-                        textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
+                      textAlign: TextAlign.center,
                     ),
-                    if (learningLemmaId != null) ...[
-                      const SizedBox(width: 6),
-                      LemmaAudioPlayer(
-                        key: ValueKey('audio_${widget.conceptId}_$learningLemmaId'),
-                        lemmaId: learningLemmaId,
-                        audioPath: learningAudioPath,
-                        term: learningTerm,
-                        description: learningDescription,
-                        languageCode: learningLanguageCode,
-                        iconSize: 18.0,
-                        autoPlay: shouldAutoPlay,
-                      ),
-                    ],
+                  ),
+                  if (learningLemmaId != null) ...[
+                    const SizedBox(width: 6),
+                    LemmaAudioPlayer(
+                      key: ValueKey('audio_${widget.conceptId}_$learningLemmaId'),
+                      lemmaId: learningLemmaId,
+                      audioPath: learningAudioPath,
+                      term: learningTerm,
+                      description: learningDescription,
+                      languageCode: learningLanguageCode,
+                      iconSize: 18.0,
+                      autoPlay: shouldAutoPlay,
+                    ),
                   ],
+                ],
+              ),
+              
+              // IPA
+              if (learningIpa != null && learningIpa.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '/$learningIpa/',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
-                
-                // IPA
-                if (learningIpa != null && learningIpa.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '/$learningIpa/',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-                
-                // Learning Description
-                if (learningDescription != null && learningDescription.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    learningDescription,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ] else ...[
-                // Native Term with Language Emoji
-                if (nativeLanguageCode != null)
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '${LanguageEmoji.getEmoji(nativeLanguageCode)} ',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        TextSpan(
-                          text: nativeTerm ?? 'Unknown',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    textAlign: TextAlign.center,
-                  )
-                else
-                  Text(
-                    nativeTerm ?? 'Unknown',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                
-                // Native IPA (if available)
-                if (nativeIpa != null && nativeIpa.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '/$nativeIpa/',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-                
-                // Native Description
-                if (nativeDescription != null && nativeDescription.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    nativeDescription,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
               ],
               
+              // Learning Description
+              if (learningDescription != null && learningDescription.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  learningDescription,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ] else ...[
+              // Native Term with Language Emoji
+              if (nativeLanguageCode != null)
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '${LanguageEmoji.getEmoji(nativeLanguageCode)} ',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextSpan(
+                        text: nativeTerm ?? 'Unknown',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                )
+              else
+                Text(
+                  nativeTerm ?? 'Unknown',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              
+              // Native IPA (if available)
+              if (nativeIpa != null && nativeIpa.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '/$nativeIpa/',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+              
+              // Native Description
+              if (nativeDescription != null && nativeDescription.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  nativeDescription,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
             ],
-          ),
+          ],
         ),
-      ),
       ),
     );
   }
