@@ -35,7 +35,10 @@ class ExerciseWidget extends StatelessWidget {
           onComplete: onComplete,
         );
       case ExerciseType.match:
+        // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
+        final conceptId = exercise.concept['id'] ?? exercise.concept['concept_id'];
         return MatchExerciseWidget(
+          key: ValueKey('match_${exercise.id}_${conceptId}'),
           exercise: exercise,
           nativeLanguage: nativeLanguage,
           learningLanguage: learningLanguage,
