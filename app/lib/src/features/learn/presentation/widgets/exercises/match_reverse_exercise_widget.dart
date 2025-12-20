@@ -128,14 +128,20 @@ class _MatchReverseExerciseWidgetState extends State<MatchReverseExerciseWidget>
       final isCorrect = _compareIds(selectedConceptId, _exerciseConceptId);
       _isCorrect = isCorrect;
       _hasAnswered = true;
+      // If correct, we'll wait for audio to finish
+      _waitingForAudio = isCorrect;
     });
 
-    // Only proceed to next card if correct
+    // Only proceed to next card if correct (and after audio finishes)
     if (_isCorrect) {
-      // Autoplay the correct answer and move to next card immediately
-      // Small delay to allow autoplay to trigger
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (mounted && _isCorrect) {
+      // Audio will autoplay, and we'll wait for onPlaybackComplete callback
+      // Add a timeout fallback in case audio doesn't play or fails (e.g., no audio available)
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted && _isCorrect && _waitingForAudio) {
+          // Audio didn't complete within timeout, proceed anyway
+          setState(() {
+            _waitingForAudio = false;
+          });
           widget.onComplete();
         }
       });
@@ -153,6 +159,16 @@ class _MatchReverseExerciseWidgetState extends State<MatchReverseExerciseWidget>
     }
   }
 
+  void _handleCorrectAnswerAudioComplete() {
+    // Only proceed if we're still waiting for audio and answer is still correct
+    if (mounted && _isCorrect && _waitingForAudio) {
+      setState(() {
+        _waitingForAudio = false;
+      });
+      widget.onComplete();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Safeguard: Ensure state is reset if exercise concept changed
@@ -164,6 +180,7 @@ class _MatchReverseExerciseWidgetState extends State<MatchReverseExerciseWidget>
       _selectedCardIndex = null;
       _isCorrect = false;
       _hasAnswered = false;
+      _waitingForAudio = false;
       // Schedule setState for next frame
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -295,6 +312,10 @@ class _MatchReverseExerciseWidgetState extends State<MatchReverseExerciseWidget>
                   hasAnswered: _hasAnswered,
                   isCorrect: _isCorrect,
                   onTap: () => _handleCardTap(index),
+                  // Only listen to playback complete for the correct answer when it's selected
+                  onPlaybackComplete: (isSelected && isCorrectAnswer && _isCorrect && _waitingForAudio)
+                      ? _handleCorrectAnswerAudioComplete
+                      : null,
                 );
               }).toList(),
             ),

@@ -83,6 +83,8 @@ class ExerciseFeedbackWidget extends StatelessWidget {
     switch (exercise.type) {
       case ExerciseType.discovery:
         return 'Great! You\'ve discovered this phrase.';
+      case ExerciseType.summary:
+        return 'Lesson Summary';
       case ExerciseType.match:
         return isCorrect ? 'Correct!' : 'Not quite right.';
       case ExerciseType.matchReverse:
@@ -98,6 +100,8 @@ class ExerciseFeedbackWidget extends StatelessWidget {
     switch (exercise.type) {
       case ExerciseType.discovery:
         return 'Take your time to familiarize yourself with this phrase.';
+      case ExerciseType.summary:
+        return 'Review all the concepts you\'ve learned in this lesson.';
       case ExerciseType.match:
         return isCorrect
             ? 'You matched it correctly!'

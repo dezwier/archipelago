@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/discovery_exercise_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/exercises/summary_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_reverse_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/scaffold_exercise_widget.dart';
@@ -29,6 +30,14 @@ class ExerciseWidget extends StatelessWidget {
     switch (exercise.type) {
       case ExerciseType.discovery:
         return DiscoveryExerciseWidget(
+          exercise: exercise,
+          nativeLanguage: nativeLanguage,
+          learningLanguage: learningLanguage,
+          autoPlay: autoPlay,
+          onComplete: onComplete,
+        );
+      case ExerciseType.summary:
+        return SummaryExerciseWidget(
           exercise: exercise,
           nativeLanguage: nativeLanguage,
           learningLanguage: learningLanguage,

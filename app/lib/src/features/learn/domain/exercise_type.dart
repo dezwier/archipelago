@@ -1,6 +1,7 @@
 /// Enum representing different types of exercises
 enum ExerciseType {
   discovery,
+  summary,
   match,
   matchReverse,
   scaffold,
@@ -11,6 +12,8 @@ enum ExerciseType {
     switch (this) {
       case ExerciseType.discovery:
         return 'Discovery';
+      case ExerciseType.summary:
+        return 'Summary';
       case ExerciseType.match:
         return 'Match';
       case ExerciseType.matchReverse:

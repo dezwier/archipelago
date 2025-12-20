@@ -45,8 +45,12 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
     final learningLemmaId = widget.learningLemma['id'] as int?;
 
     // Determine border color based on state
-    Color? borderColor;
-    Color? backgroundColor;
+    Color borderColor;
+    Color backgroundColor;
+    
+    // Default state - subtle border like topic drawer (applies to all unselected cards)
+    final defaultBorderColor = Theme.of(context).colorScheme.outline.withValues(alpha: 0.2);
+    final defaultBackgroundColor = Theme.of(context).colorScheme.surface;
     
     if (widget.hasAnswered) {
       if (widget.isCorrect) {
@@ -54,12 +58,20 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
         if (widget.isCorrectAnswer) {
           borderColor = Colors.green;
           backgroundColor = Colors.green.withValues(alpha: 0.1);
+        } else {
+          // Keep default style for other cards
+          borderColor = defaultBorderColor;
+          backgroundColor = defaultBackgroundColor;
         }
       } else {
         // After wrong answer, only show red on selected wrong one
         if (widget.isSelected) {
           borderColor = Colors.red;
           backgroundColor = Colors.red.withValues(alpha: 0.1);
+        } else {
+          // Keep default style for other cards
+          borderColor = defaultBorderColor;
+          backgroundColor = defaultBackgroundColor;
         }
       }
     } else if (widget.isSelected) {
@@ -68,8 +80,8 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
       backgroundColor = Theme.of(context).colorScheme.primaryContainer;
     } else {
       // Default state - subtle border like topic drawer
-      borderColor = Theme.of(context).colorScheme.outline.withValues(alpha: 0.2);
-      backgroundColor = Theme.of(context).colorScheme.surface;
+      borderColor = defaultBorderColor;
+      backgroundColor = defaultBackgroundColor;
     }
 
     // Autoplay anytime when selected (including after answering)
@@ -88,7 +100,7 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
             decoration: BoxDecoration(
               color: backgroundColor,
               border: Border.all(
-                color: borderColor ?? Colors.transparent,
+                color: borderColor,
                 width: widget.isSelected || (widget.hasAnswered && (widget.isCorrectAnswer || (widget.isSelected && !widget.isCorrect))) ? 2 : 1,
               ),
               borderRadius: BorderRadius.circular(12),
