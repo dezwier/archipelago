@@ -42,11 +42,6 @@ class ProduceExerciseWidget extends StatelessWidget {
               color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: onComplete,
-            child: const Text('Skip'),
-          ),
         ],
       ),
     );

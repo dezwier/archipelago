@@ -89,45 +89,41 @@ class _ConceptContentCardWidgetState extends State<ConceptContentCardWidget> {
             // Show learning or native language based on state
             if (_showingLearningLanguage) ...[
               // Learning Term with Language Emoji and Audio Button
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Flexible(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '${LanguageEmoji.getEmoji(learningLanguageCode)} ',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          TextSpan(
-                            text: learningTerm,
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '${LanguageEmoji.getEmoji(learningLanguageCode)} ',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                  ),
-                  if (learningLemmaId != null) ...[
-                    const SizedBox(width: 6),
-                    LemmaAudioPlayer(
-                      key: ValueKey('audio_${widget.conceptId}_$learningLemmaId'),
-                      lemmaId: learningLemmaId,
-                      audioPath: learningAudioPath,
-                      term: learningTerm,
-                      description: learningDescription,
-                      languageCode: learningLanguageCode,
-                      iconSize: 18.0,
-                      autoPlay: shouldAutoPlay,
+                    TextSpan(
+                      text: learningTerm,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
+                    if (learningLemmaId != null)
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: LemmaAudioPlayer(
+                            key: ValueKey('audio_${widget.conceptId}_$learningLemmaId'),
+                            lemmaId: learningLemmaId,
+                            audioPath: learningAudioPath,
+                            term: learningTerm,
+                            description: learningDescription,
+                            languageCode: learningLanguageCode,
+                            iconSize: 18.0,
+                            autoPlay: shouldAutoPlay,
+                          ),
+                        ),
+                      ),
                   ],
-                ],
+                ),
+                textAlign: TextAlign.center,
               ),
               
               // IPA
