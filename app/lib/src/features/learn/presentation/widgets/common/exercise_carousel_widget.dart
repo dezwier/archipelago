@@ -128,7 +128,7 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
     }
   }
 
-  Widget _buildExerciseTypeTag(BuildContext context, String displayName) {
+  Widget _buildExerciseTypeTag(BuildContext context, String displayName, int currentCard, int totalCards) {
     final words = displayName.split(' ');
     if (words.isEmpty) {
       return const SizedBox.shrink();
@@ -143,11 +143,23 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
       fontWeight: FontWeight.bold,
     );
 
+    final cardInfoText = ' ($currentCard/$totalCards)';
+
     if (words.length == 1) {
       // Single word - make it bold
-      return Text(
-        words[0],
-        style: boldStyle,
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: words[0],
+              style: boldStyle,
+            ),
+            TextSpan(
+              text: cardInfoText,
+              style: baseStyle,
+            ),
+          ],
+        ),
       );
     }
 
@@ -164,6 +176,10 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
               text: ' ${words[1]}',
               style: boldStyle,
             ),
+            TextSpan(
+              text: cardInfoText,
+              style: baseStyle,
+            ),
           ],
         ),
       );
@@ -179,6 +195,10 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
           ),
           TextSpan(
             text: ' ${words.sublist(2).join(' ')}',
+            style: baseStyle,
+          ),
+          TextSpan(
+            text: cardInfoText,
             style: baseStyle,
           ),
         ],
@@ -239,7 +259,12 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
 
             // Exercise Type Tag
             Center(
-              child: _buildExerciseTypeTag(context, currentExercise.type.displayName),
+              child: _buildExerciseTypeTag(
+                context,
+                currentExercise.type.displayName,
+                widget.currentIndex + 1,
+                totalExercises,
+              ),
             ),
 
             // Exercise Content

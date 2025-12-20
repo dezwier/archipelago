@@ -242,7 +242,7 @@ class _MatchAudioImageExerciseWidgetState extends State<MatchAudioImageExerciseW
                 // Description at the top
                 if (learningDescription != null && learningDescription.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 24.0),
+                    padding: const EdgeInsets.only(bottom: 18.0),
                     child: Text(
                       learningDescription,
                       textAlign: TextAlign.center,
@@ -260,14 +260,14 @@ class _MatchAudioImageExerciseWidgetState extends State<MatchAudioImageExerciseW
                     term: learningTerm,
                     description: learningDescription,
                     languageCode: learningLanguageCode,
-                    iconSize: 32.0, // Bigger icon size
+                    iconSize: 24.0, // Bigger icon size
                     autoPlay: shouldAutoPlay,
                   ),
               ],
             ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
 
           // Image grid (2 columns)
           Padding(
