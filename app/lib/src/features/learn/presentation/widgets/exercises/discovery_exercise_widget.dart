@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/exercises/concept_content_card_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/common/concept_content_card_widget.dart';
 
 /// Widget that displays a Discovery exercise
 /// This reuses the logic from LessonCardWidget - just showing the concept

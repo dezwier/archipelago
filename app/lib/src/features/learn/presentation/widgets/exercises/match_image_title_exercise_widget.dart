@@ -3,17 +3,17 @@ import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/common/selectable_concept_card_widget.dart';
 
-/// Widget that displays a Reverse Match exercise
+/// Widget that displays a Match Image Title exercise
 /// Shows an image at the top and all concept cards below
 /// User selects the matching concept card
-class MatchReverseExerciseWidget extends StatefulWidget {
+class MatchImageTitleExerciseWidget extends StatefulWidget {
   final Exercise exercise;
   final String? nativeLanguage;
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
 
-  const MatchReverseExerciseWidget({
+  const MatchImageTitleExerciseWidget({
     super.key,
     required this.exercise,
     this.nativeLanguage,
@@ -23,10 +23,10 @@ class MatchReverseExerciseWidget extends StatefulWidget {
   });
 
   @override
-  State<MatchReverseExerciseWidget> createState() => _MatchReverseExerciseWidgetState();
+  State<MatchImageTitleExerciseWidget> createState() => _MatchImageTitleExerciseWidgetState();
 }
 
-class _MatchReverseExerciseWidgetState extends State<MatchReverseExerciseWidget> {
+class _MatchImageTitleExerciseWidgetState extends State<MatchImageTitleExerciseWidget> {
   int? _selectedCardIndex;
   bool _isCorrect = false;
   bool _hasAnswered = false;
@@ -46,7 +46,7 @@ class _MatchReverseExerciseWidgetState extends State<MatchReverseExerciseWidget>
   }
 
   @override
-  void didUpdateWidget(MatchReverseExerciseWidget oldWidget) {
+  void didUpdateWidget(MatchImageTitleExerciseWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Reset state when exercise changes (check both ID and concept ID)
     final oldConceptId = _getConceptId(oldWidget.exercise.concept);

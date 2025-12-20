@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/presentation/controllers/learn_controller.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/lesson_start_widget.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/exercises/exercise_carousel_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/common/exercise_carousel_widget.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/features/create/data/topic_service.dart';
 import 'package:archipelago/src/features/create/domain/topic.dart';

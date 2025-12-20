@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/exercises/exercise_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/common/exercise_widget.dart';
 
 /// Widget that displays a carousel of exercises
 class ExerciseCarouselWidget extends StatefulWidget {

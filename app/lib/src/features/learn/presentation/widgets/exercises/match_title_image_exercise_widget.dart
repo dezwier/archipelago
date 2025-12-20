@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/constants/api_config.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/exercises/concept_content_card_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/common/concept_content_card_widget.dart';
 
-/// Widget that displays a Match exercise
+/// Widget that displays a Match Title Image exercise
 /// Shows a grid of all lesson images (2 per row) and one phrase from the exercise's concept
 /// User selects the matching image from the grid
-class MatchExerciseWidget extends StatefulWidget {
+class MatchTitleImageExerciseWidget extends StatefulWidget {
   final Exercise exercise;
   final String? nativeLanguage;
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
 
-  const MatchExerciseWidget({
+  const MatchTitleImageExerciseWidget({
     super.key,
     required this.exercise,
     this.nativeLanguage,
@@ -23,10 +23,10 @@ class MatchExerciseWidget extends StatefulWidget {
   });
 
   @override
-  State<MatchExerciseWidget> createState() => _MatchExerciseWidgetState();
+  State<MatchTitleImageExerciseWidget> createState() => _MatchTitleImageExerciseWidgetState();
 }
 
-class _MatchExerciseWidgetState extends State<MatchExerciseWidget> {
+class _MatchTitleImageExerciseWidgetState extends State<MatchTitleImageExerciseWidget> {
   int? _selectedImageIndex;
   bool _isCorrect = false;
   bool _hasAnswered = false;
@@ -46,7 +46,7 @@ class _MatchExerciseWidgetState extends State<MatchExerciseWidget> {
   }
 
   @override
-  void didUpdateWidget(MatchExerciseWidget oldWidget) {
+  void didUpdateWidget(MatchTitleImageExerciseWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Reset state when exercise changes (check both ID and concept ID)
     final oldConceptId = _getConceptId(oldWidget.exercise.concept);

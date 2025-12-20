@@ -5,15 +5,15 @@ import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/dictionary/data/lemma_audio_service.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 
-/// Widget that displays a Summary exercise showing all concepts in a 2x2 grid
-class SummaryExerciseWidget extends StatelessWidget {
+/// Widget that displays a Discovery Summary exercise showing all concepts in a 2x2 grid
+class DiscoverySummaryExerciseWidget extends StatelessWidget {
   final Exercise exercise;
   final String? nativeLanguage;
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
 
-  const SummaryExerciseWidget({
+  const DiscoverySummaryExerciseWidget({
     super.key,
     required this.exercise,
     this.nativeLanguage,
