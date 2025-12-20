@@ -158,23 +158,107 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
 
     final currentExercise = widget.exercises[widget.currentIndex];
 
-    return Column(
+    return Stack(
       children: [
-        // Progress Indicator with Dismiss Button
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Exercise ${widget.currentIndex + 1} of $totalExercises',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+        Column(
+          children: [
+            // Progress Indicator
+            Container(
+              padding: const EdgeInsets.fromLTRB(0, 21.0, 0, 12),
+              child: Center(
+                child: Text(
+                  'Exercise ${widget.currentIndex + 1} of $totalExercises',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
                 ),
               ),
-              if (widget.onDismiss != null) ...[
-                const SizedBox(width: 12),
-                IconButton(
+            ),
+
+            // Progress Bar
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
+              height: 4,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: (widget.currentIndex + 1) / totalExercises,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+
+            // Exercise Content (Input or Feedback)
+            Expanded(
+              child: _showingFeedback
+                  ? ExerciseFeedbackWidget(
+                      key: ValueKey('feedback_${currentExercise.id}'),
+                      exercise: currentExercise,
+                      isCorrect: true, // For Discovery, always correct
+                      onContinue: _handleFeedbackContinue,
+                    )
+                  : ExerciseWidget(
+                      key: ValueKey('exercise_${currentExercise.id}'),
+                      exercise: currentExercise,
+                      nativeLanguage: widget.nativeLanguage,
+                      learningLanguage: widget.learningLanguage,
+                      autoPlay: shouldAutoPlayThisBuild,
+                      onComplete: _handleExerciseComplete,
+                    ),
+            ),
+
+            // Navigation Buttons - Floating
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Previous Button
+                    ElevatedButton.icon(
+                      onPressed: isFirstExercise ? null : _handlePrevious,
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Previous'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                    ),
+
+                    // Next/Finish Button
+                    ElevatedButton.icon(
+                      onPressed: _handleNext,
+                      icon: Icon((_showingFeedback && isLastExercise) || (!_showingFeedback && widget.currentIndex >= widget.exercises.length - 1)
+                          ? Icons.check
+                          : Icons.arrow_forward),
+                      label: Text((_showingFeedback && isLastExercise) || (!_showingFeedback && widget.currentIndex >= widget.exercises.length - 1)
+                          ? 'Finish'
+                          : 'Next'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        // Dismiss button in upper right corner of screen
+        if (widget.onDismiss != null)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: IconButton(
                   onPressed: widget.onDismiss,
                   icon: Icon(
                     Icons.close,
@@ -185,86 +269,9 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
                   constraints: const BoxConstraints(),
                   tooltip: 'Dismiss lesson',
                 ),
-              ],
-            ],
-          ),
-        ),
-
-        // Progress Bar
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16.0),
-          height: 4,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(2),
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: (widget.currentIndex + 1) / totalExercises,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(2),
-                color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
-        ),
-
-        const SizedBox(height: 6),
-
-        // Exercise Content (Input or Feedback)
-        Expanded(
-          child: _showingFeedback
-              ? ExerciseFeedbackWidget(
-                  key: ValueKey('feedback_${currentExercise.id}'),
-                  exercise: currentExercise,
-                  isCorrect: true, // For Discovery, always correct
-                  onContinue: _handleFeedbackContinue,
-                )
-              : ExerciseWidget(
-                  key: ValueKey('exercise_${currentExercise.id}'),
-                  exercise: currentExercise,
-                  nativeLanguage: widget.nativeLanguage,
-                  learningLanguage: widget.learningLanguage,
-                  autoPlay: shouldAutoPlayThisBuild,
-                  onComplete: _handleExerciseComplete,
-                ),
-        ),
-
-        // Navigation Buttons - Floating
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Previous Button
-                ElevatedButton.icon(
-                  onPressed: isFirstExercise ? null : _handlePrevious,
-                  icon: const Icon(Icons.arrow_back),
-                  label: const Text('Previous'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                ),
-
-                // Next/Finish Button
-                ElevatedButton.icon(
-                  onPressed: _handleNext,
-                  icon: Icon((_showingFeedback && isLastExercise) || (!_showingFeedback && widget.currentIndex >= widget.exercises.length - 1)
-                      ? Icons.check
-                      : Icons.arrow_forward),
-                  label: Text((_showingFeedback && isLastExercise) || (!_showingFeedback && widget.currentIndex >= widget.exercises.length - 1)
-                      ? 'Finish'
-                      : 'Next'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
