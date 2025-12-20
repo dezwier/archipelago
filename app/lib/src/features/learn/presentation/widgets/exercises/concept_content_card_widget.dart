@@ -10,6 +10,7 @@ class ConceptContentCardWidget extends StatefulWidget {
   final dynamic conceptId;
   final bool autoPlay;
   final bool showNativeByDefault;
+  final bool showDescription;
 
   const ConceptContentCardWidget({
     super.key,
@@ -18,6 +19,7 @@ class ConceptContentCardWidget extends StatefulWidget {
     this.conceptId,
     this.autoPlay = false,
     this.showNativeByDefault = false,
+    this.showDescription = true,
   });
 
   @override
@@ -108,7 +110,7 @@ class _ConceptContentCardWidgetState extends State<ConceptContentCardWidget> {
                       WidgetSpan(
                         alignment: PlaceholderAlignment.middle,
                         child: Padding(
-                          padding: const EdgeInsets.only(left: 8.0),
+                          padding: const EdgeInsets.only(left: 4.0),
                           child: LemmaAudioPlayer(
                             key: ValueKey('audio_${widget.conceptId}_$learningLemmaId'),
                             lemmaId: learningLemmaId,
@@ -140,7 +142,7 @@ class _ConceptContentCardWidgetState extends State<ConceptContentCardWidget> {
               ],
               
               // Learning Description
-              if (learningDescription != null && learningDescription.isNotEmpty) ...[
+              if (widget.showDescription && learningDescription != null && learningDescription.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
                   learningDescription,
@@ -195,7 +197,7 @@ class _ConceptContentCardWidgetState extends State<ConceptContentCardWidget> {
               ],
               
               // Native Description
-              if (nativeDescription != null && nativeDescription.isNotEmpty) ...[
+              if (widget.showDescription && nativeDescription != null && nativeDescription.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
                   nativeDescription,

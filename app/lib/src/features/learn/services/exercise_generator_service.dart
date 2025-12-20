@@ -5,7 +5,7 @@ import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 /// Service that generates exercises from concepts
 class ExerciseGeneratorService {
   /// Generate all exercises for a list of concepts
-  /// Exercises are grouped by type: all discoveries first, then all matches, then scaffolds, then produces
+  /// Exercises are grouped by type: all discoveries first, then all matches, then matchReverse, then scaffolds, then produces
   /// Cards are shuffled per exercise type, and images are shuffled once for all match exercises
   static List<Exercise> generateExercises(List<Map<String, dynamic>> concepts) {
     final List<Exercise> exercises = [];
@@ -15,7 +15,7 @@ class ExerciseGeneratorService {
     final shuffledConceptsForMatch = List<Map<String, dynamic>>.from(concepts);
     shuffledConceptsForMatch.shuffle(random);
 
-    // Generate exercises grouped by type: Discovery -> Match -> Scaffold -> Produce
+    // Generate exercises grouped by type: Discovery -> Match -> MatchReverse -> Scaffold -> Produce
     for (final type in ExerciseType.values) {
       // Shuffle concepts for this exercise type to randomize card order
       final shuffledConcepts = List<Map<String, dynamic>>.from(concepts);
@@ -52,6 +52,10 @@ class ExerciseGeneratorService {
       case ExerciseType.match:
         // Match exercise needs all concepts to show the image grid
         // Use the pre-shuffled list to keep the same image order across all match cards
+        return {'all_concepts': shuffledConceptsForMatch};
+      case ExerciseType.matchReverse:
+        // MatchReverse exercise needs all concepts to show as selectable cards
+        // Use the pre-shuffled list to keep the same order across all matchReverse cards
         return {'all_concepts': shuffledConceptsForMatch};
       case ExerciseType.scaffold:
         // Scaffold exercise data will be generated when implementing Scaffold

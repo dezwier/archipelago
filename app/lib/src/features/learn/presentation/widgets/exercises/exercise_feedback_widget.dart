@@ -85,6 +85,8 @@ class ExerciseFeedbackWidget extends StatelessWidget {
         return 'Great! You\'ve discovered this phrase.';
       case ExerciseType.match:
         return isCorrect ? 'Correct!' : 'Not quite right.';
+      case ExerciseType.matchReverse:
+        return isCorrect ? 'Correct!' : 'Not quite right.';
       case ExerciseType.scaffold:
         return isCorrect ? 'Well done!' : 'Try again.';
       case ExerciseType.produce:
@@ -97,6 +99,10 @@ class ExerciseFeedbackWidget extends StatelessWidget {
       case ExerciseType.discovery:
         return 'Take your time to familiarize yourself with this phrase.';
       case ExerciseType.match:
+        return isCorrect
+            ? 'You matched it correctly!'
+            : 'Review the correct answer and try again next time.';
+      case ExerciseType.matchReverse:
         return isCorrect
             ? 'You matched it correctly!'
             : 'Review the correct answer and try again next time.';

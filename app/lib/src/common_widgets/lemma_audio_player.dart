@@ -27,6 +27,9 @@ class LemmaAudioPlayer extends StatefulWidget {
   /// Callback when audio URL is updated (so parent can refresh lemma data)
   final void Function(String audioUrl)? onAudioUrlUpdated;
   
+  /// Callback when audio playback completes
+  final VoidCallback? onPlaybackComplete;
+  
   /// The icon size
   final double iconSize;
   
@@ -44,6 +47,7 @@ class LemmaAudioPlayer extends StatefulWidget {
     this.description,
     this.languageCode,
     this.onAudioUrlUpdated,
+    this.onPlaybackComplete,
     this.iconSize = 16.0,
     this.showLoadingIndicator = true,
     this.autoPlay = false,
@@ -137,6 +141,7 @@ class _LemmaAudioPlayerState extends State<LemmaAudioPlayer> {
             setState(() {
               _isPlayingAudio = false;
             });
+            widget.onPlaybackComplete?.call();
           }
         });
       } else {
@@ -222,6 +227,7 @@ class _LemmaAudioPlayerState extends State<LemmaAudioPlayer> {
             setState(() {
               _isPlayingAudio = false;
             });
+            widget.onPlaybackComplete?.call();
           }
         });
       } else {

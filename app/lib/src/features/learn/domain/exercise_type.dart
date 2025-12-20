@@ -2,6 +2,7 @@
 enum ExerciseType {
   discovery,
   match,
+  matchReverse,
   scaffold,
   produce;
 
@@ -12,6 +13,8 @@ enum ExerciseType {
         return 'Discovery';
       case ExerciseType.match:
         return 'Match';
+      case ExerciseType.matchReverse:
+        return 'Match Reverse';
       case ExerciseType.scaffold:
         return 'Scaffold';
       case ExerciseType.produce:
