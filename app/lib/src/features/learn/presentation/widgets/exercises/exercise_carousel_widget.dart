@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/exercise_feedback_widget.dart';
 
@@ -77,10 +78,16 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
   int get totalExercises => widget.exercises.length;
 
   void _handleExerciseComplete() {
-    // Show feedback screen
-    setState(() {
-      _showingFeedback = true;
-    });
+    final currentExercise = widget.exercises[widget.currentIndex];
+    // For discovery exercises, skip feedback and go directly to next exercise
+    if (currentExercise.type == ExerciseType.discovery) {
+      _handleFeedbackContinue();
+    } else {
+      // Show feedback screen for other exercise types
+      setState(() {
+        _showingFeedback = true;
+      });
+    }
   }
 
   void _handleFeedbackContinue() {
@@ -98,21 +105,20 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
   }
 
   void _handleNext() {
+    final currentExercise = widget.exercises[widget.currentIndex];
     if (_showingFeedback) {
       // On feedback screen, continue to next exercise
       _handleFeedbackContinue();
     } else {
-      // On input screen, show feedback first (or skip directly to next if preferred)
-      // For Discovery, we can skip directly to next exercise
-      if (widget.currentIndex < widget.exercises.length - 1) {
-        if (widget.onNext != null) {
-          widget.onNext!();
-        }
+      // On input screen, show feedback first (or skip directly to next for discovery)
+      // For Discovery exercises, skip feedback and go directly to next
+      if (currentExercise.type == ExerciseType.discovery) {
+        _handleFeedbackContinue();
       } else {
-        // Last exercise, finish lesson
-        if (widget.onFinish != null) {
-          widget.onFinish!();
-        }
+        // For other exercises, show feedback first
+        setState(() {
+          _showingFeedback = true;
+        });
       }
     }
   }
@@ -197,7 +203,7 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
 
             // Exercise Content (Input or Feedback)
             Expanded(
-              child: _showingFeedback
+              child: _showingFeedback && currentExercise.type != ExerciseType.discovery
                   ? ExerciseFeedbackWidget(
                       key: ValueKey('feedback_${currentExercise.id}'),
                       exercise: currentExercise,

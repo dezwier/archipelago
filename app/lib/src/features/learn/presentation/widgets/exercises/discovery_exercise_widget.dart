@@ -291,25 +291,6 @@ class _DiscoveryExerciseWidgetState extends State<DiscoveryExerciseWidget> {
               ),
             ),
           ),
-
-          // Continue button for Discovery exercise
-          Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: widget.onComplete,
-                icon: const Icon(Icons.check),
-                label: const Text('I\'ve seen this'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
