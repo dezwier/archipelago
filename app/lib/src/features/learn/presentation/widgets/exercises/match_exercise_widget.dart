@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/common_widgets/lemma_audio_player.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/constants/api_config.dart';
-import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/exercises/concept_content_card_widget.dart';
 
 /// Widget that displays a Match exercise
 /// Shows a grid of all lesson images (2 per row) and one phrase from the exercise's concept
@@ -217,12 +216,8 @@ class _MatchExerciseWidgetState extends State<MatchExerciseWidget> {
       return const SizedBox.shrink();
     }
 
-    final learningTerm = learningLemma['translation'] as String? ?? 'Unknown';
-    final learningIpa = learningLemma['ipa'] as String?;
-    final learningDescription = learningLemma['description'] as String?;
-    final learningLanguageCode = (learningLemma['language_code'] as String? ?? '').toLowerCase();
-    final learningAudioPath = learningLemma['audio_path'] as String?;
-    final learningLemmaId = learningLemma['id'] as int?;
+    final nativeLemma = exerciseConcept['native_lemma'] as Map<String, dynamic>?;
+    final conceptId = _getConceptId(exerciseConcept);
     
     // Determine if we should autoplay for this build
     final shouldAutoPlay = widget.autoPlay && !_hasAutoPlayed;
@@ -231,94 +226,23 @@ class _MatchExerciseWidgetState extends State<MatchExerciseWidget> {
     }
 
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Phrase card
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Learning Term with Language Emoji and Audio Button
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: '${LanguageEmoji.getEmoji(learningLanguageCode)} ',
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: learningTerm,
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        if (learningLemmaId != null) ...[
-                          const SizedBox(width: 6),
-                          LemmaAudioPlayer(
-                            key: ValueKey('audio_${widget.exercise.concept['id']}_$learningLemmaId'),
-                            lemmaId: learningLemmaId,
-                            audioPath: learningAudioPath,
-                            term: learningTerm,
-                            description: learningDescription,
-                            languageCode: learningLanguageCode,
-                            iconSize: 18.0,
-                            autoPlay: shouldAutoPlay,
-                          ),
-                        ],
-                      ],
-                    ),
-                    
-                    // IPA
-                    if (learningIpa != null && learningIpa.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        '/$learningIpa/',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                    
-                    // Learning Description
-                    if (learningDescription != null && learningDescription.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        learningDescription,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Phrase card
+          ConceptContentCardWidget(
+            learningLemma: learningLemma,
+            nativeLemma: nativeLemma,
+            conceptId: conceptId,
+            autoPlay: shouldAutoPlay,
+          ),
 
-            const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-            // Image grid (2 columns)
-            GridView.builder(
+          // Image grid (2 columns)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -405,8 +329,8 @@ class _MatchExerciseWidgetState extends State<MatchExerciseWidget> {
                 );
               },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

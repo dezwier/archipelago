@@ -168,22 +168,9 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
       children: [
         Column(
           children: [
-            // Progress Indicator
-            Container(
-              padding: const EdgeInsets.fromLTRB(0, 21.0, 0, 12),
-              child: Center(
-                child: Text(
-                  'Exercise ${widget.currentIndex + 1} of $totalExercises',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                  ),
-                ),
-              ),
-            ),
-
             // Progress Bar
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
+              margin: const EdgeInsets.fromLTRB(56.0, 32.0, 56.0, 12.0),
               height: 4,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(2),
