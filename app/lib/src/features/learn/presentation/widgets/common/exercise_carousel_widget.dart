@@ -33,7 +33,7 @@ class ExerciseCarouselWidget extends StatefulWidget {
 class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
   bool _shouldAutoPlay = false;
   int? _lastAutoPlayedIndex;
-  final GlobalKey _matchImageInfoKey = GlobalKey();
+  final GlobalKey _matchImageAudioKey = GlobalKey();
 
   @override
   void initState() {
@@ -89,9 +89,9 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
   void _handleNext() {
     final currentExercise = widget.exercises[widget.currentIndex];
     
-    // For matchReverse exercises with audio-only variant, check answer first if not checked
-    if (currentExercise.type == ExerciseType.matchReverse) {
-      final state = _matchImageInfoKey.currentState;
+    // For matchImageAudio exercises, check answer first if not checked
+    if (currentExercise.type == ExerciseType.matchImageAudio) {
+      final state = _matchImageAudioKey.currentState;
       if (state != null) {
         // Use dynamic to call the method (state is _MatchImageInfoExerciseWidgetState)
         try {
@@ -126,6 +126,64 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
         widget.onPrevious!();
       }
     }
+  }
+
+  Widget _buildExerciseTypeTag(BuildContext context, String displayName) {
+    final words = displayName.split(' ');
+    if (words.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final baseStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+      fontSize: 12,
+    );
+
+    final boldStyle = baseStyle?.copyWith(
+      fontWeight: FontWeight.bold,
+    );
+
+    if (words.length == 1) {
+      // Single word - make it bold
+      return Text(
+        words[0],
+        style: boldStyle,
+      );
+    }
+
+    if (words.length == 2) {
+      // Two words - both bold
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: words[0],
+              style: boldStyle,
+            ),
+            TextSpan(
+              text: ' ${words[1]}',
+              style: boldStyle,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Three or more words - first two words bold, rest normal
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '${words[0]} ${words[1]}',
+            style: boldStyle,
+          ),
+          TextSpan(
+            text: ' ${words.sublist(2).join(' ')}',
+            style: baseStyle,
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -179,6 +237,11 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
               ),
             ),
 
+            // Exercise Type Tag
+            Center(
+              child: _buildExerciseTypeTag(context, currentExercise.type.displayName),
+            ),
+
             // Exercise Content
             Expanded(
               child: ExerciseWidget(
@@ -188,7 +251,7 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
                 learningLanguage: widget.learningLanguage,
                 autoPlay: shouldAutoPlayThisBuild,
                 onComplete: _handleExerciseComplete,
-                matchImageInfoKey: currentExercise.type == ExerciseType.matchReverse ? _matchImageInfoKey : null,
+                matchImageAudioKey: currentExercise.type == ExerciseType.matchImageAudio ? _matchImageAudioKey : null,
               ),
             ),
           ],
@@ -238,45 +301,48 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
               ),
             ),
           ),
-        // Floating Next/Finish Button - Bottom Right (show for all exercises now)
-        Positioned(
-            right: 16,
-            bottom: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Material(
-                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(28),
-                  elevation: 4,
-                  shadowColor: Colors.black.withValues(alpha: 0.2),
-                  child: InkWell(
-                    onTap: _handleNext,
+        // Floating Next/Finish Button - Bottom Right (hide for matchImageInfo, matchInfoImage, and matchAudioImage exercises)
+        if (currentExercise.type != ExerciseType.matchImageInfo && 
+            currentExercise.type != ExerciseType.matchInfoImage &&
+            currentExercise.type != ExerciseType.matchAudioImage)
+          Positioned(
+              right: 16,
+              bottom: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: Material(
+                    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(28),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            isLastExercise ? 'Finish' : 'Next',
-                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    elevation: 4,
+                    shadowColor: Colors.black.withValues(alpha: 0.2),
+                    child: InkWell(
+                      onTap: _handleNext,
+                      borderRadius: BorderRadius.circular(28),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              isLastExercise ? 'Finish' : 'Next',
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              isLastExercise ? Icons.check : Icons.arrow_forward,
                               color: Theme.of(context).colorScheme.onSurface,
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            isLastExercise ? Icons.check : Icons.arrow_forward,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
       ],
     );
   }

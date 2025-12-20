@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/common_widgets/lemma_audio_player.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/features/dictionary/data/lemma_audio_service.dart';
+import 'package:archipelago/src/constants/api_config.dart';
 
 /// A selectable card widget for concept options in exercises
 /// Inspired by the topic drawer styling pattern
@@ -34,6 +36,100 @@ class SelectableConceptCardWidget extends StatefulWidget {
 }
 
 class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidget> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _hasAutoPlayed = false;
+  String? _generatedAudioPath;
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(SelectableConceptCardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Play audio when card becomes selected
+    if (widget.isSelected && !oldWidget.isSelected && !_hasAutoPlayed) {
+      _hasAutoPlayed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _playAudio();
+        }
+      });
+    }
+    // Reset autoplay flag when card becomes unselected
+    if (!widget.isSelected && oldWidget.isSelected) {
+      _hasAutoPlayed = false;
+    }
+  }
+
+  String? _getFullAudioUrl(String? audioPath) {
+    if (audioPath == null || audioPath.isEmpty) return null;
+    if (audioPath.startsWith('http://') || audioPath.startsWith('https://')) {
+      return audioPath;
+    }
+    return '${ApiConfig.baseUrl}$audioPath';
+  }
+
+  Future<void> _playAudio() async {
+    final learningAudioPath = widget.learningLemma['audio_path'] as String?;
+    final learningLemmaId = widget.learningLemma['id'] as int?;
+    final learningTerm = widget.learningLemma['translation'] as String?;
+    final learningLanguageCode = (widget.learningLemma['language_code'] as String? ?? '').toLowerCase();
+
+    if (learningLemmaId == null) return;
+
+    // Check if audio already exists
+    final audioPath = learningAudioPath ?? _generatedAudioPath;
+    if (audioPath != null && audioPath.isNotEmpty) {
+      // Audio exists, play it
+      await _playExistingAudio(audioPath);
+    } else {
+      // No audio, generate it first
+      await _generateAndPlayAudio(learningLemmaId, learningTerm, learningLanguageCode);
+    }
+  }
+
+  Future<void> _playExistingAudio(String audioPath) async {
+    try {
+      final audioUrl = _getFullAudioUrl(audioPath);
+      if (audioUrl != null) {
+        await _audioPlayer.play(UrlSource(audioUrl));
+        _audioPlayer.onPlayerComplete.first.then((_) {
+          if (mounted) {
+            widget.onPlaybackComplete?.call();
+          }
+        });
+      }
+    } catch (e) {
+      // Silently fail - don't show errors for audio playback
+    }
+  }
+
+  Future<void> _generateAndPlayAudio(int lemmaId, String? term, String? languageCode) async {
+    try {
+      final result = await LemmaAudioService.generateAudio(
+        lemmaId: lemmaId,
+        term: term,
+        languageCode: languageCode,
+      );
+
+      if (!result['success']) {
+        return;
+      }
+
+      final audioUrl = result['audioUrl'] as String?;
+      if (audioUrl == null) {
+        return;
+      }
+
+      _generatedAudioPath = audioUrl;
+      await _playExistingAudio(audioUrl);
+    } catch (e) {
+      // Silently fail - don't show errors for audio generation
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,8 +137,6 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
     final learningTerm = widget.learningLemma['translation'] as String? ?? 'Unknown';
     final learningIpa = widget.learningLemma['ipa'] as String?;
     final learningLanguageCode = (widget.learningLemma['language_code'] as String? ?? '').toLowerCase();
-    final learningAudioPath = widget.learningLemma['audio_path'] as String?;
-    final learningLemmaId = widget.learningLemma['id'] as int?;
 
     // Determine border color based on state
     Color borderColor;
@@ -84,8 +178,6 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
       backgroundColor = defaultBackgroundColor;
     }
 
-    // Autoplay anytime when selected (including after answering)
-    final shouldAutoPlay = widget.isSelected;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
@@ -144,56 +236,15 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    // IPA with audio button inline at end
+                    // IPA text
                     if (learningIpa != null && learningIpa.isNotEmpty) ...[
                       const SizedBox(height: 3),
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            // IPA text
-                            TextSpan(
-                              text: '/$learningIpa/',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                            // Audio player inline at end
-                            if (learningLemmaId != null)
-                              WidgetSpan(
-                                alignment: PlaceholderAlignment.middle,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(left: 4.0),
-                                  child: LemmaAudioPlayer(
-                                    key: ValueKey('audio_${widget.conceptId}_$learningLemmaId'),
-                                    lemmaId: learningLemmaId,
-                                    audioPath: learningAudioPath,
-                                    term: learningTerm,
-                                    languageCode: learningLanguageCode,
-                                    iconSize: 16.0,
-                                    autoPlay: shouldAutoPlay,
-                                    showLoadingIndicator: false,
-                                    onPlaybackComplete: widget.onPlaybackComplete,
-                                  ),
-                                ),
-                              ),
-                          ],
+                      Text(
+                        '/$learningIpa/',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                          fontStyle: FontStyle.italic,
                         ),
-                        textAlign: TextAlign.left,
-                      ),
-                    ] else if (learningLemmaId != null) ...[
-                      // If no IPA, show audio button on its own line
-                      const SizedBox(height: 3),
-                      LemmaAudioPlayer(
-                        key: ValueKey('audio_${widget.conceptId}_$learningLemmaId'),
-                        lemmaId: learningLemmaId,
-                        audioPath: learningAudioPath,
-                        term: learningTerm,
-                        languageCode: learningLanguageCode,
-                        iconSize: 16.0,
-                        autoPlay: shouldAutoPlay,
-                        showLoadingIndicator: false,
-                        onPlaybackComplete: widget.onPlaybackComplete,
                       ),
                     ],
                   ],

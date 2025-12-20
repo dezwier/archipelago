@@ -2,26 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/common/selectable_concept_card_widget.dart';
-import 'package:archipelago/src/common_widgets/lemma_audio_player.dart';
-
-/// Variant type for the match image info exercise
-enum MatchImageInfoVariant {
-  /// Shows the full concept cards (title, IPA, audio)
-  title,
-  /// Shows only audio buttons for each option
-  audioOnly,
-}
 
 /// Widget that displays a Match Image Info exercise
-/// Shows an image at the top and concept options below
-/// User selects the matching concept option
+/// Shows an image at the top and full concept cards below
+/// User selects the matching concept card
 class MatchImageInfoExerciseWidget extends StatefulWidget {
   final Exercise exercise;
   final String? nativeLanguage;
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
-  final MatchImageInfoVariant variant;
 
   const MatchImageInfoExerciseWidget({
     super.key,
@@ -30,16 +20,11 @@ class MatchImageInfoExerciseWidget extends StatefulWidget {
     this.learningLanguage,
     this.autoPlay = false,
     required this.onComplete,
-    this.variant = MatchImageInfoVariant.audioOnly,
   });
 
   @override
   State<MatchImageInfoExerciseWidget> createState() => _MatchImageInfoExerciseWidgetState();
 }
-
-/// Global key type for accessing widget state
-typedef MatchImageInfoExerciseWidgetKey = GlobalKey<_MatchImageInfoExerciseWidgetState>;
-
 
 class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWidget> {
   int? _selectedCardIndex;
@@ -133,62 +118,13 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
     // Don't allow selection after answering (waiting for feedback or next card)
     if (_hasAnswered) return;
 
-    // For audio-only variant, just select without checking
-    if (widget.variant == MatchImageInfoVariant.audioOnly) {
-      setState(() {
-        _selectedCardIndex = index;
-      });
-    } else {
-      // For title variant, check immediately (original behavior)
-      setState(() {
-        _selectedCardIndex = index;
-        final selectedConcept = _allConcepts[index];
-        
-        // Check if selected card matches the exercise's concept
-        // Ensure proper type comparison for IDs
-        final selectedConceptId = _getConceptId(selectedConcept);
-        final isCorrect = _compareIds(selectedConceptId, _exerciseConceptId);
-        _isCorrect = isCorrect;
-        _hasAnswered = true;
-        // If correct, we'll wait for audio to finish
-        _waitingForAudio = isCorrect;
-      });
-
-      // Only proceed to next card if correct (and after audio finishes)
-      if (_isCorrect) {
-        // Audio will autoplay, and we'll wait for onPlaybackComplete callback
-        // Add a timeout fallback in case audio doesn't play or fails (e.g., no audio available)
-        Future.delayed(const Duration(seconds: 5), () {
-          if (mounted && _isCorrect && _waitingForAudio) {
-            // Audio didn't complete within timeout, proceed anyway
-            setState(() {
-              _waitingForAudio = false;
-            });
-            widget.onComplete();
-          }
-        });
-      } else {
-        // If wrong, show feedback and allow retry after a delay
-        // Autoplay will happen automatically since card is selected
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (mounted && !_isCorrect) {
-            setState(() {
-              _selectedCardIndex = null;
-              _hasAnswered = false;
-            });
-          }
-        });
-      }
-    }
-  }
-
-  void _handleCheckAnswer() {
-    if (_selectedCardIndex == null || _hasAnswered) return;
-
+    // Check immediately (title variant behavior)
     setState(() {
-      final selectedConcept = _allConcepts[_selectedCardIndex!];
+      _selectedCardIndex = index;
+      final selectedConcept = _allConcepts[index];
       
       // Check if selected card matches the exercise's concept
+      // Ensure proper type comparison for IDs
       final selectedConceptId = _getConceptId(selectedConcept);
       final isCorrect = _compareIds(selectedConceptId, _exerciseConceptId);
       _isCorrect = isCorrect;
@@ -212,6 +148,7 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
       });
     } else {
       // If wrong, show feedback and allow retry after a delay
+      // Autoplay will happen automatically since card is selected
       Future.delayed(const Duration(milliseconds: 1500), () {
         if (mounted && !_isCorrect) {
           setState(() {
@@ -223,18 +160,6 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
     }
   }
 
-  /// Check answer if selection is made but not answered yet (for audio-only variant)
-  /// Called by carousel's Next button
-  bool checkAnswerIfNeeded() {
-    if (widget.variant == MatchImageInfoVariant.audioOnly &&
-        _selectedCardIndex != null &&
-        !_hasAnswered) {
-      _handleCheckAnswer();
-      return true; // Answer was checked
-    }
-    return false; // No check needed or already answered
-  }
-
   void _handleCorrectAnswerAudioComplete() {
     // Only proceed if we're still waiting for audio and answer is still correct
     if (mounted && _isCorrect && _waitingForAudio) {
@@ -242,225 +167,6 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
         _waitingForAudio = false;
       });
       widget.onComplete();
-    }
-  }
-
-  /// Build the concept options section based on variant
-  Widget _buildConceptOptions() {
-    if (widget.variant == MatchImageInfoVariant.title) {
-      // Title variant: show full concept cards
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Column(
-          children: _allConcepts.asMap().entries.map((entry) {
-            final index = entry.key;
-            final concept = entry.value;
-            final learningLemma = concept['learning_lemma'] as Map<String, dynamic>?;
-            final nativeLemma = concept['native_lemma'] as Map<String, dynamic>?;
-            final conceptId = _getConceptId(concept);
-            
-            if (learningLemma == null) {
-              return const SizedBox.shrink();
-            }
-
-            final isSelected = _selectedCardIndex == index;
-            final isCorrectAnswer = _compareIds(conceptId, _exerciseConceptId);
-
-            return SelectableConceptCardWidget(
-              learningLemma: learningLemma,
-              nativeLemma: nativeLemma,
-              conceptId: conceptId,
-              isSelected: isSelected,
-              isCorrectAnswer: isCorrectAnswer,
-              hasAnswered: _hasAnswered,
-              isCorrect: _isCorrect,
-              onTap: () => _handleCardTap(index),
-              // Only listen to playback complete for the correct answer when it's selected
-              onPlaybackComplete: (isSelected && isCorrectAnswer && _isCorrect && _waitingForAudio)
-                  ? _handleCorrectAnswerAudioComplete
-                  : null,
-            );
-          }).toList(),
-        ),
-      );
-    } else {
-      // Audio-only variant: show audio buttons in a grid
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          const maxCrossAxisCount = 4;
-          const crossAxisSpacing = 12.0;
-          const horizontalPadding = 78.0;
-          
-          // Calculate available width
-          final availableWidth = constraints.maxWidth - (horizontalPadding * 2);
-          
-          // Determine actual columns: use item count if less than max, otherwise use max
-          final actualColumns = _allConcepts.length < maxCrossAxisCount 
-              ? _allConcepts.length 
-              : maxCrossAxisCount;
-          
-          // Calculate item size based on actual columns
-          final totalSpacing = crossAxisSpacing * (actualColumns - 1);
-          final itemSize = (availableWidth - totalSpacing) / actualColumns;
-          
-          // Calculate width needed for the actual items (centered)
-          final gridWidth = (itemSize * actualColumns) + totalSpacing;
-          
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
-              child: SizedBox(
-                width: gridWidth,
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: actualColumns,
-                    crossAxisSpacing: crossAxisSpacing,
-                    mainAxisSpacing: crossAxisSpacing,
-                    childAspectRatio: 1.0,
-                  ),
-                  itemCount: _allConcepts.length,
-          itemBuilder: (context, index) {
-            final concept = _allConcepts[index];
-            final learningLemma = concept['learning_lemma'] as Map<String, dynamic>?;
-            
-            if (learningLemma == null) {
-              return const SizedBox.shrink();
-            }
-
-            final learningTerm = learningLemma['translation'] as String? ?? 'Unknown';
-            final learningDescription = learningLemma['description'] as String?;
-            final learningLanguageCode = (learningLemma['language_code'] as String? ?? '').toLowerCase();
-            final learningAudioPath = learningLemma['audio_path'] as String?;
-            final learningLemmaId = learningLemma['id'] as int?;
-            final conceptId = _getConceptId(concept);
-            
-            final isSelected = _selectedCardIndex == index;
-            final isCorrectAnswer = _compareIds(conceptId, _exerciseConceptId);
-
-            // Determine border color based on state
-            Color borderColor;
-            Color backgroundColor;
-            
-            final defaultBorderColor = Theme.of(context).colorScheme.outline.withValues(alpha: 0.2);
-            final defaultBackgroundColor = Theme.of(context).colorScheme.surface;
-            
-            if (_hasAnswered) {
-              if (_isCorrect) {
-                // After correct answer, only highlight the correct one
-                if (isCorrectAnswer) {
-                  borderColor = Colors.green;
-                  backgroundColor = Colors.green.withValues(alpha: 0.1);
-                } else {
-                  borderColor = defaultBorderColor;
-                  backgroundColor = defaultBackgroundColor;
-                }
-              } else {
-                // After wrong answer, only show red on selected wrong one
-                if (isSelected) {
-                  borderColor = Colors.red;
-                  backgroundColor = Colors.red.withValues(alpha: 0.1);
-                } else {
-                  borderColor = defaultBorderColor;
-                  backgroundColor = defaultBackgroundColor;
-                }
-              }
-            } else if (isSelected) {
-              // Before answering, show primary color for selected
-              borderColor = Theme.of(context).colorScheme.primary;
-              backgroundColor = Theme.of(context).colorScheme.primaryContainer;
-            } else {
-              borderColor = defaultBorderColor;
-              backgroundColor = defaultBackgroundColor;
-            }
-
-            // Don't autoplay in audio-only variant (user clicks to play)
-            final shouldAutoPlay = false;
-
-            return GestureDetector(
-              onTap: () => _handleCardTap(index),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  border: Border.all(
-                    color: borderColor,
-                    width: (_hasAnswered && (isCorrectAnswer || (isSelected && !_isCorrect))) ? 2 : 1,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Stack(
-                  children: [
-                    // Content - centered audio button
-                    Center(
-                      child: learningLemmaId != null
-                          ? LemmaAudioPlayer(
-                              key: ValueKey('audio_${conceptId}_$learningLemmaId'),
-                              lemmaId: learningLemmaId,
-                              audioPath: learningAudioPath,
-                              term: learningTerm,
-                              description: learningDescription,
-                              languageCode: learningLanguageCode,
-                              iconSize: 24.0,
-                              autoPlay: shouldAutoPlay,
-                              showLoadingIndicator: true,
-                              onPlayStart: () {
-                                // Select this item when audio starts playing
-                                if (!_hasAnswered && _selectedCardIndex != index) {
-                                  setState(() {
-                                    _selectedCardIndex = index;
-                                  });
-                                }
-                              },
-                              onPlaybackComplete: (_hasAnswered && isSelected && isCorrectAnswer && _isCorrect && _waitingForAudio)
-                                  ? _handleCorrectAnswerAudioComplete
-                                  : null,
-                            )
-                          : Icon(
-                              Icons.volume_off,
-                              size: 32,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                            ),
-                    ),
-                    // Feedback icon (green for correct, red for incorrect)
-                    if (_hasAnswered && isSelected)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _isCorrect 
-                                ? Colors.green.withValues(alpha: 0.9)
-                                : Colors.red.withValues(alpha: 0.9),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            _isCorrect ? Icons.check : Icons.close,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-                ),
-              ),
-            ),
-          );
-        },
-      );
     }
   }
 
@@ -580,11 +286,43 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
 
           const SizedBox(height: 12),
 
-          // Concept options (varies by variant)
-          _buildConceptOptions(),
+          // Concept options - show full concept cards
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              children: _allConcepts.asMap().entries.map((entry) {
+                final index = entry.key;
+                final concept = entry.value;
+                final learningLemma = concept['learning_lemma'] as Map<String, dynamic>?;
+                final nativeLemma = concept['native_lemma'] as Map<String, dynamic>?;
+                final conceptId = _getConceptId(concept);
+                
+                if (learningLemma == null) {
+                  return const SizedBox.shrink();
+                }
+
+                final isSelected = _selectedCardIndex == index;
+                final isCorrectAnswer = _compareIds(conceptId, _exerciseConceptId);
+
+                return SelectableConceptCardWidget(
+                  learningLemma: learningLemma,
+                  nativeLemma: nativeLemma,
+                  conceptId: conceptId,
+                  isSelected: isSelected,
+                  isCorrectAnswer: isCorrectAnswer,
+                  hasAnswered: _hasAnswered,
+                  isCorrect: _isCorrect,
+                  onTap: () => _handleCardTap(index),
+                  // Only listen to playback complete for the correct answer when it's selected
+                  onPlaybackComplete: (isSelected && isCorrectAnswer && _isCorrect && _waitingForAudio)
+                      ? _handleCorrectAnswerAudioComplete
+                      : null,
+                );
+              }).toList(),
+            ),
+          ),
         ],
       ),
     );
   }
 }
-

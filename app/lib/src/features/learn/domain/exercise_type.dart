@@ -2,8 +2,10 @@
 enum ExerciseType {
   discovery,
   summary,
-  match,
-  matchReverse,
+  matchInfoImage,
+  matchAudioImage,
+  matchImageInfo,
+  matchImageAudio,
   scaffold,
   produce;
 
@@ -11,13 +13,17 @@ enum ExerciseType {
   String get displayName {
     switch (this) {
       case ExerciseType.discovery:
-        return 'Discovery';
+        return '1. Discovery';
       case ExerciseType.summary:
-        return 'Summary';
-      case ExerciseType.match:
-        return 'Match';
-      case ExerciseType.matchReverse:
-        return 'Match Reverse';
+        return '2. Discovery Summary';
+      case ExerciseType.matchInfoImage:
+        return '3.1 Match Info to Image';
+      case ExerciseType.matchImageInfo:
+        return '3.2 Match Image to Info';
+      case ExerciseType.matchAudioImage:
+        return '3.3 Match Audio to Image';
+      case ExerciseType.matchImageAudio:
+        return '3.4 Match Image to Audio';
       case ExerciseType.scaffold:
         return 'Scaffold';
       case ExerciseType.produce:
