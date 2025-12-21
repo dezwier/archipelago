@@ -15,25 +15,25 @@ enum ExerciseType {
   String get displayName {
     switch (this) {
       case ExerciseType.discovery:
-        return '1. Discovery';
+        return '1.1 Discovery';
       case ExerciseType.summary:
-        return '2. Discovery Summary';
+        return '1.2 Discovery Summary';
       case ExerciseType.matchInfoImage:
-        return '3.1 Match Info to Image';
+        return '2.1 Match Info to Image';
       case ExerciseType.matchImageInfo:
-        return '3.2 Match Image to Info';
+        return '2.2 Match Image to Info';
       case ExerciseType.matchAudioImage:
-        return '3.3 Match Audio to Image';
+        return '2.3 Match Audio to Image';
       case ExerciseType.matchImageAudio:
-        return '3.4 Match Image to Audio';
+        return '2.4 Match Image to Audio';
       case ExerciseType.matchDescriptionPhrase:
-        return '3.5 Match Description to Phrase';
+        return '2.5 Match Description to Phrase';
       case ExerciseType.matchPhraseDescription:
-        return '3.6 Match Phrase to Description';
+        return '2.6 Match Phrase to Description';
       case ExerciseType.scaffoldFromImage:
-        return '4.1 Scaffold From Image';
+        return '3.1 Scaffold From Image';
       case ExerciseType.produce:
-        return '5. Produce';
+        return '4.1 Produce';
     }
   }
 }
