@@ -8,7 +8,7 @@ enum ExerciseType {
   matchImageAudio,
   matchDescriptionPhrase,
   matchPhraseDescription,
-  scaffold,
+  scaffoldFromImage,
   produce;
 
   /// Get display name for the exercise type
@@ -30,10 +30,10 @@ enum ExerciseType {
         return '3.5 Match Description to Phrase';
       case ExerciseType.matchPhraseDescription:
         return '3.6 Match Phrase to Description';
-      case ExerciseType.scaffold:
-        return 'Scaffold';
+      case ExerciseType.scaffoldFromImage:
+        return '4.1 Scaffold From Image';
       case ExerciseType.produce:
-        return 'Produce';
+        return '5. Produce';
     }
   }
 }

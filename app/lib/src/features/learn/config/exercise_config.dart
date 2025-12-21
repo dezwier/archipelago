@@ -37,19 +37,24 @@ class ExerciseConfig {
       type: ExerciseType.matchAudioImage,
       perConcept: true,
     ),
-    // Match Image Audio: one per concept
+    // // Match Image Audio: one per concept
+    // ExerciseConfigEntry(
+    //   type: ExerciseType.matchImageAudio,
+    //   perConcept: true,
+    // ),
+    // // Match Phrase Description: one per concept
+    // ExerciseConfigEntry(
+    //   type: ExerciseType.matchPhraseDescription,
+    //   perConcept: true,
+    // ),
+    // // Match Description Phrase: one per concept
+    // ExerciseConfigEntry(
+    //   type: ExerciseType.matchDescriptionPhrase,
+    //   perConcept: true,
+    // ),
+    // Scaffold From Image: one per concept
     ExerciseConfigEntry(
-      type: ExerciseType.matchImageAudio,
-      perConcept: true,
-    ),
-    // Match Phrase Description: one per concept
-    ExerciseConfigEntry(
-      type: ExerciseType.matchPhraseDescription,
-      perConcept: true,
-    ),
-    // Match Description Phrase: one per concept
-    ExerciseConfigEntry(
-      type: ExerciseType.matchDescriptionPhrase,
+      type: ExerciseType.scaffoldFromImage,
       perConcept: true,
     ),
   ];

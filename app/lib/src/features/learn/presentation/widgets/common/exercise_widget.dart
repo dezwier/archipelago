@@ -9,7 +9,7 @@ import 'package:archipelago/src/features/learn/presentation/widgets/exercises/ma
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_image_audio_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_description_phrase_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_phrase_description_exercise_widget.dart';
-import 'package:archipelago/src/features/learn/presentation/widgets/exercises/scaffold_exercise_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/exercises/scaffold_from_image_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/produce_exercise_widget.dart';
 
 /// Base widget that routes to specific exercise type widgets
@@ -117,8 +117,11 @@ class ExerciseWidget extends StatelessWidget {
           autoPlay: autoPlay,
           onComplete: onComplete,
         );
-      case ExerciseType.scaffold:
-        return ScaffoldExerciseWidget(
+      case ExerciseType.scaffoldFromImage:
+        // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
+        final conceptIdScaffoldFromImage = exercise.concept['id'] ?? exercise.concept['concept_id'];
+        return ScaffoldFromImageExerciseWidget(
+          key: ValueKey('scaffoldFromImage_${exercise.id}_${conceptIdScaffoldFromImage}'),
           exercise: exercise,
           nativeLanguage: nativeLanguage,
           learningLanguage: learningLanguage,

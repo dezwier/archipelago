@@ -123,6 +123,21 @@ class _ConceptContentCardWidgetState extends State<ConceptContentCardWidget> {
                           ),
                         ),
                       ),
+                    if (canToggle)
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 4.0),
+                          child: GestureDetector(
+                            onTap: _toggleLanguage,
+                            child: Icon(
+                              Icons.touch_app,
+                              size: 18.0,
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 textAlign: TextAlign.center,
@@ -170,17 +185,53 @@ class _ConceptContentCardWidgetState extends State<ConceptContentCardWidget> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      if (canToggle)
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 4.0),
+                            child: GestureDetector(
+                              onTap: _toggleLanguage,
+                              child: Icon(
+                                Icons.touch_app,
+                                size: 18.0,
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                   textAlign: TextAlign.center,
                 )
               else
-                Text(
-                  nativeTerm ?? 'Unknown',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: nativeTerm ?? 'Unknown',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (canToggle)
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 4.0),
+                            child: GestureDetector(
+                              onTap: _toggleLanguage,
+                              child: Icon(
+                                Icons.touch_app,
+                                size: 18.0,
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
+                  textAlign: TextAlign.center,
                 ),
               
               // Native IPA (if available)

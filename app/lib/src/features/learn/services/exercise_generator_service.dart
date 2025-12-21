@@ -114,8 +114,8 @@ class ExerciseGeneratorService {
         // MatchDescriptionPhrase exercise needs all concepts to show as selectable cards
         // Each card gets its own shuffled list for random option ordering
         return {'all_concepts': shuffledOptions ?? allConcepts};
-      case ExerciseType.scaffold:
-        // Scaffold exercise data will be generated when implementing Scaffold
+      case ExerciseType.scaffoldFromImage:
+        // ScaffoldFromImage doesn't need additional data, uses concept's learning_lemma
         return null;
       case ExerciseType.produce:
         // Produce exercise data will be generated when implementing Produce
