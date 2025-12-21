@@ -30,6 +30,7 @@ class CloseExerciseWidget extends StatefulWidget {
 
 class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
   List<String> _allWords = [];
+  List<String> _wordPunctuation = []; // Trailing punctuation for each word
   List<int> _blankIndices = []; // Indices of words that should be blank
   List<String> _blankInputs = []; // Current input for each blank word
   int _currentBlankIndex = 0; // Which blank word is currently being filled
@@ -108,6 +109,7 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
     if (learningLemma == null) {
       _originalPhrase = '';
       _allWords = [];
+      _wordPunctuation = [];
       _blankIndices = [];
       return;
     }
@@ -115,8 +117,23 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
     final phrase = learningLemma['translation'] as String? ?? '';
     _originalPhrase = phrase.trim();
     
-    // Split phrase by spaces to get words, trim each word
-    _allWords = _originalPhrase.split(' ').where((w) => w.trim().isNotEmpty).map((w) => w.trim()).toList();
+    // Split phrase by spaces and separate words from trailing punctuation
+    _allWords = [];
+    _wordPunctuation = [];
+    final wordParts = _originalPhrase.split(' ').where((w) => w.trim().isNotEmpty);
+    
+    for (final wordPart in wordParts) {
+      // Match word characters followed by optional punctuation
+      final match = RegExp(r'^(\w+)([^\w\s]*)$').firstMatch(wordPart.trim());
+      if (match != null) {
+        _allWords.add(match.group(1) ?? ''); // Word without punctuation
+        _wordPunctuation.add(match.group(2) ?? ''); // Trailing punctuation
+      } else {
+        // Fallback: if no match, treat entire part as word
+        _allWords.add(wordPart.trim());
+        _wordPunctuation.add('');
+      }
+    }
     
     if (_allWords.isEmpty) {
       _blankIndices = [];
@@ -444,6 +461,7 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
     
     final wordIndex = _blankIndices[blankIndex];
     final expectedWord = _allWords[wordIndex];
+    final punctuation = wordIndex < _wordPunctuation.length ? _wordPunctuation[wordIndex] : '';
     final input = blankIndex < _blankInputs.length ? _blankInputs[blankIndex] : '';
     final isWordCorrect = blankIndex < _isCorrect.length ? _isCorrect[blankIndex] : false;
     final isCurrentBlank = blankIndex == _currentBlankIndex;
@@ -530,10 +548,20 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
       }
     }
     
-    // Make the word tappable
+    // Make the word tappable and include punctuation after it
     return GestureDetector(
       onTap: () => _handleBlankTap(blankIndex),
-      child: wordWidget,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          wordWidget,
+          if (punctuation.isNotEmpty)
+            Text(
+              punctuation,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+        ],
+      ),
     );
   }
 
@@ -626,7 +654,7 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
             children: [
               // Image at the top (centered)
               Padding(
-                padding: const EdgeInsets.fromLTRB(78.0, 24.0, 78.0, 16),
+                padding: const EdgeInsets.fromLTRB(78.0, 24.0, 78.0, 12),
                 child: Center(
                   child: Container(
                     constraints: const BoxConstraints(
@@ -675,30 +703,31 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
                   ),
                 ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
               // Learning language phrase with underscores
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                padding: const EdgeInsets.symmetric(horizontal: 48.0),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     // Build phrase with words and underscores
                     Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                      spacing: 6,
+                      runSpacing: 4,
                       alignment: WrapAlignment.center,
                       children: List.generate(_allWords.length, (index) {
                         final isBlank = _blankIndices.contains(index);
                         final blankIndex = isBlank ? _blankIndices.indexOf(index) : -1;
+                        final punctuation = index < _wordPunctuation.length ? _wordPunctuation[index] : '';
 
                         if (isBlank && blankIndex >= 0) {
                           // Show blank word - _buildColoredWord handles both incomplete and complete cases
                           return _buildColoredWord(blankIndex);
                         } else {
-                          // Show word as text
+                          // Show word as text with punctuation
                           return Text(
-                            _allWords[index],
+                            _allWords[index] + punctuation,
                             style: Theme.of(context).textTheme.bodyLarge,
                           );
                         }
