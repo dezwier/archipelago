@@ -10,53 +10,85 @@ class ExerciseGeneratorService {
   /// Uses ExerciseConfig to determine which exercises to generate.
   /// Exercises are generated in the order specified by the configuration.
   /// 
+  /// Generation order: All exercises of each type are generated together before moving to the next type.
+  /// For example: all discoveries, then summary, then all matches, etc.
+  /// 
   /// Randomization:
   /// - Each exercise type gets its own shuffled concept list (for per-concept exercises)
   /// - Each match exercise card gets its own shuffled option list for random option ordering
+  /// - If randomizeSelection is enabled, randomly select exercises per concept
+  /// - If randomizeOrdering is enabled, shuffle exercise order per concept
   static List<Exercise> generateExercises(List<Map<String, dynamic>> concepts) {
     final List<Exercise> exercises = [];
     final random = Random();
 
-    // Generate exercises based on configuration
+    // Generate exercises grouped by type, respecting config order
+    // Loop through config entries first, then for each entry generate exercises for all concepts
     for (final configEntry in ExerciseConfig.exercises) {
       if (configEntry.perConcept) {
-        // Generate one exercise per concept, with concepts shuffled for this exercise type
-        final shuffledConcepts = List<Map<String, dynamic>>.from(concepts);
-        shuffledConcepts.shuffle(random);
+        // For alternatives, create a shuffled list and cycle through without replacement
+        // Only reuse types when there are more concepts than available types
+        List<ExerciseType>? shuffledTypes;
+        int typeIndex = 0;
         
-        for (final concept in shuffledConcepts) {
+        if (configEntry.types.length > 1) {
+          // Multiple types (alternatives): shuffle once and cycle through without replacement
+          shuffledTypes = List<ExerciseType>.from(configEntry.types)..shuffle(random);
+        }
+        
+        // Generate one exercise per concept for this config entry
+        for (final concept in concepts) {
+          // Select exercise type: 
+          // - If single type (types.length == 1), always use that type for all concepts
+          // - If multiple types (alternatives), cycle through shuffled list without replacement
+          final selectedType = configEntry.types.length == 1
+              ? configEntry.types[0]  // Single type: use it for all concepts
+              : shuffledTypes![typeIndex % shuffledTypes.length];  // Alternatives: cycle without replacement
+          
+          // Increment index for next concept (only for alternatives)
+          if (configEntry.types.length > 1) {
+            typeIndex++;
+          }
+          
           // For match exercises, create a new shuffled list of options for each card
-          final shuffledOptions = _isMatchExercise(configEntry.type)
+          final shuffledOptions = _isMatchExercise(selectedType)
               ? (List<Map<String, dynamic>>.from(concepts)..shuffle(random))
               : null;
           
-          final exerciseId = '${concept['id']}_${configEntry.type.name}';
+          final exerciseId = '${concept['id']}_${selectedType.name}';
           exercises.add(
             Exercise(
               id: exerciseId,
-              type: configEntry.type,
+              type: selectedType,
               concept: concept,
               exerciseData: _generateExerciseData(
-                configEntry.type,
+                selectedType,
                 concept,
                 concepts,
                 shuffledOptions,
+                configEntry.parameters,
               ),
             ),
           );
         }
       } else {
-        // Generate a single exercise for all concepts (e.g., summary)
+        // Generate one exercise for all concepts (e.g., summary)
+        // Select exercise type: if multiple types, randomly select one
+        final selectedType = configEntry.types.length == 1
+            ? configEntry.types[0]
+            : configEntry.types[random.nextInt(configEntry.types.length)];
+        
         exercises.add(
           Exercise(
-            id: '${configEntry.type.name}_all_concepts',
-            type: configEntry.type,
+            id: '${selectedType.name}_all_concepts',
+            type: selectedType,
             concept: {}, // Empty concept for summary-type exercises
             exerciseData: _generateExerciseData(
-              configEntry.type,
+              selectedType,
               {},
               concepts,
               null, // Summary doesn't need shuffled options
+              configEntry.parameters,
             ),
           ),
         );
@@ -82,6 +114,7 @@ class ExerciseGeneratorService {
     Map<String, dynamic> concept,
     List<Map<String, dynamic>> allConcepts,
     List<Map<String, dynamic>>? shuffledOptions,
+    Map<String, dynamic>? parameters,
   ) {
     switch (type) {
       case ExerciseType.discovery:
@@ -116,10 +149,10 @@ class ExerciseGeneratorService {
         return {'all_concepts': shuffledOptions ?? allConcepts};
       case ExerciseType.scaffoldFromImage:
         // ScaffoldFromImage doesn't need additional data, uses concept's learning_lemma
-        return null;
+        return parameters;
       case ExerciseType.closeExercise:
-        // CloseExercise doesn't need additional data, uses concept's learning_lemma
-        return null;
+        // CloseExercise uses concept's learning_lemma and optional parameters (minBlanks, maxBlanks)
+        return parameters;
     }
   }
 }

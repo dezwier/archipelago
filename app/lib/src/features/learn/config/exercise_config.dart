@@ -6,76 +6,148 @@ import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 /// This structure allows for easy modification of exercise composition and
 /// can be extended in the future to support per-concept exercise selection.
 class ExerciseConfig {
+  /// Whether to randomly select exercises per concept (instead of using all configured exercises)
+  /// When true, up to [maxExercisesPerConcept] exercises will be randomly selected for each concept
+  static const bool randomizeSelection = false;
+  
+  /// Whether to randomize the order of exercises per concept
+  /// When true, exercises will be shuffled for each concept independently
+  static const bool randomizeOrdering = false;
+  
+  /// Maximum number of exercises to generate per concept when [randomizeSelection] is true
+  /// If null, all configured exercises will be used (subject to randomization)
+  static const int? maxExercisesPerConcept = null;
+  
   /// List of exercise configurations defining which exercises to generate
   /// 
   /// Each entry specifies:
-  /// - The exercise type
+  /// - The exercise type(s) - if multiple types are provided, one is randomly selected per concept
   /// - Whether it's generated per-concept (true) or once for all concepts (false)
-  static const List<ExerciseConfigEntry> exercises = [
-    // Discovery exercises: one per concept
+  /// - Optional parameters specific to the exercise type
+  /// 
+  /// The order of entries determines the order of exercises in the lesson.
+  /// 
+  /// Lesson Flow:
+  /// 1. Discovery card per concept
+  /// 2. Discovery summary card (once, after all discoveries)
+  /// 3. Random image-based match exercise per concept (randomly selects from 4 types)
+  /// 4. Random non-image match exercise per concept (randomly selects from 2 types)
+  /// 5. Scaffold per concept
+  /// 6. Close exercise with 2 words missing per concept
+  /// 7. Close exercise with 4 words missing per concept
+  /// 
+  /// Example: To have Discovery, then randomly MatchInfoImage OR MatchAudioImage, then CloseExercise:
+  /// ```
+  /// ExerciseConfigEntry(type: ExerciseType.discovery, perConcept: true),
+  /// ExerciseConfigEntry.alternatives(
+  ///   types: [ExerciseType.matchInfoImage, ExerciseType.matchAudioImage],
+  ///   perConcept: true,
+  /// ),
+  /// ExerciseConfigEntry(type: ExerciseType.closeExercise, perConcept: true),
+  /// ```
+  static final List<ExerciseConfigEntry> exercises = [
+    // 1. Discovery card: one per concept
     ExerciseConfigEntry(
       type: ExerciseType.discovery,
       perConcept: true,
     ),
-    // // Summary exercise: once after all discoveries
-    // ExerciseConfigEntry(
-    //   type: ExerciseType.summary,
-    //   perConcept: false,
-    // ),
-    // // Match Info Image: one per concept
-    // ExerciseConfigEntry(
-    //   type: ExerciseType.matchInfoImage,
-    //   perConcept: true,
-    // ),
-    // // Match Image Info: one per concept
-    // ExerciseConfigEntry(
-    //   type: ExerciseType.matchImageInfo,
-    //   perConcept: true,
-    // ),
-    // // Match Audio Image: one per concept
-    // ExerciseConfigEntry(
-    //   type: ExerciseType.matchAudioImage,
-    //   perConcept: true,
-    // ),
-    // // Match Image Audio: one per concept
-    // ExerciseConfigEntry(
-    //   type: ExerciseType.matchImageAudio,
-    //   perConcept: true,
-    // ),
-    // // Match Phrase Description: one per concept
-    // ExerciseConfigEntry(
-    //   type: ExerciseType.matchPhraseDescription,
-    //   perConcept: true,
-    // ),
-    // // Match Description Phrase: one per concept
-    // ExerciseConfigEntry(
-    //   type: ExerciseType.matchDescriptionPhrase,
-    //   perConcept: true,
-    // ),
-    // Scaffold From Image: one per concept
-    // ExerciseConfigEntry(
-    //   type: ExerciseType.scaffoldFromImage,
-    //   perConcept: true,
-    // ),
-    // Close Exercise: one per concept
+    
+    // 2. Discovery summary: once after all discoveries
+    ExerciseConfigEntry(
+      type: ExerciseType.summary,
+      perConcept: false,
+    ),
+
+    // 3. Match info image: one per concept
+    ExerciseConfigEntry(
+      type: ExerciseType.matchInfoImage,
+      perConcept: true,
+    ),
+
+    // 4. Random other match exercise: one per concept
+    const ExerciseConfigEntry.alternatives(
+      types: [
+        ExerciseType.matchAudioImage,
+        ExerciseType.matchImageInfo,
+        ExerciseType.matchImageAudio,
+        ExerciseType.matchDescriptionPhrase,
+        ExerciseType.matchPhraseDescription,
+      ],
+      perConcept: true,
+    ),
+    
+    
+    // 5. Scaffold: one per concept
+    ExerciseConfigEntry(
+      type: ExerciseType.scaffoldFromImage,
+      perConcept: true,
+    ),
+    
+    // 6. Close exercise with 2 words missing: one per concept
     ExerciseConfigEntry(
       type: ExerciseType.closeExercise,
       perConcept: true,
+      parameters: {
+        'minBlanks': 2,
+        'maxBlanks': 2,
+      },
+    ),
+    
+    // 7. Close exercise with 4 words missing: one per concept
+    ExerciseConfigEntry(
+      type: ExerciseType.closeExercise,
+      perConcept: true,
+      parameters: {
+        'minBlanks': 4,
+        'maxBlanks': 4,
+      },
     ),
   ];
 }
 
-/// Configuration entry for a single exercise type
+/// Configuration entry for a single exercise type or multiple alternatives
 class ExerciseConfigEntry {
-  /// The type of exercise to generate
-  final ExerciseType type;
+  /// The type(s) of exercise to generate
+  /// If a single type is provided, it will always be used.
+  /// If multiple types are provided, one will be randomly selected per concept.
+  /// The order in the config list determines the position of exercises.
+  final List<ExerciseType> types;
   
   /// Whether this exercise should be generated per-concept (true) or once for all concepts (false)
   final bool perConcept;
   
-  const ExerciseConfigEntry({
-    required this.type,
+  /// Optional parameters specific to this exercise type
+  /// These parameters will be passed through to the exercise via exerciseData
+  /// Example: For cloze exercises, {'minBlanks': 1, 'maxBlanks': 3}
+  /// Note: If multiple types are provided, the same parameters will be used for all
+  final Map<String, dynamic>? parameters;
+  
+  const ExerciseConfigEntry._({
+    required this.types,
     required this.perConcept,
+    this.parameters,
   });
+  
+  /// Constructor for a single exercise type
+  ExerciseConfigEntry({
+    required ExerciseType type,
+    required bool perConcept,
+    Map<String, dynamic>? parameters,
+  }) : this._(
+          types: [type],
+          perConcept: perConcept,
+          parameters: parameters,
+        );
+  
+  /// Constructor for multiple exercise type alternatives
+  /// One will be randomly selected per concept
+  const ExerciseConfigEntry.alternatives({
+    required List<ExerciseType> types,
+    required bool perConcept,
+    Map<String, dynamic>? parameters,
+  }) : this._(
+          types: types,
+          perConcept: perConcept,
+          parameters: parameters,
+        );
 }
-

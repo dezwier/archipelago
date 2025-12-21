@@ -6,7 +6,7 @@ import 'package:archipelago/src/features/dictionary/data/lemma_audio_service.dar
 import 'package:archipelago/src/utils/language_emoji.dart';
 
 /// Widget that displays a Discovery Summary exercise showing all concepts in a 2x2 grid
-class DiscoverySummaryExerciseWidget extends StatelessWidget {
+class DiscoverySummaryExerciseWidget extends StatefulWidget {
   final Exercise exercise;
   final String? nativeLanguage;
   final String? learningLanguage;
@@ -21,6 +21,25 @@ class DiscoverySummaryExerciseWidget extends StatelessWidget {
     this.autoPlay = false,
     required this.onComplete,
   });
+
+  @override
+  State<DiscoverySummaryExerciseWidget> createState() => _DiscoverySummaryExerciseWidgetState();
+}
+
+class _DiscoverySummaryExerciseWidgetState extends State<DiscoverySummaryExerciseWidget> {
+  final List<AudioPlayer> _audioPlayers = [];
+
+  void _registerAudioPlayer(AudioPlayer player) {
+    _audioPlayers.add(player);
+  }
+
+  void _stopAllOtherAudio(AudioPlayer currentPlayer) {
+    for (final player in _audioPlayers) {
+      if (player != currentPlayer) {
+        player.stop();
+      }
+    }
+  }
 
   /// Get the full image URL
   String? _getImageUrl(String? imageUrl) {
@@ -41,7 +60,7 @@ class DiscoverySummaryExerciseWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Get all concepts from exercise data
-    final allConcepts = exercise.exerciseData?['all_concepts'] as List<dynamic>?;
+    final allConcepts = widget.exercise.exerciseData?['all_concepts'] as List<dynamic>?;
     
     if (allConcepts == null || allConcepts.isEmpty) {
       return const Center(
@@ -87,6 +106,8 @@ class DiscoverySummaryExerciseWidget extends StatelessWidget {
               learningAudioPath: learningAudioPath,
               learningLemmaId: learningLemmaId,
               conceptId: conceptId,
+              onAudioPlayerCreated: _registerAudioPlayer,
+              onAudioPlayStart: _stopAllOtherAudio,
             );
           },
         ),
@@ -103,6 +124,8 @@ class _SummaryConceptCard extends StatefulWidget {
   final String? learningAudioPath;
   final int? learningLemmaId;
   final dynamic conceptId;
+  final void Function(AudioPlayer)? onAudioPlayerCreated;
+  final void Function(AudioPlayer)? onAudioPlayStart;
 
   const _SummaryConceptCard({
     required this.imageUrl,
@@ -111,6 +134,8 @@ class _SummaryConceptCard extends StatefulWidget {
     this.learningAudioPath,
     this.learningLemmaId,
     this.conceptId,
+    this.onAudioPlayerCreated,
+    this.onAudioPlayStart,
   });
 
   @override
@@ -122,6 +147,22 @@ class _SummaryConceptCardState extends State<_SummaryConceptCard> {
   bool _isPlayingAudio = false;
   bool _isGeneratingAudio = false;
   String? _generatedAudioPath;
+
+  @override
+  void initState() {
+    super.initState();
+    // Register this audio player with the parent
+    widget.onAudioPlayerCreated?.call(_audioPlayer);
+    
+    // Listen to player state changes to update UI when audio is stopped externally
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted && state == PlayerState.stopped && _isPlayingAudio) {
+        setState(() {
+          _isPlayingAudio = false;
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -146,6 +187,9 @@ class _SummaryConceptCardState extends State<_SummaryConceptCard> {
   }
 
   Future<void> _playExistingAudio(String audioPath) async {
+    // Stop all other audio players before starting this one
+    widget.onAudioPlayStart?.call(_audioPlayer);
+    
     setState(() {
       _isPlayingAudio = true;
     });
@@ -207,6 +251,9 @@ class _SummaryConceptCardState extends State<_SummaryConceptCard> {
         _isGeneratingAudio = false;
         _isPlayingAudio = true;
       });
+
+      // Stop all other audio players before starting this one
+      widget.onAudioPlayStart?.call(_audioPlayer);
 
       final fullAudioUrl = _getFullAudioUrl(audioUrl);
       if (fullAudioUrl != null) {

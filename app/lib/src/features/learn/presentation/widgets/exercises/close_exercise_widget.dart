@@ -43,10 +43,6 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
   bool _waitingForAudio = false;
   bool _hasAnswered = false;
   dynamic _exerciseConceptId;
-  
-  // Parameter to control number of blanks (random 1 to 3)
-  static const int _minBlanks = 1;
-  static const int _maxBlanks = 3;
 
   /// Get concept ID from a concept map, checking both 'id' and 'concept_id' fields
   dynamic _getConceptId(Map<String, dynamic> concept) {
@@ -140,9 +136,14 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
       return;
     }
 
-    // Select random indices to blank out (1 to 3, but ensure at least 1 word remains visible)
+    // Get min/max blanks from exerciseData, with defaults
+    final exerciseData = widget.exercise.exerciseData;
+    final minBlanks = exerciseData?['minBlanks'] as int? ?? 1;
+    final maxBlanks = exerciseData?['maxBlanks'] as int? ?? 3;
+
+    // Select random indices to blank out (but ensure at least 1 word remains visible)
     final random = Random(widget.exercise.id.hashCode);
-    final numBlanks = min(_maxBlanks, max(_minBlanks, _allWords.length - 1));
+    final numBlanks = min(maxBlanks, max(minBlanks, _allWords.length - 1));
     final availableIndices = List.generate(_allWords.length, (i) => i);
     availableIndices.shuffle(random);
     _blankIndices = availableIndices.take(numBlanks).toList()..sort();
