@@ -17,31 +17,31 @@ class ExerciseConfig {
       type: ExerciseType.discovery,
       perConcept: true,
     ),
-    // Summary exercise: once after all discoveries
-    ExerciseConfigEntry(
-      type: ExerciseType.summary,
-      perConcept: false,
-    ),
-    // Match Info Image: one per concept
-    ExerciseConfigEntry(
-      type: ExerciseType.matchInfoImage,
-      perConcept: true,
-    ),
-    // Match Image Info: one per concept
-    ExerciseConfigEntry(
-      type: ExerciseType.matchImageInfo,
-      perConcept: true,
-    ),
-    // Match Audio Image: one per concept
-    ExerciseConfigEntry(
-      type: ExerciseType.matchAudioImage,
-      perConcept: true,
-    ),
-    // Match Image Audio: one per concept
-    ExerciseConfigEntry(
-      type: ExerciseType.matchImageAudio,
-      perConcept: true,
-    ),
+    // // Summary exercise: once after all discoveries
+    // ExerciseConfigEntry(
+    //   type: ExerciseType.summary,
+    //   perConcept: false,
+    // ),
+    // // Match Info Image: one per concept
+    // ExerciseConfigEntry(
+    //   type: ExerciseType.matchInfoImage,
+    //   perConcept: true,
+    // ),
+    // // Match Image Info: one per concept
+    // ExerciseConfigEntry(
+    //   type: ExerciseType.matchImageInfo,
+    //   perConcept: true,
+    // ),
+    // // Match Audio Image: one per concept
+    // ExerciseConfigEntry(
+    //   type: ExerciseType.matchAudioImage,
+    //   perConcept: true,
+    // ),
+    // // Match Image Audio: one per concept
+    // ExerciseConfigEntry(
+    //   type: ExerciseType.matchImageAudio,
+    //   perConcept: true,
+    // ),
     // // Match Phrase Description: one per concept
     // ExerciseConfigEntry(
     //   type: ExerciseType.matchPhraseDescription,
@@ -53,8 +53,13 @@ class ExerciseConfig {
     //   perConcept: true,
     // ),
     // Scaffold From Image: one per concept
+    // ExerciseConfigEntry(
+    //   type: ExerciseType.scaffoldFromImage,
+    //   perConcept: true,
+    // ),
+    // Close Exercise: one per concept
     ExerciseConfigEntry(
-      type: ExerciseType.scaffoldFromImage,
+      type: ExerciseType.closeExercise,
       perConcept: true,
     ),
   ];

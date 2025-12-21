@@ -326,13 +326,14 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
               ),
             ),
           ),
-        // Floating Next/Finish Button - Bottom Right (hide for matchImageInfo, matchInfoImage, matchAudioImage, matchDescriptionPhrase, matchPhraseDescription, and scaffoldFromImage exercises)
+        // Floating Next/Finish Button - Bottom Right (hide for matchImageInfo, matchInfoImage, matchAudioImage, matchDescriptionPhrase, matchPhraseDescription, scaffoldFromImage, and closeExercise exercises)
         if (currentExercise.type != ExerciseType.matchImageInfo && 
             currentExercise.type != ExerciseType.matchInfoImage &&
             currentExercise.type != ExerciseType.matchAudioImage &&
             currentExercise.type != ExerciseType.matchDescriptionPhrase &&
             currentExercise.type != ExerciseType.matchPhraseDescription &&
-            currentExercise.type != ExerciseType.scaffoldFromImage)
+            currentExercise.type != ExerciseType.scaffoldFromImage &&
+            currentExercise.type != ExerciseType.closeExercise)
           Positioned(
               right: 16,
               bottom: 0,

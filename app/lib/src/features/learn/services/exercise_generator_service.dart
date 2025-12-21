@@ -120,6 +120,9 @@ class ExerciseGeneratorService {
       case ExerciseType.produce:
         // Produce exercise data will be generated when implementing Produce
         return null;
+      case ExerciseType.closeExercise:
+        // CloseExercise doesn't need additional data, uses concept's learning_lemma
+        return null;
     }
   }
 }
