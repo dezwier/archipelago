@@ -4,6 +4,14 @@ import 'package:archipelago/src/utils/language_emoji.dart';
 import 'package:archipelago/src/features/dictionary/data/lemma_audio_service.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 
+/// Display mode for the selectable concept card
+enum CardDisplayMode {
+  /// Show phrase (term + IPA)
+  phrase,
+  /// Show description text
+  description,
+}
+
 /// A selectable card widget for concept options in exercises
 /// Inspired by the topic drawer styling pattern
 /// Shows title and IPA in an elegant layout, autoplays audio when selected
@@ -17,6 +25,8 @@ class SelectableConceptCardWidget extends StatefulWidget {
   final bool isCorrect;
   final VoidCallback onTap;
   final VoidCallback? onPlaybackComplete;
+  final CardDisplayMode displayMode;
+  final bool autoPlay;
 
   const SelectableConceptCardWidget({
     super.key,
@@ -29,6 +39,8 @@ class SelectableConceptCardWidget extends StatefulWidget {
     required this.isCorrect,
     required this.onTap,
     this.onPlaybackComplete,
+    this.displayMode = CardDisplayMode.phrase,
+    this.autoPlay = true,
   });
 
   @override
@@ -49,8 +61,8 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
   @override
   void didUpdateWidget(SelectableConceptCardWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Play audio when card becomes selected
-    if (widget.isSelected && !oldWidget.isSelected && !_hasAutoPlayed) {
+    // Play audio when card becomes selected (only if autoPlay is enabled)
+    if (widget.autoPlay && widget.isSelected && !oldWidget.isSelected && !_hasAutoPlayed) {
       _hasAutoPlayed = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -136,6 +148,7 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
     // Extract data from learning lemma
     final learningTerm = widget.learningLemma['translation'] as String? ?? 'Unknown';
     final learningIpa = widget.learningLemma['ipa'] as String?;
+    final learningDescription = widget.learningLemma['description'] as String?;
     final learningLanguageCode = (widget.learningLemma['language_code'] as String? ?? '').toLowerCase();
 
     // Determine border color based on state
@@ -206,45 +219,77 @@ class _SelectableConceptCardWidgetState extends State<SelectableConceptCardWidge
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Title with flag inline at start and audio button inline at end
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          // Flag emoji at start
-                          TextSpan(
-                            text: '${LanguageEmoji.getEmoji(learningLanguageCode)} ',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: widget.isSelected && !widget.hasAnswered
-                                  ? Theme.of(context).colorScheme.onPrimaryContainer
-                                  : Theme.of(context).colorScheme.onSurface,
+                    if (widget.displayMode == CardDisplayMode.phrase) ...[
+                      // Phrase mode: Title with flag inline at start
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            // Flag emoji at start
+                            TextSpan(
+                              text: '${LanguageEmoji.getEmoji(learningLanguageCode)} ',
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: widget.isSelected && !widget.hasAnswered
+                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
-                          ),
-                          // Title text
-                          TextSpan(
-                            text: learningTerm,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: widget.isSelected && !widget.hasAnswered
-                                  ? Theme.of(context).colorScheme.onPrimaryContainer
-                                  : Theme.of(context).colorScheme.onSurface,
+                            // Title text
+                            TextSpan(
+                              text: learningTerm,
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: widget.isSelected && !widget.hasAnswered
+                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      textAlign: TextAlign.left,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    // IPA text
-                    if (learningIpa != null && learningIpa.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        '/$learningIpa/',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                          fontStyle: FontStyle.italic,
+                          ],
                         ),
+                        textAlign: TextAlign.left,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      // IPA text
+                      if (learningIpa != null && learningIpa.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          '/$learningIpa/',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ] else ...[
+                      // Description mode: Flag emoji + description text
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            // Flag emoji at start
+                            TextSpan(
+                              text: '${LanguageEmoji.getEmoji(learningLanguageCode)} ',
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: widget.isSelected && !widget.hasAnswered
+                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            // Description text
+                            TextSpan(
+                              text: learningDescription ?? 'No description',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: widget.isSelected && !widget.hasAnswered
+                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                        textAlign: TextAlign.left,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ],

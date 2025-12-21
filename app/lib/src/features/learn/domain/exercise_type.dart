@@ -6,6 +6,8 @@ enum ExerciseType {
   matchAudioImage,
   matchImageInfo,
   matchImageAudio,
+  matchDescriptionPhrase,
+  matchPhraseDescription,
   scaffold,
   produce;
 
@@ -24,6 +26,10 @@ enum ExerciseType {
         return '3.3 Match Audio to Image';
       case ExerciseType.matchImageAudio:
         return '3.4 Match Image to Audio';
+      case ExerciseType.matchDescriptionPhrase:
+        return '3.5 Match Description to Phrase';
+      case ExerciseType.matchPhraseDescription:
+        return '3.6 Match Phrase to Description';
       case ExerciseType.scaffold:
         return 'Scaffold';
       case ExerciseType.produce:

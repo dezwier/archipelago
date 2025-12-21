@@ -7,6 +7,8 @@ import 'package:archipelago/src/features/learn/presentation/widgets/exercises/ma
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_audio_image_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_image_info_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_image_audio_exercise_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_description_phrase_exercise_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_phrase_description_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/scaffold_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/produce_exercise_widget.dart';
 
@@ -87,6 +89,28 @@ class ExerciseWidget extends StatelessWidget {
         final conceptIdMatchImageAudio = exercise.concept['id'] ?? exercise.concept['concept_id'];
         return MatchImageAudioExerciseWidget(
           key: matchImageAudioKey ?? ValueKey('matchImageAudio_${exercise.id}_${conceptIdMatchImageAudio}'),
+          exercise: exercise,
+          nativeLanguage: nativeLanguage,
+          learningLanguage: learningLanguage,
+          autoPlay: autoPlay,
+          onComplete: onComplete,
+        );
+      case ExerciseType.matchDescriptionPhrase:
+        // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
+        final conceptIdMatchDescriptionPhrase = exercise.concept['id'] ?? exercise.concept['concept_id'];
+        return MatchDescriptionPhraseExerciseWidget(
+          key: ValueKey('matchDescriptionPhrase_${exercise.id}_${conceptIdMatchDescriptionPhrase}'),
+          exercise: exercise,
+          nativeLanguage: nativeLanguage,
+          learningLanguage: learningLanguage,
+          autoPlay: autoPlay,
+          onComplete: onComplete,
+        );
+      case ExerciseType.matchPhraseDescription:
+        // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
+        final conceptIdMatchPhraseDescription = exercise.concept['id'] ?? exercise.concept['concept_id'];
+        return MatchPhraseDescriptionExerciseWidget(
+          key: ValueKey('matchPhraseDescription_${exercise.id}_${conceptIdMatchPhraseDescription}'),
           exercise: exercise,
           nativeLanguage: nativeLanguage,
           learningLanguage: learningLanguage,
