@@ -102,6 +102,63 @@ class _LearnScreenState extends State<LearnScreen> {
     );
   }
 
+  void _showDismissConfirmation() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.warning_rounded,
+                color: Theme.of(context).colorScheme.error,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Leave Lesson?',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'You will lose all progress in this lesson. Are you sure you want to leave?',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _controller.finishLesson();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              child: const Text('Leave Lesson'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -214,7 +271,7 @@ class _LearnScreenState extends State<LearnScreen> {
               onPrevious: _controller.previousCard,
               onNext: _controller.nextCard,
               onFinish: _controller.finishLesson,
-              onDismiss: _controller.finishLesson,
+              onDismiss: _showDismissConfirmation,
             );
           }
 
