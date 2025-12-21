@@ -43,9 +43,9 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
   bool _hasAnswered = false;
   dynamic _exerciseConceptId;
   
-  // Parameter to control number of blanks (random 1 to 5)
+  // Parameter to control number of blanks (random 1 to 3)
   static const int _minBlanks = 1;
-  static const int _maxBlanks = 5;
+  static const int _maxBlanks = 3;
 
   /// Get concept ID from a concept map, checking both 'id' and 'concept_id' fields
   dynamic _getConceptId(Map<String, dynamic> concept) {
@@ -123,7 +123,7 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
       return;
     }
 
-    // Select random indices to blank out (1 to 5, but ensure at least 1 word remains visible)
+    // Select random indices to blank out (1 to 3, but ensure at least 1 word remains visible)
     final random = Random(widget.exercise.id.hashCode);
     final numBlanks = min(_maxBlanks, max(_minBlanks, _allWords.length - 1));
     final availableIndices = List.generate(_allWords.length, (i) => i);
@@ -319,6 +319,135 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
     return display.toString();
   }
 
+  /// Get the color for a letter at a specific position in a completed word
+  /// Returns: Colors.green for correct position, Colors.orange for wrong position but present, Colors.red for not present
+  Color _getLetterColor(int blankIndex, int letterIndex) {
+    if (blankIndex >= _blankIndices.length) return Colors.red;
+    
+    final wordIndex = _blankIndices[blankIndex];
+    final expectedWord = _allWords[wordIndex];
+    final input = blankIndex < _blankInputs.length ? _blankInputs[blankIndex] : '';
+    
+    final expectedNormalized = _normalizeText(expectedWord);
+    final inputNormalized = _normalizeText(input);
+    
+    if (letterIndex >= inputNormalized.length || letterIndex >= expectedNormalized.length) {
+      return Colors.red;
+    }
+    
+    final inputChar = inputNormalized[letterIndex];
+    final expectedChar = expectedNormalized[letterIndex];
+    
+    // Green: letter in correct spot
+    if (inputChar == expectedChar) {
+      return Colors.green;
+    }
+    
+    // Check if letter exists in the expected word
+    if (!expectedNormalized.contains(inputChar)) {
+      return Colors.red;
+    }
+    
+    // Orange: letter is present in word but in wrong position
+    // Mark greens first, then assign orange to remaining letters
+    final greenPositions = <int>{};
+    for (int i = 0; i < inputNormalized.length && i < expectedNormalized.length; i++) {
+      if (inputNormalized[i] == expectedNormalized[i]) {
+        greenPositions.add(i);
+      }
+    }
+    
+    // Count available orange slots for this letter (excluding green positions)
+    int availableForOrange = 0;
+    for (int i = 0; i < expectedNormalized.length; i++) {
+      if (expectedNormalized[i] == inputChar && !greenPositions.contains(i)) {
+        availableForOrange++;
+      }
+    }
+    
+    // Count orange slots used before current position
+    int orangeUsedBefore = 0;
+    for (int i = 0; i < letterIndex && i < inputNormalized.length; i++) {
+      if (inputNormalized[i] == inputChar && !greenPositions.contains(i)) {
+        orangeUsedBefore++;
+      }
+    }
+    
+    // If there are still available orange slots, this letter should be orange
+    if (orangeUsedBefore < availableForOrange) {
+      return Colors.orange;
+    }
+    
+    // Otherwise, this letter occurrence exceeds what's available, so it's red
+    return Colors.red;
+  }
+
+  /// Build a RichText widget for a completed word with colored letters
+  /// Only shows colors when word is fully typed (same number of letters)
+  Widget _buildColoredWord(int blankIndex) {
+    if (blankIndex >= _blankIndices.length) return const SizedBox.shrink();
+    
+    final wordIndex = _blankIndices[blankIndex];
+    final expectedWord = _allWords[wordIndex];
+    final input = blankIndex < _blankInputs.length ? _blankInputs[blankIndex] : '';
+    final isWordCorrect = blankIndex < _isCorrect.length ? _isCorrect[blankIndex] : false;
+    final isCurrentBlank = blankIndex == _currentBlankIndex;
+    
+    // Create base style once - use exact same style for all cases
+    final baseTextStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
+      fontWeight: FontWeight.bold,
+      letterSpacing: 1,
+    ) ?? const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1);
+    
+    // Only show colors when word is fully typed (same number of letters)
+    if (input.length != expectedWord.length) {
+      // Not fully typed yet, show normal display with underscores
+      final displayText = _getBlankDisplayText(blankIndex);
+      return Text(
+        displayText,
+        style: baseTextStyle.copyWith(
+          color: isWordCorrect
+              ? Colors.green
+              : (isCurrentBlank
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurface),
+        ),
+      );
+    }
+    
+    // Word is fully typed, show colored letters
+    // If word is correct, show all green
+    if (isWordCorrect) {
+      return Text(
+        expectedWord,
+        style: baseTextStyle.copyWith(
+          color: Colors.green,
+        ),
+      );
+    }
+    
+    // Build text spans with colors for each letter (keep same style, only change color)
+    final spans = <TextSpan>[];
+    for (int i = 0; i < expectedWord.length; i++) {
+      final color = _getLetterColor(blankIndex, i);
+      spans.add(TextSpan(
+        text: input[i],
+        style: baseTextStyle.copyWith(
+          color: color,
+        ),
+      ));
+    }
+    
+    return DefaultTextStyle(
+      style: baseTextStyle,
+      child: Text.rich(
+        TextSpan(
+          children: spans,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Safeguard: Ensure state is reset if exercise concept changed
@@ -408,7 +537,7 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
             children: [
               // Image at the top (centered)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 78.0, vertical: 24.0),
+                padding: const EdgeInsets.fromLTRB(78.0, 24.0, 78.0, 16),
                 child: Center(
                   child: Container(
                     constraints: const BoxConstraints(
@@ -482,23 +611,8 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
                         final blankIndex = isBlank ? _blankIndices.indexOf(index) : -1;
 
                         if (isBlank && blankIndex >= 0) {
-                          // Show blank word with underscores
-                          final isWordCorrect = blankIndex < _isCorrect.length ? _isCorrect[blankIndex] : false;
-                          final isCurrentBlank = blankIndex == _currentBlankIndex;
-                          final displayText = _getBlankDisplayText(blankIndex);
-                          
-                          return Text(
-                            displayText,
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: isWordCorrect
-                                  ? Colors.green
-                                  : (isCurrentBlank
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.onSurface),
-                              fontWeight: isCurrentBlank ? FontWeight.bold : FontWeight.bold,
-                              letterSpacing: 1, // Keep same letter spacing whether correct or not
-                            ),
-                          );
+                          // Show blank word - _buildColoredWord handles both incomplete and complete cases
+                          return _buildColoredWord(blankIndex);
                         } else {
                           // Show word as text
                           return Text(

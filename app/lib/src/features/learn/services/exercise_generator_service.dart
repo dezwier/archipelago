@@ -117,9 +117,6 @@ class ExerciseGeneratorService {
       case ExerciseType.scaffoldFromImage:
         // ScaffoldFromImage doesn't need additional data, uses concept's learning_lemma
         return null;
-      case ExerciseType.produce:
-        // Produce exercise data will be generated when implementing Produce
-        return null;
       case ExerciseType.closeExercise:
         // CloseExercise doesn't need additional data, uses concept's learning_lemma
         return null;
