@@ -200,8 +200,11 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
         setState(() {
           _currentBlankIndex--;
         });
+        // Update the input controller with the current value for this blank
+        _inputController?.text = _blankInputs[_currentBlankIndex];
+        _previousInputLength = _blankInputs[_currentBlankIndex].length;
       }
-      _previousInputLength = 0;
+      _previousInputLength = value.length;
       return;
     }
 
@@ -244,26 +247,9 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
 
     _previousInputLength = limitedValue.length;
 
-    // If correct and word is complete, move to next blank
-    if (isCorrect && _currentBlankIndex < _blankIndices.length - 1) {
-      // Clear input and move to next blank
-      Future.delayed(const Duration(milliseconds: 50), () {
-        if (mounted) {
-          _inputController?.clear();
-          _previousInputLength = 0;
-          if (_currentBlankIndex < _blankIndices.length - 1) {
-            setState(() {
-              _currentBlankIndex++;
-            });
-            _inputFocusNode?.requestFocus();
-          }
-        }
-      });
-    }
-
-    // Check if all words are completed correctly
-    if (isCorrect && _isCorrect.every((correct) => correct == true)) {
-      _handleComplete();
+    // If correct and word is complete, move to next blank or complete exercise
+    if (isCorrect) {
+      _handleWordComplete(_currentBlankIndex);
     }
   }
 
@@ -292,31 +278,100 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
     });
   }
 
-  /// Get the display text for a blank word (underscores with typed letters, or original word if correct)
-  String _getBlankDisplayText(int blankIndex) {
-    if (blankIndex >= _blankIndices.length) return '';
+  /// Handle tap on a blank word
+  void _handleBlankTap(int blankIndex) {
+    if (_hasAnswered || _waitingForAudio || blankIndex >= _blankIndices.length) return;
+
+    // If tapping on the currently focused blank, add a hint
+    if (blankIndex == _currentBlankIndex) {
+      _addHint(blankIndex);
+    } else {
+      // Switch focus to the tapped blank
+      setState(() {
+        _currentBlankIndex = blankIndex;
+      });
+      // Update the input controller with the current value for this blank
+      _inputController?.text = _blankInputs[blankIndex];
+      _previousInputLength = _blankInputs[blankIndex].length;
+      // Focus the input field
+      _inputFocusNode?.requestFocus();
+    }
+  }
+
+  /// Add the next correct letter as a hint
+  void _addHint(int blankIndex) {
+    if (blankIndex >= _blankIndices.length) return;
     
+    // Don't add hints if word is already correct
+    if (blankIndex < _isCorrect.length && _isCorrect[blankIndex]) return;
+
     final wordIndex = _blankIndices[blankIndex];
     final expectedWord = _allWords[wordIndex];
-    final isWordCorrect = blankIndex < _isCorrect.length ? _isCorrect[blankIndex] : false;
+    final currentInput = blankIndex < _blankInputs.length ? _blankInputs[blankIndex] : '';
     
-    // If word is correct, show the original word with case and symbols
-    if (isWordCorrect) {
-      return expectedWord;
-    }
+    // Find the next position that needs a hint
+    final normalizedExpected = _normalizeText(expectedWord);
+    final normalizedInput = _normalizeText(currentInput);
     
-    final input = blankIndex < _blankInputs.length ? _blankInputs[blankIndex] : '';
-    
-    // Build display: typed letters + remaining underscores
-    final display = StringBuffer();
-    for (int i = 0; i < expectedWord.length; i++) {
-      if (i < input.length) {
-        display.write(input[i]);
-      } else {
-        display.write('_');
+    // Find the next missing letter
+    int nextIndex = normalizedInput.length;
+    if (nextIndex < normalizedExpected.length) {
+      final nextLetter = normalizedExpected[nextIndex];
+      final newInput = currentInput + nextLetter;
+      
+      // Add the hint letter directly to the input
+      setState(() {
+        if (blankIndex < _blankInputs.length) {
+          _blankInputs[blankIndex] = newInput;
+        } else {
+          _blankInputs.add(newInput);
+        }
+      });
+      
+      // Update the input controller to reflect the new input
+      if (blankIndex == _currentBlankIndex && _inputController != null) {
+        _inputController!.text = newInput;
+        _previousInputLength = newInput.length;
+      }
+      
+      // Check if the hint makes the word correct using the same logic as typing
+      final normalizedNewInput = _normalizeText(newInput);
+      final isCorrect = normalizedNewInput == normalizedExpected && newInput.length == expectedWord.length;
+      
+      if (isCorrect) {
+        setState(() {
+          _isCorrect[blankIndex] = true;
+        });
+        
+        // Move to next blank or complete exercise
+        _handleWordComplete(blankIndex);
       }
     }
-    return display.toString();
+  }
+  
+  /// Handle completion of a word - move to next blank or complete exercise
+  void _handleWordComplete(int blankIndex) {
+    // Check if all words are completed correctly
+    if (_isCorrect.every((correct) => correct == true)) {
+      _handleComplete();
+      return;
+    }
+    
+    // Move to next blank if available
+    if (blankIndex < _blankIndices.length - 1) {
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          _inputController?.clear();
+          _previousInputLength = 0;
+          setState(() {
+            // Move to next blank
+            final nextIndex = blankIndex + 1;
+            _currentBlankIndex = nextIndex;
+          });
+          _inputFocusNode?.requestFocus();
+        }
+      });
+    }
   }
 
   /// Get the color for a letter at a specific position in a completed word
@@ -399,52 +454,86 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
       letterSpacing: 1,
     ) ?? const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1);
     
+    // Build the widget
+    Widget wordWidget;
+    
     // Only show colors when word is fully typed (same number of letters)
     if (input.length != expectedWord.length) {
       // Not fully typed yet, show normal display with underscores
-      final displayText = _getBlankDisplayText(blankIndex);
-      return Text(
-        displayText,
-        style: baseTextStyle.copyWith(
-          color: isWordCorrect
-              ? Colors.green
-              : (isCurrentBlank
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.onSurface),
+      // Build with TextSpan to style underscores differently
+      final spans = <TextSpan>[];
+      for (int i = 0; i < expectedWord.length; i++) {
+        if (i < input.length) {
+          // Show typed letter (including hints which are now part of input)
+          spans.add(TextSpan(
+            text: input[i],
+            style: baseTextStyle.copyWith(
+              color: isWordCorrect
+                  ? Colors.green
+                  : (isCurrentBlank
+                      ? Colors.grey[800] // Dark gray for focused
+                      : Theme.of(context).colorScheme.onSurface),
+            ),
+          ));
+        } else {
+          // Show underscore with focus-based styling
+          spans.add(TextSpan(
+            text: '_',
+            style: baseTextStyle.copyWith(
+              color: isCurrentBlank
+                  ? Colors.grey[800] // Dark gray for focused
+                  : Colors.grey[800], // Light gray for unfocused
+              fontWeight: isCurrentBlank
+                  ? FontWeight.w500 // Thicker for focused
+                  : FontWeight.w200, // Thin (1px equivalent) for unfocused
+            ),
+          ));
+        }
+      }
+      wordWidget = DefaultTextStyle(
+        style: baseTextStyle,
+        child: Text.rich(
+          TextSpan(children: spans),
         ),
       );
+    } else {
+      // Word is fully typed, show colored letters
+      // If word is correct, show all green
+      if (isWordCorrect) {
+        wordWidget = Text(
+          expectedWord,
+          style: baseTextStyle.copyWith(
+            color: Colors.green,
+          ),
+        );
+      } else {
+        // Build text spans with colors for each letter (keep same style, only change color)
+        final spans = <TextSpan>[];
+        for (int i = 0; i < expectedWord.length; i++) {
+          final color = _getLetterColor(blankIndex, i);
+          spans.add(TextSpan(
+            text: input[i],
+            style: baseTextStyle.copyWith(
+              color: color,
+            ),
+          ));
+        }
+        
+        wordWidget = DefaultTextStyle(
+          style: baseTextStyle,
+          child: Text.rich(
+            TextSpan(
+              children: spans,
+            ),
+          ),
+        );
+      }
     }
     
-    // Word is fully typed, show colored letters
-    // If word is correct, show all green
-    if (isWordCorrect) {
-      return Text(
-        expectedWord,
-        style: baseTextStyle.copyWith(
-          color: Colors.green,
-        ),
-      );
-    }
-    
-    // Build text spans with colors for each letter (keep same style, only change color)
-    final spans = <TextSpan>[];
-    for (int i = 0; i < expectedWord.length; i++) {
-      final color = _getLetterColor(blankIndex, i);
-      spans.add(TextSpan(
-        text: input[i],
-        style: baseTextStyle.copyWith(
-          color: color,
-        ),
-      ));
-    }
-    
-    return DefaultTextStyle(
-      style: baseTextStyle,
-      child: Text.rich(
-        TextSpan(
-          children: spans,
-        ),
-      ),
+    // Make the word tappable
+    return GestureDetector(
+      onTap: () => _handleBlankTap(blankIndex),
+      child: wordWidget,
     );
   }
 
@@ -574,7 +663,7 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
               // Native language phrase below image
               if (nativeLemma != null)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
                   child: Center(
                     child: Text(
                       nativeLemma['translation'] as String? ?? '',
@@ -586,21 +675,14 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
                   ),
                 ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // Learning language phrase with underscores
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                padding: const EdgeInsets.symmetric(horizontal: 32.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Complete the phrase:',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
                     // Build phrase with words and underscores
                     Wrap(
                       spacing: 8,
