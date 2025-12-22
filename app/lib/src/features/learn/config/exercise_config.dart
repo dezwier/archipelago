@@ -33,8 +33,8 @@ class ExerciseConfig {
   /// 3. Random image-based match exercise per concept (randomly selects from 4 types)
   /// 4. Random non-image match exercise per concept (randomly selects from 2 types)
   /// 5. Scaffold per concept
-  /// 6. Close exercise with 2 words missing per concept
-  /// 7. Close exercise with 4 words missing per concept
+  /// 6. Close exercise with 33% of words missing per concept
+  /// 7. Close exercise with 66% of words missing per concept
   /// 
   /// Example: To have Discovery, then randomly MatchInfoImage OR MatchAudioImage, then CloseExercise:
   /// ```
@@ -83,23 +83,21 @@ class ExerciseConfig {
       perConcept: true,
     ),
     
-    // 6. Close exercise with 2 words missing: one per concept
+    // 6. Close exercise with 33% of words missing: one per concept
     ExerciseConfigEntry(
       type: ExerciseType.closeExercise,
       perConcept: true,
       parameters: {
-        'minBlanks': 2,
-        'maxBlanks': 2,
+        'blankPercentage': 0.33,
       },
     ),
     
-    // 7. Close exercise with 4 words missing: one per concept
+    // 7. Close exercise with 66% of words missing: one per concept
     ExerciseConfigEntry(
       type: ExerciseType.closeExercise,
       perConcept: true,
       parameters: {
-        'minBlanks': 4,
-        'maxBlanks': 4,
+        'blankPercentage': 0.66,
       },
     ),
   ];
@@ -118,7 +116,7 @@ class ExerciseConfigEntry {
   
   /// Optional parameters specific to this exercise type
   /// These parameters will be passed through to the exercise via exerciseData
-  /// Example: For cloze exercises, {'minBlanks': 1, 'maxBlanks': 3}
+  /// Example: For cloze exercises, {'blankCount': 2} or {'blankPercentage': 0.33}
   /// Note: If multiple types are provided, the same parameters will be used for all
   final Map<String, dynamic>? parameters;
   

@@ -136,14 +136,36 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
       return;
     }
 
-    // Get min/max blanks from exerciseData, with defaults
+    // Get blank configuration from exerciseData
+    // Supports either 'blankCount' (exact number) or 'blankPercentage' (percentage of words)
     final exerciseData = widget.exercise.exerciseData;
-    final minBlanks = exerciseData?['minBlanks'] as int? ?? 1;
-    final maxBlanks = exerciseData?['maxBlanks'] as int? ?? 3;
+    final blankCount = exerciseData?['blankCount'] as int?;
+    final blankPercentage = exerciseData?['blankPercentage'] as double?;
+    
+    // Calculate number of blanks to use
+    int numBlanks;
+    if (blankCount != null) {
+      // Use exact number (but ensure at least 1 word remains visible)
+      numBlanks = min(blankCount, _allWords.length - 1);
+    } else if (blankPercentage != null) {
+      // Calculate based on percentage, rounded to nearest whole number
+      numBlanks = (_allWords.length * blankPercentage).round();
+      // Ensure at least 1 word remains visible
+      numBlanks = min(numBlanks, _allWords.length - 1);
+      // Ensure at least 1 word is blank (if there are 2+ words)
+      if (_allWords.length > 1) {
+        numBlanks = max(numBlanks, 1);
+      } else {
+        // If only 1 word, don't blank it
+        numBlanks = 0;
+      }
+    } else {
+      // Default: use 1 blank if no configuration provided (and at least 2 words)
+      numBlanks = _allWords.length > 1 ? min(1, _allWords.length - 1) : 0;
+    }
 
-    // Select random indices to blank out (but ensure at least 1 word remains visible)
+    // Select random indices to blank out
     final random = Random(widget.exercise.id.hashCode);
-    final numBlanks = min(maxBlanks, max(minBlanks, _allWords.length - 1));
     final availableIndices = List.generate(_allWords.length, (i) => i);
     availableIndices.shuffle(random);
     _blankIndices = availableIndices.take(numBlanks).toList()..sort();
