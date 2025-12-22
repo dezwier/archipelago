@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/common_widgets/lemma_audio_player.dart';
 
@@ -13,6 +14,8 @@ class ScaffoldFromImageExerciseWidget extends StatefulWidget {
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
+  final Function(Exercise exercise)? onExerciseStart;
+  final Function(Exercise exercise, ExerciseOutcome outcome, {int? hintCount, String? failureReason})? onExerciseComplete;
 
   const ScaffoldFromImageExerciseWidget({
     super.key,
@@ -21,6 +24,8 @@ class ScaffoldFromImageExerciseWidget extends StatefulWidget {
     this.learningLanguage,
     this.autoPlay = false,
     required this.onComplete,
+    this.onExerciseStart,
+    this.onExerciseComplete,
   });
 
   @override
@@ -37,6 +42,8 @@ class _ScaffoldFromImageExerciseWidgetState extends State<ScaffoldFromImageExerc
   bool _waitingForAudio = false;
   bool _hasAnswered = false;
   dynamic _exerciseConceptId;
+  bool _hasStartedTracking = false;
+  bool _hasWrongOrder = false;
 
   /// Get concept ID from a concept map, checking both 'id' and 'concept_id' fields
   dynamic _getConceptId(Map<String, dynamic> concept) {
@@ -47,6 +54,7 @@ class _ScaffoldFromImageExerciseWidgetState extends State<ScaffoldFromImageExerc
   void initState() {
     super.initState();
     _resetState();
+    _startTracking();
   }
 
 
@@ -59,6 +67,14 @@ class _ScaffoldFromImageExerciseWidgetState extends State<ScaffoldFromImageExerc
     if (oldWidget.exercise.id != widget.exercise.id || 
         oldConceptId != newConceptId) {
       _resetState();
+      _startTracking();
+    }
+  }
+  
+  void _startTracking() {
+    if (!_hasStartedTracking && widget.onExerciseStart != null) {
+      _hasStartedTracking = true;
+      widget.onExerciseStart!(widget.exercise);
     }
   }
 
@@ -72,6 +88,8 @@ class _ScaffoldFromImageExerciseWidgetState extends State<ScaffoldFromImageExerc
         _isCorrect = false;
         _hasAnswered = false;
         _waitingForAudio = false;
+        _hasStartedTracking = false;
+        _hasWrongOrder = false;
       });
     } else {
       _selectedWords = [];
@@ -79,6 +97,8 @@ class _ScaffoldFromImageExerciseWidgetState extends State<ScaffoldFromImageExerc
       _isCorrect = false;
       _hasAnswered = false;
       _waitingForAudio = false;
+      _hasStartedTracking = false;
+      _hasWrongOrder = false;
     }
   }
 
@@ -138,6 +158,11 @@ class _ScaffoldFromImageExerciseWidgetState extends State<ScaffoldFromImageExerc
       _selectedWords.add(word);
       _wordCorrectness.add(isCorrect);
       _availableWords.remove(word);
+      
+      // Track wrong order
+      if (!isCorrect && !_hasWrongOrder) {
+        _hasWrongOrder = true;
+      }
     });
 
     // Check if all words are selected and all are correct
@@ -170,9 +195,18 @@ class _ScaffoldFromImageExerciseWidgetState extends State<ScaffoldFromImageExerc
       if (i < _expectedWords.length) {
         final expectedWord = _expectedWords[i].toLowerCase().trim();
         final selectedWord = _selectedWords[i].toLowerCase().trim();
-        _wordCorrectness.add(expectedWord == selectedWord);
+        final isCorrect = expectedWord == selectedWord;
+        _wordCorrectness.add(isCorrect);
+        
+        // Track wrong order
+        if (!isCorrect && !_hasWrongOrder) {
+          _hasWrongOrder = true;
+        }
       } else {
         _wordCorrectness.add(false);
+        if (!_hasWrongOrder) {
+          _hasWrongOrder = true;
+        }
       }
     }
   }
@@ -197,6 +231,18 @@ class _ScaffoldFromImageExerciseWidgetState extends State<ScaffoldFromImageExerc
       _hasAnswered = true;
       _waitingForAudio = true;
     });
+
+    // Determine outcome
+    final outcome = _hasWrongOrder ? ExerciseOutcome.failed : ExerciseOutcome.succeeded;
+    
+    // Report completion
+    if (widget.onExerciseComplete != null) {
+      widget.onExerciseComplete!(
+        widget.exercise,
+        outcome,
+        failureReason: _hasWrongOrder ? 'Wrong order at some point' : null,
+      );
+    }
 
     // Audio will be played by LemmaAudioPlayer widget
     // Add timeout fallback in case audio doesn't play or fails
@@ -300,10 +346,20 @@ class _ScaffoldFromImageExerciseWidgetState extends State<ScaffoldFromImageExerc
       _isCorrect = false;
       _hasAnswered = false;
       _waitingForAudio = false;
+      _hasStartedTracking = false;
+      _hasWrongOrder = false;
       // Schedule setState for next frame
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {});
+          _startTracking();
+        }
+      });
+    } else {
+      // Ensure tracking is started
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _startTracking();
         }
       });
     }

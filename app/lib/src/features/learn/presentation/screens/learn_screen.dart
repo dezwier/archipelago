@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/presentation/controllers/learn_controller.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/lesson_start_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/common/exercise_carousel_widget.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/lesson_report_card_widget.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/features/create/data/topic_service.dart';
 import 'package:archipelago/src/features/create/domain/topic.dart';
@@ -261,6 +262,16 @@ class _LearnScreenState extends State<LearnScreen> {
             );
           }
 
+          // Show report card if lesson finished
+          if (_controller.showReportCard) {
+            return LessonReportCardWidget(
+              performances: _controller.exercisePerformances,
+              onDone: () {
+                _controller.dismissReportCard();
+              },
+            );
+          }
+
           // Show exercise carousel if lesson is active
           if (_controller.isLessonActive) {
             return ExerciseCarouselWidget(
@@ -272,6 +283,8 @@ class _LearnScreenState extends State<LearnScreen> {
               onNext: _controller.nextCard,
               onFinish: _controller.finishLesson,
               onDismiss: _showDismissConfirmation,
+              onExerciseStart: _controller.startExerciseTracking,
+              onExerciseComplete: _controller.completeExerciseTracking,
             );
           }
 

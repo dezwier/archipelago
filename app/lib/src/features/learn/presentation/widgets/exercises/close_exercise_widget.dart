@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/common_widgets/lemma_audio_player.dart';
 
@@ -14,6 +15,8 @@ class CloseExerciseWidget extends StatefulWidget {
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
+  final Function(Exercise exercise)? onExerciseStart;
+  final Function(Exercise exercise, ExerciseOutcome outcome, {int? hintCount, String? failureReason})? onExerciseComplete;
 
   const CloseExerciseWidget({
     super.key,
@@ -22,6 +25,8 @@ class CloseExerciseWidget extends StatefulWidget {
     this.learningLanguage,
     this.autoPlay = false,
     required this.onComplete,
+    this.onExerciseStart,
+    this.onExerciseComplete,
   });
 
   @override
@@ -43,6 +48,9 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
   bool _waitingForAudio = false;
   bool _hasAnswered = false;
   dynamic _exerciseConceptId;
+  bool _hasStartedTracking = false;
+  int _hintCount = 0;
+  bool _hasRedLetters = false;
 
   /// Get concept ID from a concept map, checking both 'id' and 'concept_id' fields
   dynamic _getConceptId(Map<String, dynamic> concept) {
@@ -53,6 +61,7 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
   void initState() {
     super.initState();
     _resetState();
+    _startTracking();
   }
 
   @override
@@ -64,6 +73,14 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
     if (oldWidget.exercise.id != widget.exercise.id || 
         oldConceptId != newConceptId) {
       _resetState();
+      _startTracking();
+    }
+  }
+  
+  void _startTracking() {
+    if (!_hasStartedTracking && widget.onExerciseStart != null) {
+      _hasStartedTracking = true;
+      widget.onExerciseStart!(widget.exercise);
     }
   }
 
@@ -82,11 +99,17 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
         _isComplete = false;
         _hasAnswered = false;
         _waitingForAudio = false;
+        _hasStartedTracking = false;
+        _hintCount = 0;
+        _hasRedLetters = false;
       });
     } else {
       _isComplete = false;
       _hasAnswered = false;
       _waitingForAudio = false;
+      _hasStartedTracking = false;
+      _hintCount = 0;
+      _hasRedLetters = false;
     }
   }
 
@@ -302,6 +325,26 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
       _waitingForAudio = true;
     });
 
+    // Determine outcome
+    ExerciseOutcome outcome;
+    if (_hasRedLetters) {
+      outcome = ExerciseOutcome.failed;
+    } else if (_hintCount > 0) {
+      outcome = ExerciseOutcome.neededHints;
+    } else {
+      outcome = ExerciseOutcome.succeeded;
+    }
+    
+    // Report completion
+    if (widget.onExerciseComplete != null) {
+      widget.onExerciseComplete!(
+        widget.exercise,
+        outcome,
+        hintCount: _hintCount,
+        failureReason: _hasRedLetters ? 'Red letters shown' : null,
+      );
+    }
+
     // Unfocus input field
     _inputFocusNode?.unfocus();
 
@@ -358,6 +401,11 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
     if (nextIndex < normalizedExpected.length) {
       final nextLetter = normalizedExpected[nextIndex];
       final newInput = currentInput + nextLetter;
+      
+      // Track hint
+      setState(() {
+        _hintCount++;
+      });
       
       // Add the hint letter directly to the input
       setState(() {
@@ -440,6 +488,12 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
     
     // Check if letter exists in the expected word
     if (!expectedNormalized.contains(inputChar)) {
+      // Track red letter
+      if (!_hasRedLetters) {
+        setState(() {
+          _hasRedLetters = true;
+        });
+      }
       return Colors.red;
     }
     
@@ -474,6 +528,12 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
     }
     
     // Otherwise, this letter occurrence exceeds what's available, so it's red
+    // Track red letter
+    if (!_hasRedLetters) {
+      setState(() {
+        _hasRedLetters = true;
+      });
+    }
     return Colors.red;
   }
 
@@ -599,10 +659,21 @@ class _CloseExerciseWidgetState extends State<CloseExerciseWidget> {
       _isComplete = false;
       _hasAnswered = false;
       _waitingForAudio = false;
+      _hasStartedTracking = false;
+      _hintCount = 0;
+      _hasRedLetters = false;
       // Schedule setState for next frame
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {});
+          _startTracking();
+        }
+      });
+    } else {
+      // Ensure tracking is started
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _startTracking();
         }
       });
     }

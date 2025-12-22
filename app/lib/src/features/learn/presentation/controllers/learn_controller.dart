@@ -6,7 +6,10 @@ import 'package:archipelago/src/common_widgets/filter_interface.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/features/learn/data/learn_service.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
 import 'package:archipelago/src/features/learn/services/exercise_generator_service.dart';
+import 'package:archipelago/src/constants/api_config.dart';
 
 class LearnController extends ChangeNotifier implements FilterState {
   User? _currentUser;
@@ -28,6 +31,11 @@ class LearnController extends ChangeNotifier implements FilterState {
   bool _isLessonActive = false;
   int _currentLessonIndex = 0; // Now tracks exercise index
   int _cardsToLearn = 4; // Number of cards to learn
+  bool _showReportCard = false;
+  
+  // Performance tracking
+  List<ExercisePerformance> _exercisePerformances = [];
+  Map<String, DateTime> _exerciseStartTimes = {}; // Map exercise ID to start time
   
   // Filter state
   Set<int> _selectedTopicIds = {};
@@ -66,6 +74,10 @@ class LearnController extends ChangeNotifier implements FilterState {
   bool get isLessonActive => _isLessonActive;
   int get currentLessonIndex => _currentLessonIndex;
   int get cardsToLearn => _cardsToLearn;
+  bool get showReportCard => _showReportCard;
+  
+  // Performance tracking getters
+  List<ExercisePerformance> get exercisePerformances => List.unmodifiable(_exercisePerformances);
   
   // FilterState interface implementation
   @override
@@ -320,6 +332,9 @@ class LearnController extends ChangeNotifier implements FilterState {
         // Reset lesson state when new cards are loaded
         _isLessonActive = false;
         _currentLessonIndex = 0;
+        _showReportCard = false;
+        _exercisePerformances.clear();
+        _exerciseStartTimes.clear();
       } else {
         _concepts = [];
         _exercises = [];
@@ -332,6 +347,9 @@ class LearnController extends ChangeNotifier implements FilterState {
         // Reset lesson state on error
         _isLessonActive = false;
         _currentLessonIndex = 0;
+        _showReportCard = false;
+        _exercisePerformances.clear();
+        _exerciseStartTimes.clear();
       }
     } catch (e) {
       _isLoading = false;
@@ -358,6 +376,9 @@ class LearnController extends ChangeNotifier implements FilterState {
     if (_exercises.isNotEmpty) {
       _isLessonActive = true;
       _currentLessonIndex = 0;
+      _showReportCard = false;
+      _exercisePerformances.clear();
+      _exerciseStartTimes.clear();
       notifyListeners();
     }
   }
@@ -380,8 +401,115 @@ class LearnController extends ChangeNotifier implements FilterState {
   
   /// Finish the lesson
   void finishLesson() {
+    _showReportCard = true;
     _isLessonActive = false;
     _currentLessonIndex = 0;
+    notifyListeners();
+  }
+  
+  /// Dismiss the report card and return to lesson start screen
+  void dismissReportCard() {
+    _showReportCard = false;
+    notifyListeners();
+  }
+  
+  /// Start tracking an exercise
+  void startExerciseTracking(Exercise exercise) {
+    // Only track interactive exercises (not discovery or summary)
+    if (exercise.type == ExerciseType.discovery || exercise.type == ExerciseType.summary) {
+      return;
+    }
+    
+    // Don't track if already started
+    if (_exerciseStartTimes.containsKey(exercise.id)) {
+      return;
+    }
+    
+    _exerciseStartTimes[exercise.id] = DateTime.now();
+  }
+  
+  /// Get the full image URL from a relative path
+  String? _getImageUrl(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return null;
+    }
+    
+    // Build base URL
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
+    } else {
+      // Otherwise, prepend the API base URL
+      final cleanUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+      return '${ApiConfig.baseUrl}/$cleanUrl';
+    }
+  }
+
+  /// Complete tracking an exercise
+  void completeExerciseTracking(
+    Exercise exercise,
+    ExerciseOutcome outcome, {
+    int? hintCount,
+    String? failureReason,
+  }) {
+    // Only track interactive exercises (not discovery or summary)
+    if (exercise.type == ExerciseType.discovery || exercise.type == ExerciseType.summary) {
+      return;
+    }
+    
+    final startTime = _exerciseStartTimes[exercise.id];
+    // Clear the start time so if the exercise is done again, it gets a fresh start time
+    _exerciseStartTimes.remove(exercise.id);
+    
+    final endTime = DateTime.now();
+    final actualStartTime = startTime ?? endTime;
+    final conceptId = exercise.concept['id'] ?? exercise.concept['concept_id'];
+    
+    // Get concept term/translation from learning_lemma
+    String? conceptTerm;
+    int? learningLemmaId;
+    String? learningAudioPath;
+    String? learningLanguageCode;
+    String? learningTerm;
+    
+    final learningLemma = exercise.concept['learning_lemma'] as Map<String, dynamic>?;
+    if (learningLemma != null) {
+      conceptTerm = learningLemma['translation'] as String?;
+      learningLemmaId = learningLemma['id'] as int?;
+      learningAudioPath = learningLemma['audio_path'] as String?;
+      learningLanguageCode = learningLemma['language_code'] as String?;
+      learningTerm = learningLemma['translation'] as String?;
+    }
+    // Fallback to concept term if translation not available
+    if (conceptTerm == null || conceptTerm.isEmpty) {
+      conceptTerm = exercise.concept['term'] as String?;
+    }
+    
+    // Get concept image URL
+    final imageUrl = exercise.concept['image_url'] as String?;
+    final conceptImageUrl = _getImageUrl(imageUrl);
+    
+    // Always add a new performance entry to track each completion separately
+    // This allows tracking multiple completions of the same exercise
+    final performance = ExercisePerformance(
+      exerciseId: exercise.id,
+      conceptId: conceptId,
+      exerciseType: exercise.type,
+      conceptTerm: conceptTerm,
+      conceptImageUrl: conceptImageUrl,
+      learningLemmaId: learningLemmaId,
+      learningAudioPath: learningAudioPath,
+      learningLanguageCode: learningLanguageCode,
+      learningTerm: learningTerm,
+      startTime: actualStartTime,
+      endTime: endTime,
+      outcome: outcome,
+      hintCount: hintCount ?? 0,
+      failureReason: failureReason,
+    );
+    
+    // Add new performance (don't update existing, track each completion separately)
+    _exercisePerformances.add(performance);
+    
     notifyListeners();
   }
   

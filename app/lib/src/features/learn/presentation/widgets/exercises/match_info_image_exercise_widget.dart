@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/common/concept_content_card_widget.dart';
 
@@ -12,6 +13,8 @@ class MatchInfoImageExerciseWidget extends StatefulWidget {
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
+  final Function(Exercise exercise)? onExerciseStart;
+  final Function(Exercise exercise, ExerciseOutcome outcome, {int? hintCount, String? failureReason})? onExerciseComplete;
 
   const MatchInfoImageExerciseWidget({
     super.key,
@@ -20,6 +23,8 @@ class MatchInfoImageExerciseWidget extends StatefulWidget {
     this.learningLanguage,
     this.autoPlay = false,
     required this.onComplete,
+    this.onExerciseStart,
+    this.onExerciseComplete,
   });
 
   @override
@@ -33,6 +38,8 @@ class _MatchInfoImageExerciseWidgetState extends State<MatchInfoImageExerciseWid
   List<Map<String, dynamic>> _allConcepts = [];
   dynamic _exerciseConceptId;
   bool _hasAutoPlayed = false; // Track if we've autoplayed for this card instance
+  bool _hasStartedTracking = false;
+  bool _hasWrongSelection = false;
 
   /// Get concept ID from a concept map, checking both 'id' and 'concept_id' fields
   dynamic _getConceptId(Map<String, dynamic> concept) {
@@ -43,6 +50,7 @@ class _MatchInfoImageExerciseWidgetState extends State<MatchInfoImageExerciseWid
   void initState() {
     super.initState();
     _resetState();
+    _startTracking();
   }
 
   @override
@@ -54,6 +62,7 @@ class _MatchInfoImageExerciseWidgetState extends State<MatchInfoImageExerciseWid
     if (oldWidget.exercise.id != widget.exercise.id || 
         oldConceptId != newConceptId) {
       _resetState();
+      _startTracking();
     }
     // Reset autoplay flag if we navigated to a different exercise
     if (widget.exercise.id != oldWidget.exercise.id) {
@@ -62,6 +71,13 @@ class _MatchInfoImageExerciseWidgetState extends State<MatchInfoImageExerciseWid
     // If autoPlay changed from false to true, reset the flag to allow autoplay
     if (widget.autoPlay && !oldWidget.autoPlay) {
       _hasAutoPlayed = false;
+    }
+  }
+  
+  void _startTracking() {
+    if (!_hasStartedTracking && widget.onExerciseStart != null) {
+      _hasStartedTracking = true;
+      widget.onExerciseStart!(widget.exercise);
     }
   }
 
@@ -74,6 +90,8 @@ class _MatchInfoImageExerciseWidgetState extends State<MatchInfoImageExerciseWid
         _isCorrect = false;
         _hasAnswered = false;
         _hasAutoPlayed = false;
+        _hasStartedTracking = false;
+        _hasWrongSelection = false;
       });
     } else {
       // If not mounted, set directly (shouldn't happen, but safe)
@@ -81,6 +99,8 @@ class _MatchInfoImageExerciseWidgetState extends State<MatchInfoImageExerciseWid
       _isCorrect = false;
       _hasAnswered = false;
       _hasAutoPlayed = false;
+      _hasStartedTracking = false;
+      _hasWrongSelection = false;
     }
   }
 
@@ -141,10 +161,25 @@ class _MatchInfoImageExerciseWidgetState extends State<MatchInfoImageExerciseWid
       final isCorrect = _compareIds(selectedConceptId, _exerciseConceptId);
       _isCorrect = isCorrect;
       _hasAnswered = true;
+      
+      // Track wrong selection
+      if (!isCorrect) {
+        _hasWrongSelection = true;
+      }
     });
 
     // Only proceed to next card if correct
     if (_isCorrect) {
+      // Report completion
+      if (widget.onExerciseComplete != null) {
+        final outcome = _hasWrongSelection ? ExerciseOutcome.failed : ExerciseOutcome.succeeded;
+        widget.onExerciseComplete!(
+          widget.exercise,
+          outcome,
+          failureReason: _hasWrongSelection ? 'Wrong answer selected first' : null,
+        );
+      }
+      
       // Move to next card after a short delay
       Future.delayed(const Duration(milliseconds: 1000), () {
         if (mounted && _isCorrect) {
@@ -175,10 +210,20 @@ class _MatchInfoImageExerciseWidgetState extends State<MatchInfoImageExerciseWid
       _selectedImageIndex = null;
       _isCorrect = false;
       _hasAnswered = false;
+      _hasStartedTracking = false;
+      _hasWrongSelection = false;
       // Schedule setState for next frame
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {});
+          _startTracking();
+        }
+      });
+    } else {
+      // Ensure tracking is started
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _startTracking();
         }
       });
     }

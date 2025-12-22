@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/discovery_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/discovery_summary_exercise_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/exercises/match_info_image_exercise_widget.dart';
@@ -20,6 +21,8 @@ class ExerciseWidget extends StatelessWidget {
   final bool autoPlay;
   final VoidCallback onComplete; // Called when exercise is completed
   final GlobalKey? matchImageAudioKey; // For accessing matchImageAudio widget state
+  final Function(Exercise exercise)? onExerciseStart;
+  final Function(Exercise exercise, ExerciseOutcome outcome, {int? hintCount, String? failureReason})? onExerciseComplete;
 
   const ExerciseWidget({
     super.key,
@@ -29,6 +32,8 @@ class ExerciseWidget extends StatelessWidget {
     this.autoPlay = false,
     required this.onComplete,
     this.matchImageAudioKey,
+    this.onExerciseStart,
+    this.onExerciseComplete,
   });
 
   @override
@@ -60,6 +65,8 @@ class ExerciseWidget extends StatelessWidget {
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          onExerciseStart: onExerciseStart,
+          onExerciseComplete: onExerciseComplete,
         );
       case ExerciseType.matchAudioImage:
         // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
@@ -71,6 +78,8 @@ class ExerciseWidget extends StatelessWidget {
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          onExerciseStart: onExerciseStart,
+          onExerciseComplete: onExerciseComplete,
         );
       case ExerciseType.matchImageInfo:
         // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
@@ -82,6 +91,8 @@ class ExerciseWidget extends StatelessWidget {
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          onExerciseStart: onExerciseStart,
+          onExerciseComplete: onExerciseComplete,
         );
       case ExerciseType.matchImageAudio:
         // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
@@ -94,6 +105,8 @@ class ExerciseWidget extends StatelessWidget {
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          onExerciseStart: onExerciseStart,
+          onExerciseComplete: onExerciseComplete,
         );
       case ExerciseType.matchDescriptionPhrase:
         // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
@@ -105,6 +118,8 @@ class ExerciseWidget extends StatelessWidget {
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          onExerciseStart: onExerciseStart,
+          onExerciseComplete: onExerciseComplete,
         );
       case ExerciseType.matchPhraseDescription:
         // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
@@ -116,6 +131,8 @@ class ExerciseWidget extends StatelessWidget {
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          onExerciseStart: onExerciseStart,
+          onExerciseComplete: onExerciseComplete,
         );
       case ExerciseType.scaffoldFromImage:
         // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
@@ -127,6 +144,8 @@ class ExerciseWidget extends StatelessWidget {
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          onExerciseStart: onExerciseStart,
+          onExerciseComplete: onExerciseComplete,
         );
       case ExerciseType.closeExercise:
         // Use a unique key that includes exercise ID and concept ID to ensure widget recreation
@@ -138,6 +157,8 @@ class ExerciseWidget extends StatelessWidget {
           learningLanguage: learningLanguage,
           autoPlay: autoPlay,
           onComplete: onComplete,
+          onExerciseStart: onExerciseStart,
+          onExerciseComplete: onExerciseComplete,
         );
     }
   }

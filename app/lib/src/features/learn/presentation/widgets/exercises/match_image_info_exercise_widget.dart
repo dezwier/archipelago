@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/common/selectable_concept_card_widget.dart';
 
@@ -12,6 +13,8 @@ class MatchImageInfoExerciseWidget extends StatefulWidget {
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
+  final Function(Exercise exercise)? onExerciseStart;
+  final Function(Exercise exercise, ExerciseOutcome outcome, {int? hintCount, String? failureReason})? onExerciseComplete;
 
   const MatchImageInfoExerciseWidget({
     super.key,
@@ -20,6 +23,8 @@ class MatchImageInfoExerciseWidget extends StatefulWidget {
     this.learningLanguage,
     this.autoPlay = false,
     required this.onComplete,
+    this.onExerciseStart,
+    this.onExerciseComplete,
   });
 
   @override
@@ -33,6 +38,8 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
   bool _waitingForAudio = false;
   List<Map<String, dynamic>> _allConcepts = [];
   dynamic _exerciseConceptId;
+  bool _hasStartedTracking = false;
+  bool _hasWrongSelection = false;
 
   /// Get concept ID from a concept map, checking both 'id' and 'concept_id' fields
   dynamic _getConceptId(Map<String, dynamic> concept) {
@@ -43,6 +50,7 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
   void initState() {
     super.initState();
     _resetState();
+    _startTracking();
   }
 
   @override
@@ -54,6 +62,14 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
     if (oldWidget.exercise.id != widget.exercise.id || 
         oldConceptId != newConceptId) {
       _resetState();
+      _startTracking();
+    }
+  }
+  
+  void _startTracking() {
+    if (!_hasStartedTracking && widget.onExerciseStart != null) {
+      _hasStartedTracking = true;
+      widget.onExerciseStart!(widget.exercise);
     }
   }
 
@@ -66,6 +82,8 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
         _isCorrect = false;
         _hasAnswered = false;
         _waitingForAudio = false;
+        _hasStartedTracking = false;
+        _hasWrongSelection = false;
       });
     } else {
       // If not mounted, set directly (shouldn't happen, but safe)
@@ -73,6 +91,8 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
       _isCorrect = false;
       _hasAnswered = false;
       _waitingForAudio = false;
+      _hasStartedTracking = false;
+      _hasWrongSelection = false;
     }
   }
 
@@ -131,10 +151,25 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
       _hasAnswered = true;
       // If correct, we'll wait for audio to finish
       _waitingForAudio = isCorrect;
+      
+      // Track wrong selection
+      if (!isCorrect) {
+        _hasWrongSelection = true;
+      }
     });
 
     // Only proceed to next card if correct (and after audio finishes)
     if (_isCorrect) {
+      // Report completion
+      if (widget.onExerciseComplete != null) {
+        final outcome = _hasWrongSelection ? ExerciseOutcome.failed : ExerciseOutcome.succeeded;
+        widget.onExerciseComplete!(
+          widget.exercise,
+          outcome,
+          failureReason: _hasWrongSelection ? 'Wrong answer selected first' : null,
+        );
+      }
+      
       // Audio will autoplay, and we'll wait for onPlaybackComplete callback
       // Add a timeout fallback in case audio doesn't play or fails (e.g., no audio available)
       Future.delayed(const Duration(seconds: 5), () {
@@ -182,10 +217,20 @@ class _MatchImageInfoExerciseWidgetState extends State<MatchImageInfoExerciseWid
       _isCorrect = false;
       _hasAnswered = false;
       _waitingForAudio = false;
+      _hasStartedTracking = false;
+      _hasWrongSelection = false;
       // Schedule setState for next frame
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {});
+          _startTracking();
+        }
+      });
+    } else {
+      // Ensure tracking is started
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _startTracking();
         }
       });
     }

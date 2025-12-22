@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:archipelago/src/features/dictionary/data/lemma_audio_service.dart';
@@ -13,6 +14,8 @@ class MatchImageAudioExerciseWidget extends StatefulWidget {
   final String? learningLanguage;
   final bool autoPlay;
   final VoidCallback onComplete;
+  final Function(Exercise exercise)? onExerciseStart;
+  final Function(Exercise exercise, ExerciseOutcome outcome, {int? hintCount, String? failureReason})? onExerciseComplete;
 
   const MatchImageAudioExerciseWidget({
     super.key,
@@ -21,6 +24,8 @@ class MatchImageAudioExerciseWidget extends StatefulWidget {
     this.learningLanguage,
     this.autoPlay = false,
     required this.onComplete,
+    this.onExerciseStart,
+    this.onExerciseComplete,
   });
 
   @override
@@ -39,6 +44,8 @@ class _MatchImageAudioExerciseWidgetState extends State<MatchImageAudioExerciseW
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _generatedAudioPath;
   int? _lastSelectedIndex; // Preserve last selection across exercises
+  bool _hasStartedTracking = false;
+  bool _hasWrongSelection = false;
 
   /// Get concept ID from a concept map, checking both 'id' and 'concept_id' fields
   dynamic _getConceptId(Map<String, dynamic> concept) {
@@ -49,6 +56,7 @@ class _MatchImageAudioExerciseWidgetState extends State<MatchImageAudioExerciseW
   void initState() {
     super.initState();
     _resetState();
+    _startTracking();
   }
 
   @override
@@ -66,6 +74,14 @@ class _MatchImageAudioExerciseWidgetState extends State<MatchImageAudioExerciseW
     if (oldWidget.exercise.id != widget.exercise.id || 
         oldConceptId != newConceptId) {
       _resetState();
+      _startTracking();
+    }
+  }
+  
+  void _startTracking() {
+    if (!_hasStartedTracking && widget.onExerciseStart != null) {
+      _hasStartedTracking = true;
+      widget.onExerciseStart!(widget.exercise);
     }
   }
 
@@ -78,6 +94,8 @@ class _MatchImageAudioExerciseWidgetState extends State<MatchImageAudioExerciseW
         _selectedCardIndex = null;
         _isCorrect = false;
         _hasAnswered = false;
+        _hasStartedTracking = false;
+        _hasWrongSelection = false;
       });
       // Select the last selected index (or first button if none) after initialization (without playing)
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -98,6 +116,8 @@ class _MatchImageAudioExerciseWidgetState extends State<MatchImageAudioExerciseW
       _selectedCardIndex = null;
       _isCorrect = false;
       _hasAnswered = false;
+      _hasStartedTracking = false;
+      _hasWrongSelection = false;
     }
   }
 
@@ -233,9 +253,24 @@ class _MatchImageAudioExerciseWidgetState extends State<MatchImageAudioExerciseW
     setState(() {
       _isCorrect = isCorrect;
       _hasAnswered = true;
+      
+      // Track wrong selection
+      if (!isCorrect) {
+        _hasWrongSelection = true;
+      }
     });
 
     if (_isCorrect) {
+      // Report completion
+      if (widget.onExerciseComplete != null) {
+        final outcome = _hasWrongSelection ? ExerciseOutcome.failed : ExerciseOutcome.succeeded;
+        widget.onExerciseComplete!(
+          widget.exercise,
+          outcome,
+          failureReason: _hasWrongSelection ? 'Wrong answer selected first' : null,
+        );
+      }
+      
       // Show green feedback, wait 1 second, then proceed
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted && _isCorrect) {
@@ -269,6 +304,8 @@ class _MatchImageAudioExerciseWidgetState extends State<MatchImageAudioExerciseW
       _selectedCardIndex = null;
       _isCorrect = false;
       _hasAnswered = false;
+      _hasStartedTracking = false;
+      _hasWrongSelection = false;
       // Schedule setState for next frame and restore last selection
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _allConcepts.isNotEmpty) {
@@ -281,6 +318,14 @@ class _MatchImageAudioExerciseWidgetState extends State<MatchImageAudioExerciseW
           setState(() {
             _selectedCardIndex = indexToSelect;
           });
+          _startTracking();
+        }
+      });
+    } else {
+      // Ensure tracking is started
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _startTracking();
         }
       });
     }

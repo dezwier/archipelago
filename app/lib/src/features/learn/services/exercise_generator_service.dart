@@ -24,7 +24,10 @@ class ExerciseGeneratorService {
 
     // Generate exercises grouped by type, respecting config order
     // Loop through config entries first, then for each entry generate exercises for all concepts
-    for (final configEntry in ExerciseConfig.exercises) {
+    for (final configEntryWithIndex in ExerciseConfig.exercises.asMap().entries) {
+      final configIndex = configEntryWithIndex.key;
+      final configEntry = configEntryWithIndex.value;
+      
       if (configEntry.perConcept) {
         // For alternatives, create a shuffled list and cycle through without replacement
         // Only reuse types when there are more concepts than available types
@@ -55,7 +58,7 @@ class ExerciseGeneratorService {
               ? (List<Map<String, dynamic>>.from(concepts)..shuffle(random))
               : null;
           
-          final exerciseId = '${concept['id']}_${selectedType.name}';
+          final exerciseId = '${concept['id']}_${selectedType.name}_$configIndex';
           exercises.add(
             Exercise(
               id: exerciseId,
@@ -80,7 +83,7 @@ class ExerciseGeneratorService {
         
         exercises.add(
           Exercise(
-            id: '${selectedType.name}_all_concepts',
+            id: '${selectedType.name}_all_concepts_$configIndex',
             type: selectedType,
             concept: {}, // Empty concept for summary-type exercises
             exerciseData: _generateExerciseData(

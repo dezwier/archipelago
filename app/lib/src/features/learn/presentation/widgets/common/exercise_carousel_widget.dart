@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
+import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/common/exercise_widget.dart';
 
 /// Widget that displays a carousel of exercises
@@ -13,6 +14,8 @@ class ExerciseCarouselWidget extends StatefulWidget {
   final VoidCallback? onNext;
   final VoidCallback? onFinish;
   final VoidCallback? onDismiss;
+  final Function(Exercise exercise)? onExerciseStart;
+  final Function(Exercise exercise, ExerciseOutcome outcome, {int? hintCount, String? failureReason})? onExerciseComplete;
 
   const ExerciseCarouselWidget({
     super.key,
@@ -24,6 +27,8 @@ class ExerciseCarouselWidget extends StatefulWidget {
     this.onNext,
     this.onFinish,
     this.onDismiss,
+    this.onExerciseStart,
+    this.onExerciseComplete,
   });
 
   @override
@@ -277,6 +282,8 @@ class _ExerciseCarouselWidgetState extends State<ExerciseCarouselWidget> {
                 autoPlay: shouldAutoPlayThisBuild,
                 onComplete: _handleExerciseComplete,
                 matchImageAudioKey: currentExercise.type == ExerciseType.matchImageAudio ? _matchImageAudioKey : null,
+                onExerciseStart: widget.onExerciseStart,
+                onExerciseComplete: widget.onExerciseComplete,
               ),
             ),
           ],
