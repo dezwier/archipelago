@@ -13,8 +13,8 @@ from app.models.concept import Concept
 from app.models.language import Language
 from app.models.lemma import Lemma
 from app.models.user import User
-from app.models.card import Card
-from app.models.practice import Practice
+from app.models.user_lemma import UserLemma
+from app.models.exercise import Exercise
 
 __all__ = [
     'CEFRLevel',
@@ -23,6 +23,6 @@ __all__ = [
     'Language',
     'Lemma',
     'User',
-    'Card',
-    'Practice',
+    'UserLemma',
+    'Exercise',
 ]

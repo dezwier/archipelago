@@ -399,11 +399,21 @@ class LearnController extends ChangeNotifier implements FilterState {
     }
   }
   
-  /// Finish the lesson
+  /// Finish the lesson (completed normally - shows report card)
   void finishLesson() {
     _showReportCard = true;
     _isLessonActive = false;
     _currentLessonIndex = 0;
+    notifyListeners();
+  }
+  
+  /// Dismiss the lesson early (does not show report card)
+  void dismissLesson() {
+    _showReportCard = false;
+    _isLessonActive = false;
+    _currentLessonIndex = 0;
+    _exercisePerformances.clear();
+    _exerciseStartTimes.clear();
     notifyListeners();
   }
   

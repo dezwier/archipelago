@@ -9,9 +9,9 @@ from app.models.models import (
     Concept,
     Language,
     Lemma,
-    Card,
+    UserLemma,
     User,
-    Practice,
+    Exercise,
 )
 
 # this is the Alembic Config object

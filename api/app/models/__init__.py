@@ -10,8 +10,8 @@ from app.models.concept import Concept
 from app.models.language import Language
 from app.models.lemma import Lemma
 from app.models.user import User
-from app.models.card import Card
-from app.models.practice import Practice
+from app.models.user_lemma import UserLemma
+from app.models.exercise import Exercise
 
 # For backward compatibility: allow importing from models.models
 # This maintains existing imports like "from app.models.models import Concept"
@@ -26,8 +26,8 @@ _models_module.Concept = Concept
 _models_module.Language = Language
 _models_module.Lemma = Lemma
 _models_module.User = User
-_models_module.Card = Card
-_models_module.Practice = Practice
+_models_module.UserLemma = UserLemma
+_models_module.Exercise = Exercise
 
 # Add to sys.modules so imports work
 sys.modules['app.models.models'] = _models_module
@@ -39,7 +39,7 @@ __all__ = [
     'Language',
     'Lemma',
     'User',
-    'Card',
-    'Practice',
+    'UserLemma',
+    'Exercise',
 ]
 

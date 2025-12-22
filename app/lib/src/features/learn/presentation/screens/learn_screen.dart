@@ -146,7 +146,7 @@ class _LearnScreenState extends State<LearnScreen> {
             FilledButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                _controller.finishLesson();
+                _controller.dismissLesson();
               },
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,

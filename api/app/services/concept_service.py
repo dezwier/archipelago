@@ -5,7 +5,7 @@ import logging
 from sqlmodel import Session, select
 from typing import Optional
 
-from app.models.models import Concept, Lemma, Card
+from app.models.models import Concept, Lemma, UserLemma
 from app.utils.assets_utils import get_assets_directory
 from app.services.image_service import delete_concept_image_file
 
@@ -20,7 +20,7 @@ def delete_concept_and_associated_resources(
     Delete a concept and all its associated resources.
     
     This function deletes:
-    - All Cards that reference lemmas for this concept
+    - All UserLemmas that reference lemmas for this concept
     - All Lemmas for this concept
     - The concept's image file (if it exists)
     - The Concept itself
@@ -45,14 +45,14 @@ def delete_concept_and_associated_resources(
         select(Lemma).where(Lemma.concept_id == concept_id)
     ).all()
     
-    # Delete all Cards that reference these lemmas
+    # Delete all UserLemmas that reference these lemmas
     lemma_ids = [lemma.id for lemma in lemmas]
     if lemma_ids:
-        cards = session.exec(
-            select(Card).where(Card.lemma_id.in_(lemma_ids))  # type: ignore
+        user_lemmas = session.exec(
+            select(UserLemma).where(UserLemma.lemma_id.in_(lemma_ids))  # type: ignore
         ).all()
-        for card in cards:
-            session.delete(card)
+        for user_lemma in user_lemmas:
+            session.delete(user_lemma)
     
     # Delete all lemmas
     for lemma in lemmas:

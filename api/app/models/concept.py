@@ -8,12 +8,12 @@ from app.models.enums import CEFRLevel
 
 
 class Concept(SQLModel, table=True):
-    """Concept table - represents a concept that can have multiple language cards."""
+    """Concept table - represents a concept that can have multiple language lemmas."""
     __tablename__ = "concept"
     
     id: Optional[int] = Field(default=None, primary_key=True)
     topic_id: Optional[int] = Field(default=None, foreign_key="topic.id")
-    user_id: Optional[int] = Field(default=None, foreign_key="users.id")  # User who created the concept (null for script-created concepts)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")  # User who created the concept (null for script-created concepts)
     term: str  # Former internal_name - English translation for the concept (mandatory)
     description: Optional[str] = None
     part_of_speech: Optional[str] = None

@@ -9,7 +9,7 @@ import hashlib
 
 class User(SQLModel, table=True):
     """User table - stores user information."""
-    __tablename__ = "users"
+    __tablename__ = "user"
     
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(unique=True, index=True)  # Unique username
@@ -20,8 +20,7 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
-    cards: List["Card"] = Relationship(back_populates="user")
-    practices: List["Practice"] = Relationship(back_populates="user")
+    user_lemmas: List["UserLemma"] = Relationship(back_populates="user")
     
     @staticmethod
     def hash_password(password: str) -> str:

@@ -14,7 +14,7 @@ class Topic(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     icon: Optional[str] = None  # Single emoji character
-    user_id: int = Field(foreign_key="users.id")  # User who created the topic (mandatory)
+    user_id: int = Field(foreign_key="user.id")  # User who created the topic (mandatory)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships

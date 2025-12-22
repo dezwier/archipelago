@@ -13,7 +13,7 @@ from typing import List, Optional
 import logging
 import random
 from app.core.database import get_session
-from app.models.models import Lemma, Concept, Card, User
+from app.models.models import Lemma, Concept, UserLemma, User
 from app.schemas.lemma import LemmaResponse, UpdateLemmaRequest, NewCardsResponse, ConceptWithLemmas
 from app.schemas.concept import (
     CreateConceptRequest,
@@ -518,7 +518,7 @@ async def get_new_cards(
     session: Session = Depends(get_session)
 ):
     """
-    Get concepts that don't have a card for the user in the learning language.
+    Get concepts that don't have a user lemma for the user in the learning language.
     Filters concepts using the same parameters as the dictionary endpoint.
     Only returns concepts that have lemmas in both native and learning languages.
     Returns concepts with both learning and native language lemmas coupled together.
@@ -540,7 +540,7 @@ async def get_new_cards(
         is_complete: 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
     
     Returns:
-        NewCardsResponse containing concepts with both native and learning language lemmas that don't have cards for the user
+        NewCardsResponse containing concepts with both native and learning language lemmas that don't have user lemmas for the user
     """
     learning_language_code = language.lower()
     
@@ -681,10 +681,10 @@ async def get_new_cards(
     learning_lemmas_query = (
         select(Lemma)
         .outerjoin(
-            Card,
+            UserLemma,
             and_(
-                Card.lemma_id == Lemma.id,
-                Card.user_id == user_id
+                UserLemma.lemma_id == Lemma.id,
+                UserLemma.user_id == user_id
             )
         )
         .where(
@@ -692,17 +692,17 @@ async def get_new_cards(
             Lemma.language_code == learning_language_code,
             Lemma.term.isnot(None),
             Lemma.term != "",
-            Card.id.is_(None)  # type: ignore[attr-defined] # No card exists for this user
+            UserLemma.id.is_(None)  # type: ignore[attr-defined] # No user_lemma exists for this user
         )
     )
     learning_lemmas = session.exec(learning_lemmas_query).all()
     
-    # Get unique concept IDs from learning lemmas that don't have cards
+    # Get unique concept IDs from learning lemmas that don't have user lemmas
     eligible_concept_ids = list({lemma.concept_id for lemma in learning_lemmas})
     
-    # Count 3: Concepts without cards for user in learning language
+    # Count 3: Concepts without user lemmas for user in learning language
     concepts_without_cards_count = len(eligible_concept_ids)
-    logger.info("Concepts without cards for user: %s", concepts_without_cards_count)
+    logger.info("Concepts without user lemmas for user: %s", concepts_without_cards_count)
     
     # Randomly select n concepts if max_n is provided
     if max_n is not None and len(eligible_concept_ids) > max_n:
@@ -920,7 +920,7 @@ async def delete_lemma(
     session: Session = Depends(get_session)
 ):
     """
-    Delete a lemma and all its associated cards.
+    Delete a lemma and all its associated user lemmas.
     
     Args:
         lemma_id: The lemma ID
@@ -932,14 +932,14 @@ async def delete_lemma(
             detail="Lemma not found"
         )
     
-    # Delete all Cards that reference this lemma
-    from app.models.models import Card
-    cards = session.exec(
-        select(Card).where(Card.lemma_id == lemma_id)
+    # Delete all UserLemmas that reference this lemma
+    from app.models.models import UserLemma
+    user_lemmas = session.exec(
+        select(UserLemma).where(UserLemma.lemma_id == lemma_id)
     ).all()
     
-    for card in cards:
-        session.delete(card)
+    for user_lemma in user_lemmas:
+        session.delete(user_lemma)
     
     # Delete the lemma
     session.delete(lemma)

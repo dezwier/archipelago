@@ -152,5 +152,5 @@ class NewCardsResponse(BaseModel):
     total_concepts_count: int = Field(..., description="Total number of concepts visible to the user")
     filtered_concepts_count: int = Field(..., description="Number of concepts after applying dictionary filters")
     concepts_with_both_languages_count: int = Field(..., description="Number of concepts with lemmas in both native and learning languages")
-    concepts_without_cards_count: int = Field(..., description="Number of concepts without cards for user in learning language")
+    concepts_without_cards_count: int = Field(..., description="Number of concepts without user lemmas for user in learning language", alias="concepts_without_cards_count")
 
