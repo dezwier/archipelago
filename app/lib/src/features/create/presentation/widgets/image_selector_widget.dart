@@ -259,6 +259,13 @@ class _ImageSelectorWidgetState extends State<ImageSelectorWidget> {
                     ),
                     color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   ),
+                  child: Center(
+                    child: Icon(
+                      Icons.add_photo_alternate,
+                      size: 48,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
                 ),
           // Buttons overlay at top right
           Positioned(

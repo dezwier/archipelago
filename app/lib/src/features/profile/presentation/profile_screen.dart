@@ -9,7 +9,6 @@ import 'package:archipelago/src/features/create/domain/topic.dart';
 import 'package:archipelago/src/features/profile/domain/user.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
-import 'package:archipelago/src/features/profile/presentation/widgets/language_summary_card.dart';
 import 'package:archipelago/src/features/profile/presentation/widgets/leitner_distribution_card.dart';
 import 'package:archipelago/src/features/profile/presentation/widgets/exercises_daily_chart_card.dart';
 import 'package:archipelago/src/features/profile/presentation/profile_filter_state.dart';
@@ -449,13 +448,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const Divider(height: 32),
-                  _buildLanguageProfileItem('Native Language', _currentUser!.langNative),
-                  if (_currentUser!.langLearning != null &&
-                      _currentUser!.langLearning!.isNotEmpty)
-                    _buildLanguageProfileItem(
-                        'Learning Language', _currentUser!.langLearning!),
-                  _buildProfileItem('Member since',
-                      _formatDate(_currentUser!.createdAt)),
+                  // Summary statistics
+                  if (_isLoadingStats)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_statsError != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Error loading statistics',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _statsError!,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _loadStatistics,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    )
+                  else if (_summaryStats != null)
+                    _buildSummaryStatistics(_summaryStats!),
                 ],
               ),
             ),
@@ -530,12 +556,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             )
           else ...[
-            if (_summaryStats != null)
-              LanguageSummaryCard(
-                stats: _summaryStats!,
-                languages: _languages,
-              ),
-            const SizedBox(height: 16),
             ExercisesDailyChartCard(
               key: ValueKey('practice-daily-${_practiceMetricType}'),
               practiceDaily: _practiceDaily,
@@ -569,76 +589,100 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 160,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+  Widget _buildSummaryStatistics(SummaryStats stats) {
+    if (stats.languageStats.isEmpty) {
+      return Text(
+        'No learning data available',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+      );
+    }
 
-  Widget _buildLanguageProfileItem(String label, String languageCode) {
-    final languageName = _getLanguageName(languageCode);
-    final emoji = LanguageEmoji.getEmoji(languageCode);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 160,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ),
-          Expanded(
-            child: Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...stats.languageStats.map((stat) {
+          final emoji = LanguageEmoji.getEmoji(stat.languageCode);
+          final languageName = _getLanguageName(stat.languageCode);
+          
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  emoji,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                Row(
+                  children: [
+                    Text(
+                      emoji,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      languageName,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  languageName,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatItem(
+                        value: stat.lemmaCount.toString(),
+                        label: 'Lemmas',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildStatItem(
+                        value: stat.lessonCount.toString(),
+                        label: 'Lessons',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildStatItem(
+                        value: stat.exerciseCount.toString(),
+                        label: 'Exercises',
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  Widget _buildStatItem({required String value, required String label}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
-  }
-
-  String _formatDate(String isoDate) {
-    try {
-      final date = DateTime.parse(isoDate);
-      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return isoDate;
-    }
   }
 
   Future<void> _loadStatistics() async {

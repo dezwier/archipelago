@@ -31,6 +31,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
   User? _currentUser;
   List<Language> _languages = [];
   bool _isLoadingLanguages = false;
+  bool _isDeletingData = false;
 
   @override
   void initState() {
@@ -208,6 +209,68 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
         });
       } catch (e) {
         // Ignore errors during logout
+      }
+    }
+  }
+
+  Future<void> _handleDeleteUserDataWithContext(BuildContext buttonContext) async {
+    if (_currentUser == null || !mounted) {
+      return;
+    }
+
+    // Close drawer first
+    try {
+      if (Navigator.canPop(buttonContext)) {
+        Navigator.of(buttonContext).pop();
+        // Wait a bit for drawer to close
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+    } catch (e) {
+      // Ignore if Navigator is not available
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _isDeletingData = true;
+    });
+
+    try {
+      final result = await AuthService.deleteUserData(_currentUser!.id);
+
+      if (mounted) {
+        if (result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] as String),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Refresh profile data
+          _refreshProfileCallback?.call();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] as String),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting data: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDeletingData = false;
+        });
       }
     }
   }
@@ -479,6 +542,53 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                                     },
                                   ),
                                 ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Delete All Data button
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: Builder(
+                                  builder: (buttonContext) {
+                                    return OutlinedButton.icon(
+                                      onPressed: _isDeletingData
+                                          ? null
+                                          : () {
+                                              print('DEBUG: Button tapped');
+                                              _handleDeleteUserDataWithContext(buttonContext);
+                                            },
+                                      icon: _isDeletingData
+                                          ? SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor: AlwaysStoppedAnimation<Color>(
+                                                  Theme.of(buttonContext).colorScheme.error,
+                                                ),
+                                              ),
+                                            )
+                                          : Icon(
+                                              Icons.delete_forever,
+                                              color: Theme.of(buttonContext).colorScheme.error,
+                                            ),
+                                      label: Text(
+                                        _isDeletingData ? 'Deleting...' : 'Delete All Data',
+                                        style: TextStyle(
+                                          color: Theme.of(buttonContext).colorScheme.error,
+                                        ),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        side: BorderSide(
+                                          color: Theme.of(buttonContext).colorScheme.error.withValues(alpha: 0.5),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                             const SizedBox(height: 12),

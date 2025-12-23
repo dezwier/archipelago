@@ -160,5 +160,52 @@ class AuthService {
       };
     }
   }
+
+  static Future<Map<String, dynamic>> deleteUserData(int userId) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/auth/delete-user-data?user_id=$userId');
+    
+    try {
+      final response = await http.delete(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'message': data['message'] as String? ?? 'User data deleted successfully',
+          'exercises_deleted': data['exercises_deleted'] as int? ?? 0,
+          'user_lemmas_deleted': data['user_lemmas_deleted'] as int? ?? 0,
+          'lessons_deleted': data['lessons_deleted'] as int? ?? 0,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to delete user data',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error: ${e.toString()}';
+      
+      final errorStr = e.toString();
+      if (errorStr.contains('Connection refused') || 
+          errorStr.contains('Failed host lookup') ||
+          errorStr.contains('SocketException')) {
+        final baseUrl = ApiConfig.baseUrl;
+        errorMessage = 'Cannot connect to server at $baseUrl.\n\n'
+            'Please ensure:\n'
+            '• The API server is running\n'
+            '• You are using the correct API URL for your platform\n'
+            '• For physical devices, set hostIp in api_config.dart';
+      }
+      
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
 }
 

@@ -242,9 +242,9 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
             const SizedBox(height: 16),
             SegmentedButton<String>(
               segments: const [
-                ButtonSegment(value: 'exercises', label: Text('Exercises')),
-                ButtonSegment(value: 'lessons', label: Text('Lessons')),
                 ButtonSegment(value: 'lemmas', label: Text('Lemmas')),
+                ButtonSegment(value: 'lessons', label: Text('Lessons')),
+                ButtonSegment(value: 'exercises', label: Text('Exercises')),
               ],
               selected: {_selectedMetricType},
               onSelectionChanged: (Set<String> newSelection) {
@@ -255,6 +255,7 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                 // Notify parent to reload data with new metric type
                 widget.onMetricTypeChanged?.call(newMetricType);
               },
+              showSelectedIcon: false,
             ),
             const SizedBox(height: 24),
             SizedBox(

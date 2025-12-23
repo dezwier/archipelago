@@ -3,6 +3,7 @@ from sqlmodel import Session, select
 from app.core.database import get_session
 from app.models.models import User, Language
 from app.schemas.auth import LoginRequest, RegisterRequest, AuthResponse, UserResponse, UpdateUserLanguagesRequest
+from app.services.user_service import delete_user_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -163,4 +164,45 @@ async def update_user_languages(
         ),
         message="Languages updated successfully"
     )
+
+
+@router.delete("/delete-user-data")
+async def delete_user_data_endpoint(
+    user_id: int,
+    session: Session = Depends(get_session)
+):
+    """
+    Delete all exercises, user_lemmas, and lessons for a user.
+    
+    This endpoint permanently deletes:
+    - All exercises associated with the user's user_lemmas
+    - All user_lemmas for the user
+    - All lessons for the user
+    
+    Args:
+        user_id: The user ID whose data should be deleted
+        session: Database session
+        
+    Returns:
+        Dict with success status and deletion counts
+    """
+    try:
+        result = delete_user_data(session, user_id)
+        return {
+            "success": True,
+            "message": "User data deleted successfully",
+            "exercises_deleted": result["exercises_deleted"],
+            "user_lemmas_deleted": result["user_lemmas_deleted"],
+            "lessons_deleted": result["lessons_deleted"]
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user data: {str(e)}"
+        ) from e
 
