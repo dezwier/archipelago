@@ -298,6 +298,8 @@ class _LearnScreenState extends State<LearnScreen> {
               conceptsWithBothLanguagesCount: _controller.conceptsWithBothLanguagesCount,
               conceptsWithoutCardsCount: _controller.conceptsWithoutCardsCount,
               cardsToLearn: _controller.cardsToLearn,
+              includeNewCards: _controller.includeNewCards,
+              includeLearnedCards: _controller.includeLearnedCards,
               onCardsToLearnChanged: _controller.setCardsToLearn,
               onFilterPressed: _showFilterSheet,
               onStartLesson: _controller.startLesson,

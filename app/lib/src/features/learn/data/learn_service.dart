@@ -4,7 +4,7 @@ import 'package:archipelago/src/constants/api_config.dart';
 
 /// Service for learning feature - retrieving new cards for learning
 class LearnService {
-  /// Get new cards (concepts without cards for the user in learning language).
+  /// Get new cards (concepts with/without cards for the user in learning language).
   /// Filters concepts using the same parameters as the dictionary endpoint.
   /// Only returns concepts that have lemmas in both native and learning languages.
   /// 
@@ -15,7 +15,7 @@ class LearnService {
   /// - 'total_concepts_count': int (if successful) - total number of concepts visible to the user
   /// - 'filtered_concepts_count': int (if successful) - number of concepts after dictionary filtering
   /// - 'concepts_with_both_languages_count': int (if successful) - number of concepts with lemmas in both languages
-  /// - 'concepts_without_cards_count': int (if successful) - number of concepts without cards for user
+  /// - 'concepts_without_cards_count': int (if successful) - number of concepts matching user_lemma criteria
   /// - 'message': String (if error)
   static Future<Map<String, dynamic>> getNewCards({
     required int userId,
@@ -32,8 +32,10 @@ class LearnService {
     int? hasImages,
     int? hasAudio,
     int? isComplete,
+    bool includeWithUserLemma = false, // Include concepts that have a user lemma
+    bool includeWithoutUserLemma = true, // Include concepts that don't have a user lemma
   }) async {
-    final uri = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/new-cards');
+    final uri = Uri.parse('${ApiConfig.apiBaseUrl}/lessons/generate');
     final queryParams = <String, String>{
       'user_id': userId.toString(),
       'language': language,
@@ -85,6 +87,10 @@ class LearnService {
     if (isComplete != null) {
       queryParams['is_complete'] = isComplete.toString();
     }
+    
+    // Add user_lemma inclusion parameters
+    queryParams['include_with_user_lemma'] = includeWithUserLemma.toString();
+    queryParams['include_without_user_lemma'] = includeWithoutUserLemma.toString();
     
     final url = uri.replace(queryParameters: queryParams);
     

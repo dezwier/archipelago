@@ -33,6 +33,8 @@ class LearnController extends ChangeNotifier implements FilterState {
   int _currentLessonIndex = 0; // Now tracks exercise index
   int _cardsToLearn = 4; // Number of cards to learn
   bool _showReportCard = false;
+  bool _includeNewCards = true; // Track if new cards are included
+  bool _includeLearnedCards = false; // Track if learned cards are included
   
   // Performance tracking
   List<ExercisePerformance> _exercisePerformances = [];
@@ -76,6 +78,8 @@ class LearnController extends ChangeNotifier implements FilterState {
   int get currentLessonIndex => _currentLessonIndex;
   int get cardsToLearn => _cardsToLearn;
   bool get showReportCard => _showReportCard;
+  bool get includeNewCards => _includeNewCards;
+  bool get includeLearnedCards => _includeLearnedCards;
   
   // Performance tracking getters
   List<ExercisePerformance> get exercisePerformances => List.unmodifiable(_exercisePerformances);
@@ -269,7 +273,11 @@ class LearnController extends ChangeNotifier implements FilterState {
   }
   
   /// Load new cards based on current filters
-  Future<void> loadNewCards({bool isRefresh = false}) async {
+  Future<void> loadNewCards({
+    bool isRefresh = false,
+    bool includeNewCards = true,
+    bool includeLearnedCards = false,
+  }) async {
     if (_currentUser == null || _learningLanguage == null) {
       _isLoading = false;
       _isRefreshing = false;
@@ -291,7 +299,7 @@ class LearnController extends ChangeNotifier implements FilterState {
       // The endpoint handles:
       // - Filtering concepts using dictionary logic
       // - Filtering to concepts with lemmas in both native and learning languages
-      // - Filtering to concepts without cards for user in learning language
+      // - Filtering to concepts with/without user_lemma based on parameters
       // - Randomly selecting max_n concepts
       final result = await LearnService.getNewCards(
         userId: _currentUser!.id,
@@ -307,6 +315,8 @@ class LearnController extends ChangeNotifier implements FilterState {
         hasImages: getEffectiveHasImages(),
         hasAudio: getEffectiveHasAudio(),
         isComplete: getEffectiveIsComplete(),
+        includeWithUserLemma: includeLearnedCards,
+        includeWithoutUserLemma: includeNewCards,
       );
       
       _isLoading = false;
@@ -564,9 +574,12 @@ class LearnController extends ChangeNotifier implements FilterState {
     required bool includeLearnedCards,
   }) async {
     _cardsToLearn = cardsToLearn;
-    // TODO: Implement includeLearnedCards support in backend if needed
-    // For now, we only support new cards (which is what the endpoint returns)
-    await loadNewCards();
+    _includeNewCards = includeNewCards;
+    _includeLearnedCards = includeLearnedCards;
+    await loadNewCards(
+      includeNewCards: includeNewCards,
+      includeLearnedCards: includeLearnedCards,
+    );
   }
 }
 

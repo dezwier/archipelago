@@ -4,7 +4,7 @@ Lesson completion endpoints.
 # pyright: reportAttributeAccessIssue=false
 # pyright: reportCallIssue=false
 # pyright: reportArgumentType=false
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select
 from typing import Dict, List, Optional
 from datetime import datetime
@@ -16,7 +16,9 @@ from app.schemas.lesson import (
     CompleteLessonRequest,
     CompleteLessonResponse
 )
+from app.schemas.lemma import NewCardsResponse
 from app.services.srs_service import update_leitner_bin, calculate_next_review_at
+from app.services.lesson_service import generate_lesson_concepts
 
 logger = logging.getLogger(__name__)
 
@@ -320,6 +322,75 @@ async def complete_lesson(
         message="Lesson completed successfully",
         created_exercises_count=created_exercises_count,
         updated_user_lemmas_count=updated_user_lemmas_count
+    )
+
+
+@router.get("/generate", response_model=NewCardsResponse)
+async def generate_lesson(
+    user_id: int,
+    language: str,  # Learning language
+    native_language: Optional[str] = None,  # Native language (optional, will use user's if not provided)
+    max_n: Optional[int] = None,  # Randomly select n concepts to return
+    search: Optional[str] = None,  # Optional search query for concept.term and lemma.term
+    include_lemmas: bool = Query(True, description="Include lemmas (concept.is_phrase is False)"),
+    include_phrases: bool = Query(True, description="Include phrases (concept.is_phrase is True)"),
+    topic_ids: Optional[str] = None,  # Comma-separated list of topic IDs to filter by
+    include_without_topic: bool = True,  # Include concepts without a topic (topic_id is null)
+    levels: Optional[str] = None,  # Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
+    part_of_speech: Optional[str] = None,  # Comma-separated list of part of speech values to filter by
+    has_images: Optional[int] = None,  # 1 = include only concepts with images, 0 = include only concepts without images, null = include all
+    has_audio: Optional[int] = None,  # 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
+    is_complete: Optional[int] = None,  # 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
+    include_with_user_lemma: bool = Query(False, description="Include concepts that have a user lemma for the user"),
+    include_without_user_lemma: bool = Query(True, description="Include concepts that don't have a user lemma for the user"),
+    session: Session = Depends(get_session)
+):
+    """
+    Generate a lesson by retrieving concepts based on filters and user_lemma inclusion criteria.
+    
+    Filters concepts using the same parameters as the dictionary endpoint.
+    Only returns concepts that have lemmas in both native and learning languages.
+    Returns concepts with both learning and native language lemmas coupled together.
+    
+    Args:
+        user_id: The user ID (required)
+        language: Learning language code (required)
+        native_language: Native language code (optional, will use user's native language if not provided)
+        max_n: Optional maximum number of concepts to randomly return. If not provided, returns all matching concepts.
+        search: Optional search query to filter by concept.term and lemma.term
+        include_lemmas: Include lemmas (concept.is_phrase is False)
+        include_phrases: Include phrases (concept.is_phrase is True)
+        topic_ids: Comma-separated list of topic IDs to filter by
+        include_without_topic: Include concepts without a topic (topic_id is null)
+        levels: Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
+        part_of_speech: Comma-separated list of part of speech values to filter by
+        has_images: 1 = include only concepts with images, 0 = include only concepts without images, null = include all
+        has_audio: 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
+        is_complete: 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
+        include_with_user_lemma: Include concepts that have a user lemma for the user
+        include_without_user_lemma: Include concepts that don't have a user lemma for the user
+    
+    Returns:
+        NewCardsResponse containing concepts with both native and learning language lemmas
+    """
+    return generate_lesson_concepts(
+        session=session,
+        user_id=user_id,
+        language=language,
+        native_language=native_language,
+        max_n=max_n,
+        search=search,
+        include_lemmas=include_lemmas,
+        include_phrases=include_phrases,
+        topic_ids=topic_ids,
+        include_without_topic=include_without_topic,
+        levels=levels,
+        part_of_speech=part_of_speech,
+        has_images=has_images,
+        has_audio=has_audio,
+        is_complete=is_complete,
+        include_with_user_lemma=include_with_user_lemma,
+        include_without_user_lemma=include_without_user_lemma,
     )
 
 

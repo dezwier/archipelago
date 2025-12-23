@@ -8,6 +8,8 @@ class LessonStartWidget extends StatefulWidget {
   final int conceptsWithBothLanguagesCount;
   final int conceptsWithoutCardsCount;
   final int cardsToLearn;
+  final bool includeNewCards;
+  final bool includeLearnedCards;
   final ValueChanged<int>? onCardsToLearnChanged;
   final VoidCallback? onFilterPressed;
   final VoidCallback? onStartLesson;
@@ -21,6 +23,8 @@ class LessonStartWidget extends StatefulWidget {
     required this.conceptsWithBothLanguagesCount,
     required this.conceptsWithoutCardsCount,
     required this.cardsToLearn,
+    required this.includeNewCards,
+    required this.includeLearnedCards,
     this.onCardsToLearnChanged,
     this.onFilterPressed,
     this.onStartLesson,
@@ -40,6 +44,8 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
   void initState() {
     super.initState();
     _localCardsToLearn = widget.cardsToLearn;
+    _includeNewCards = widget.includeNewCards;
+    _includeLearnedCards = widget.includeLearnedCards;
   }
 
   @override
@@ -47,6 +53,24 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
     super.didUpdateWidget(oldWidget);
     if (widget.cardsToLearn != oldWidget.cardsToLearn) {
       _localCardsToLearn = widget.cardsToLearn;
+    }
+    if (widget.includeNewCards != oldWidget.includeNewCards) {
+      _includeNewCards = widget.includeNewCards;
+    }
+    if (widget.includeLearnedCards != oldWidget.includeLearnedCards) {
+      _includeLearnedCards = widget.includeLearnedCards;
+    }
+  }
+
+  String _getConceptsLabel() {
+    if (widget.includeNewCards && widget.includeLearnedCards) {
+      return 'New and Learned Concepts';
+    } else if (widget.includeNewCards) {
+      return 'New Concepts';
+    } else if (widget.includeLearnedCards) {
+      return 'Learned Concepts';
+    } else {
+      return 'New and Learned Concepts';
     }
   }
 
@@ -253,7 +277,7 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                 const SizedBox(height: 8),
                 _buildCountRow(
                   context: context,
-                  label: 'Concepts not yet learned',
+                  label: _getConceptsLabel(),
                   count: widget.conceptsWithoutCardsCount,
                   color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                   indent: 48,
