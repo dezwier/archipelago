@@ -5,12 +5,14 @@ class LanguageStat {
   final int lemmaCount;
   final int exerciseCount;
   final int lessonCount;
+  final int totalTimeSeconds;
 
   LanguageStat({
     required this.languageCode,
     required this.lemmaCount,
     required this.exerciseCount,
     required this.lessonCount,
+    required this.totalTimeSeconds,
   });
 
   factory LanguageStat.fromJson(Map<String, dynamic> json) {
@@ -19,6 +21,7 @@ class LanguageStat {
       lemmaCount: json['lemma_count'] as int,
       exerciseCount: json['exercise_count'] as int,
       lessonCount: json['lesson_count'] as int,
+      totalTimeSeconds: json['total_time_seconds'] as int,
     );
   }
 
@@ -28,6 +31,7 @@ class LanguageStat {
       'lemma_count': lemmaCount,
       'exercise_count': exerciseCount,
       'lesson_count': lessonCount,
+      'total_time_seconds': totalTimeSeconds,
     };
   }
 }

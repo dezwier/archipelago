@@ -18,6 +18,7 @@ class _LearnScreenState extends State<LearnScreen> {
   late final LearnController _controller;
   List<Topic> _topics = [];
   bool _isLoadingTopics = false;
+  Map<String, dynamic> Function()? _getCurrentWidgetSettings;
 
   @override
   void initState() {
@@ -41,6 +42,20 @@ class _LearnScreenState extends State<LearnScreen> {
   void _onControllerChanged() {
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  Future<void> _handleRefresh() async {
+    // Get current widget settings if available, otherwise use controller's current state
+    if (_getCurrentWidgetSettings != null) {
+      final settings = _getCurrentWidgetSettings!();
+      return _controller.refresh(
+        cardsToLearn: settings['cardsToLearn'] as int,
+        includeNewCards: settings['includeNewCards'] as bool,
+        includeLearnedCards: settings['includeLearnedCards'] as bool,
+      );
+    } else {
+      return _controller.refresh();
     }
   }
 
@@ -169,7 +184,7 @@ class _LearnScreenState extends State<LearnScreen> {
           // Show loading state only on initial load (not when refreshing)
           if (_controller.isLoading && !_controller.isRefreshing) {
             return RefreshIndicator(
-              onRefresh: _controller.refresh,
+              onRefresh: _handleRefresh,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: SizedBox(
@@ -187,7 +202,7 @@ class _LearnScreenState extends State<LearnScreen> {
 
           if (_controller.errorMessage != null) {
             return RefreshIndicator(
-              onRefresh: _controller.refresh,
+              onRefresh: _handleRefresh,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: SizedBox(
@@ -223,7 +238,7 @@ class _LearnScreenState extends State<LearnScreen> {
           // Show empty state if no concepts
           if (_controller.concepts.isEmpty) {
             return RefreshIndicator(
-              onRefresh: _controller.refresh,
+              onRefresh: _handleRefresh,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: SizedBox(
@@ -290,7 +305,7 @@ class _LearnScreenState extends State<LearnScreen> {
 
           // Show start screen if lesson is not active
           return RefreshIndicator(
-            onRefresh: _controller.refresh,
+            onRefresh: _handleRefresh,
             child: LessonStartWidget(
               cardCount: _controller.concepts.length,
               totalConceptsCount: _controller.totalConceptsCount,
@@ -310,6 +325,9 @@ class _LearnScreenState extends State<LearnScreen> {
                   includeNewCards: includeNewCards,
                   includeLearnedCards: includeLearnedCards,
                 );
+              },
+              onGetCurrentSettingsReady: (getCurrentSettings) {
+                _getCurrentWidgetSettings = getCurrentSettings;
               },
             ),
           );

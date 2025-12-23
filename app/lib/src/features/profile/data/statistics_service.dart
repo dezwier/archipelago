@@ -203,7 +203,7 @@ class StatisticsService {
   /// - 'data': PracticeDaily (if successful)
   /// - 'message': String (if error)
   /// 
-  /// metricType: 'exercises', 'lessons', or 'lemmas'
+  /// metricType: 'exercises', 'lessons', 'lemmas', or 'time'
   static Future<Map<String, dynamic>> getPracticeDaily({
     required int userId,
     String metricType = 'exercises',

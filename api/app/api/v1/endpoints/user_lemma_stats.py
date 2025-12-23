@@ -140,22 +140,32 @@ async def get_language_summary_stats(
     language_codes_from_results = [row.language_code for row in results]
     
     lesson_counts_map: Dict[str, int] = {}
+    total_time_map: Dict[str, int] = {}
     if language_codes_from_results:
         lesson_query = (
             select(
                 lesson_alias.learning_language,
-                func.count(func.distinct(lesson_alias.id)).label('lesson_count')
+                func.count(func.distinct(lesson_alias.id)).label('lesson_count'),
+                func.sum(
+                    func.extract('epoch', lesson_alias.end_time - lesson_alias.start_time)
+                ).label('total_time_seconds')
             )
             .select_from(lesson_alias)
             .where(
                 lesson_alias.user_id == user_id,
-                lesson_alias.learning_language.in_(language_codes_from_results)  # type: ignore[attr-defined]
+                lesson_alias.learning_language.in_(language_codes_from_results),  # type: ignore[attr-defined]
+                lesson_alias.start_time.isnot(None),
+                lesson_alias.end_time.isnot(None)
             )
             .group_by(lesson_alias.learning_language)
         )
         
         lesson_results = session.exec(lesson_query).all()
         lesson_counts_map = {row.learning_language: row.lesson_count for row in lesson_results}
+        total_time_map = {
+            row.learning_language: int(row.total_time_seconds or 0) 
+            for row in lesson_results
+        }
     
     # Build response
     language_stats = [
@@ -163,7 +173,8 @@ async def get_language_summary_stats(
             language_code=row.language_code,
             lemma_count=row.lemma_count or 0,
             exercise_count=row.exercise_count or 0,
-            lesson_count=lesson_counts_map.get(row.language_code, 0)
+            lesson_count=lesson_counts_map.get(row.language_code, 0),
+            total_time_seconds=total_time_map.get(row.language_code, 0)
         )
         for row in results
     ]
@@ -278,7 +289,7 @@ async def get_leitner_distribution(
 @router.get("/exercises-daily", response_model=PracticeDailyResponse)
 async def get_exercises_daily(
     user_id: int = Query(..., description="User ID"),
-    metric_type: str = Query("exercises", description="Metric type: 'exercises', 'lessons', or 'lemmas'"),
+    metric_type: str = Query("exercises", description="Metric type: 'exercises', 'lessons', 'lemmas', or 'time'"),
     visible_languages: Optional[str] = Query(None, description="Comma-separated list of visible language codes"),
     include_lemmas: bool = Query(True, description="Include lemmas"),
     include_phrases: bool = Query(True, description="Include phrases"),
@@ -296,9 +307,9 @@ async def get_exercises_daily(
     Get practice data per language per day.
     
     Returns the count of exercises, lessons, or lemmas practiced per language per day,
-    filtered by the same criteria as the dictionary/learn features.
+    or minutes spent per language per day, filtered by the same criteria as the dictionary/learn features.
     
-    metric_type: 'exercises' (default), 'lessons', or 'lemmas'
+    metric_type: 'exercises' (default), 'lessons', 'lemmas', or 'time'
     """
     # Validate user exists
     user = session.get(User, user_id)
@@ -309,10 +320,10 @@ async def get_exercises_daily(
         )
     
     # Validate metric_type
-    if metric_type not in ["exercises", "lessons", "lemmas"]:
+    if metric_type not in ["exercises", "lessons", "lemmas", "time"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="metric_type must be 'exercises', 'lessons', or 'lemmas'"
+            detail="metric_type must be 'exercises', 'lessons', 'lemmas', or 'time'"
         )
     
     # Parse filter parameters
@@ -323,7 +334,63 @@ async def get_exercises_daily(
     
     language_data_map: Dict[str, List[PracticeDailyData]] = {}
     
-    if metric_type == "lessons":
+    if metric_type == "time":
+        # Query: Get total minutes spent per language per day from lessons
+        lesson_alias = aliased(Lesson)
+        
+        time_query = (
+            select(
+                lesson_alias.learning_language.label('language_code'),
+                cast(lesson_alias.end_time, Date).label('practice_date'),
+                func.sum(
+                    func.extract('epoch', lesson_alias.end_time - lesson_alias.start_time) / 60
+                ).label('count')  # Convert seconds to minutes
+            )
+            .select_from(lesson_alias)
+            .where(
+                lesson_alias.user_id == user_id,
+                lesson_alias.end_time.isnot(None),
+                lesson_alias.start_time.isnot(None)
+            )
+        )
+        
+        # Apply visible languages filter if provided
+        if visible_language_codes:
+            time_query = time_query.where(lesson_alias.learning_language.in_(visible_language_codes))  # type: ignore[attr-defined]
+        
+        time_query = time_query.group_by(
+            lesson_alias.learning_language,
+            cast(lesson_alias.end_time, Date)
+        ).order_by(
+            lesson_alias.learning_language,
+            cast(lesson_alias.end_time, Date)
+        )
+        
+        # Execute query
+        results = session.exec(time_query).all()
+        
+        # Group results by language_code
+        for row in results:
+            lang_code = row.language_code
+            practice_date = row.practice_date
+            count = int(row.count or 0)  # Round to integer minutes
+            
+            # Convert date to ISO format string
+            if isinstance(practice_date, date):
+                date_str = practice_date.isoformat()
+            elif isinstance(practice_date, datetime):
+                date_str = practice_date.date().isoformat()
+            else:
+                date_str = str(practice_date)
+            
+            if lang_code not in language_data_map:
+                language_data_map[lang_code] = []
+            
+            language_data_map[lang_code].append(
+                PracticeDailyData(date=date_str, count=count)
+            )
+    
+    elif metric_type == "lessons":
         # Query: Get lessons per language per day
         lesson_alias = aliased(Lesson)
         

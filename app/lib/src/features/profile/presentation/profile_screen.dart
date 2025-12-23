@@ -166,13 +166,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  String _getLanguageName(String code) {
-    final language = _languages.firstWhere(
-      (lang) => lang.code == code,
-      orElse: () => Language(code: code, name: code.toUpperCase()),
-    );
-    return language.name;
-  }
 
   Future<void> _loadSavedUser({bool force = false}) async {
     // Don't reload if user is already loaded (unless forced)
@@ -458,7 +451,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ],
                   ),
-                  const Divider(height: 32),
+                  const Divider(height: 40),
                   // Summary statistics
                   if (_isLoadingStats)
                     const Center(
@@ -616,52 +609,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         ...stats.languageStats.map((stat) {
           final emoji = LanguageEmoji.getEmoji(stat.languageCode);
-          final languageName = _getLanguageName(stat.languageCode);
+          final minutes = (stat.totalTimeSeconds / 60).round();
+          final timeValue = minutes >= 60 
+              ? '${(minutes / 60).round()}'
+              : minutes.toString();
+          final timeLabel = minutes >= 60 ? 'Hours' : 'Minutes';
           
           return Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Column(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      emoji,
-                      style: Theme.of(context).textTheme.titleLarge,
+                Expanded(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        emoji,
+                        style: Theme.of(context).textTheme.displaySmall,
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      languageName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatItem(
-                        value: stat.lemmaCount.toString(),
-                        label: 'Lemmas',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildStatItem(
-                        value: stat.lessonCount.toString(),
-                        label: 'Lessons',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildStatItem(
-                        value: stat.exerciseCount.toString(),
-                        label: 'Exercises',
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  child: _buildInlineStatItem(
+                    value: stat.lemmaCount.toString(),
+                    label: 'Lemmas',
+                  ),
+                ),
+                Expanded(
+                  child: _buildInlineStatItem(
+                    value: stat.lessonCount.toString(),
+                    label: 'Lessons',
+                  ),
+                ),
+                Expanded(
+                  child: _buildInlineStatItem(
+                    value: stat.exerciseCount.toString(),
+                    label: 'Exercises',
+                  ),
+                ),
+                Expanded(
+                  child: _buildInlineStatItem(
+                    value: timeValue,
+                    label: timeLabel,
+                  ),
                 ),
               ],
             ),
@@ -671,31 +663,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStatItem({required String value, required String label}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+  Widget _buildInlineStatItem({required String value, required String label}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+        ),
+      ],
     );
   }
+
 
   Future<void> _loadStatistics() async {
     if (_currentUser == null) return;

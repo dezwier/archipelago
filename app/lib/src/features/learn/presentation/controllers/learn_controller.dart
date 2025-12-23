@@ -373,13 +373,23 @@ class LearnController extends ChangeNotifier implements FilterState {
     notifyListeners();
   }
   
-  /// Refresh the data
-  Future<void> refresh() async {
+  /// Refresh the data - same effect as Generate Lesson button
+  /// If settings are provided, use those; otherwise use current controller state
+  Future<void> refresh({
+    int? cardsToLearn,
+    bool? includeNewCards,
+    bool? includeLearnedCards,
+  }) async {
     await _loadCurrentUser();
     if (_currentUser != null && _currentUser!.langLearning != null && _currentUser!.langLearning!.isNotEmpty) {
       _learningLanguage = _currentUser!.langLearning;
     }
-    await loadNewCards(isRefresh: true);
+    // Use generateWorkout to refresh with provided settings or current settings (same as Generate Lesson button)
+    await generateWorkout(
+      cardsToLearn: cardsToLearn ?? _cardsToLearn,
+      includeNewCards: includeNewCards ?? _includeNewCards,
+      includeLearnedCards: includeLearnedCards ?? _includeLearnedCards,
+    );
   }
   
   /// Start the lesson

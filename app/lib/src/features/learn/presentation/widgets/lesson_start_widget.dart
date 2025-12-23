@@ -15,6 +15,7 @@ class LessonStartWidget extends StatefulWidget {
   final VoidCallback? onFilterPressed;
   final VoidCallback? onStartLesson;
   final void Function(int cardsToLearn, bool includeNewCards, bool includeLearnedCards)? onGenerateWorkout;
+  final void Function(Map<String, dynamic> Function() getCurrentSettings)? onGetCurrentSettingsReady;
 
   const LessonStartWidget({
     super.key,
@@ -31,6 +32,7 @@ class LessonStartWidget extends StatefulWidget {
     this.onFilterPressed,
     this.onStartLesson,
     this.onGenerateWorkout,
+    this.onGetCurrentSettingsReady,
   });
 
   @override
@@ -168,6 +170,17 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
     _localCardsToLearn = widget.cardsToLearn;
     _includeNewCards = widget.includeNewCards;
     _includeLearnedCards = widget.includeLearnedCards;
+    
+    // Register callback to expose current settings
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onGetCurrentSettingsReady?.call(() {
+        return {
+          'cardsToLearn': _localCardsToLearn,
+          'includeNewCards': _includeNewCards,
+          'includeLearnedCards': _includeLearnedCards,
+        };
+      });
+    });
   }
 
   @override

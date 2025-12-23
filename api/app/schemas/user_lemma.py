@@ -11,6 +11,7 @@ class LanguageStat(BaseModel):
     lemma_count: int
     exercise_count: int
     lesson_count: int
+    total_time_seconds: int
 
 
 class SummaryStatsResponse(BaseModel):

@@ -45,11 +45,13 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
   String _getTitle() {
     switch (_selectedMetricType) {
       case 'lessons':
-        return 'Lessons over Time';
+        return 'Lessons per Day';
       case 'lemmas':
-        return 'Lemmas Practiced over Time';
+        return 'Lemmas per Day';
+      case 'time':
+        return 'Time per Day';
       default:
-        return 'Exercises over Time';
+        return 'Exercises per Day';
     }
   }
 
@@ -59,6 +61,8 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
         return 'No lesson data available';
       case 'lemmas':
         return 'No lemma practice data available';
+      case 'time':
+        return 'No time data available';
       default:
         return 'No exercise data available';
     }
@@ -239,12 +243,13 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                     fontWeight: FontWeight.bold,
                   ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             SegmentedButton<String>(
               segments: const [
                 ButtonSegment(value: 'lemmas', label: Text('Lemmas')),
                 ButtonSegment(value: 'lessons', label: Text('Lessons')),
                 ButtonSegment(value: 'exercises', label: Text('Exercises')),
+                ButtonSegment(value: 'time', label: Text('Time')),
               ],
               selected: {_selectedMetricType},
               onSelectionChanged: (Set<String> newSelection) {
@@ -257,9 +262,9 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
               },
               showSelectedIcon: false,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
             SizedBox(
-              height: 250,
+              height: 200,
               child: LineChart(
                 LineChartData(
                   gridData: FlGridData(
@@ -320,10 +325,27 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                           if (value == meta.min || value == meta.max) {
                             return const SizedBox.shrink();
                           }
-                          return Text(
-                            value.toInt().toString(),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          );
+                          if (_selectedMetricType == 'time') {
+                            // Format as hours if >= 60 minutes, otherwise minutes
+                            final minutes = value.toInt();
+                            if (minutes >= 60) {
+                              final hours = (minutes / 60).round();
+                              return Text(
+                                '${hours}h',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              );
+                            } else {
+                              return Text(
+                                '${minutes}m',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              );
+                            }
+                          } else {
+                            return Text(
+                              value.toInt().toString(),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            );
+                          }
                         },
                       ),
                     ),
@@ -373,7 +395,7 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             // Legend
             Wrap(
               spacing: 16,
