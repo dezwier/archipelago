@@ -391,13 +391,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return _buildAuthView();
   }
 
+  Future<void> _refreshProfile() async {
+    await Future.wait([
+      _loadSavedUser(force: true),
+      _loadTopics(),
+      _loadStatistics(),
+    ]);
+  }
+
   Widget _buildProfileView() {
     return Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: 12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: RefreshIndicator(
+        onRefresh: _refreshProfile,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           const SizedBox(height: 16),
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -577,6 +588,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ],
       ),
+        ),
       ),
       floatingActionButton: FloatingActionButton.small(
         heroTag: 'profile_filter_fab',
