@@ -4,11 +4,13 @@ class LanguageStat {
   final String languageCode;
   final int lemmaCount;
   final int exerciseCount;
+  final int lessonCount;
 
   LanguageStat({
     required this.languageCode,
     required this.lemmaCount,
     required this.exerciseCount,
+    required this.lessonCount,
   });
 
   factory LanguageStat.fromJson(Map<String, dynamic> json) {
@@ -16,6 +18,7 @@ class LanguageStat {
       languageCode: json['language_code'] as String,
       lemmaCount: json['lemma_count'] as int,
       exerciseCount: json['exercise_count'] as int,
+      lessonCount: json['lesson_count'] as int,
     );
   }
 
@@ -24,6 +27,7 @@ class LanguageStat {
       'language_code': languageCode,
       'lemma_count': lemmaCount,
       'exercise_count': exerciseCount,
+      'lesson_count': lessonCount,
     };
   }
 }
@@ -100,17 +104,17 @@ class LeitnerDistribution {
   }
 }
 
-class ExerciseDailyData {
+class PracticeDailyData {
   final String date;
   final int count;
 
-  ExerciseDailyData({
+  PracticeDailyData({
     required this.date,
     required this.count,
   });
 
-  factory ExerciseDailyData.fromJson(Map<String, dynamic> json) {
-    return ExerciseDailyData(
+  factory PracticeDailyData.fromJson(Map<String, dynamic> json) {
+    return PracticeDailyData(
       date: json['date'] as String,
       count: json['count'] as int,
     );
@@ -124,20 +128,20 @@ class ExerciseDailyData {
   }
 }
 
-class LanguageExerciseData {
+class LanguagePracticeData {
   final String languageCode;
-  final List<ExerciseDailyData> dailyData;
+  final List<PracticeDailyData> dailyData;
 
-  LanguageExerciseData({
+  LanguagePracticeData({
     required this.languageCode,
     required this.dailyData,
   });
 
-  factory LanguageExerciseData.fromJson(Map<String, dynamic> json) {
-    return LanguageExerciseData(
+  factory LanguagePracticeData.fromJson(Map<String, dynamic> json) {
+    return LanguagePracticeData(
       languageCode: json['language_code'] as String,
       dailyData: (json['daily_data'] as List<dynamic>)
-          .map((item) => ExerciseDailyData.fromJson(item as Map<String, dynamic>))
+          .map((item) => PracticeDailyData.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }
@@ -150,17 +154,17 @@ class LanguageExerciseData {
   }
 }
 
-class ExercisesDaily {
-  final List<LanguageExerciseData> languageData;
+class PracticeDaily {
+  final List<LanguagePracticeData> languageData;
 
-  ExercisesDaily({
+  PracticeDaily({
     required this.languageData,
   });
 
-  factory ExercisesDaily.fromJson(Map<String, dynamic> json) {
-    return ExercisesDaily(
+  factory PracticeDaily.fromJson(Map<String, dynamic> json) {
+    return PracticeDaily(
       languageData: (json['language_data'] as List<dynamic>)
-          .map((item) => LanguageExerciseData.fromJson(item as Map<String, dynamic>))
+          .map((item) => LanguagePracticeData.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }
@@ -171,4 +175,9 @@ class ExercisesDaily {
     };
   }
 }
+
+// Keep old names for backward compatibility
+typedef ExerciseDailyData = PracticeDailyData;
+typedef LanguageExerciseData = LanguagePracticeData;
+typedef ExercisesDaily = PracticeDaily;
 

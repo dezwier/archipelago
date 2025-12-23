@@ -196,14 +196,17 @@ class StatisticsService {
     }
   }
 
-  /// Get exercises per language per day.
+  /// Get practice data per language per day.
   /// 
   /// Returns a map with:
   /// - 'success': bool
-  /// - 'data': ExercisesDaily (if successful)
+  /// - 'data': PracticeDaily (if successful)
   /// - 'message': String (if error)
-  static Future<Map<String, dynamic>> getExercisesDaily({
+  /// 
+  /// metricType: 'exercises', 'lessons', or 'lemmas'
+  static Future<Map<String, dynamic>> getPracticeDaily({
     required int userId,
+    String metricType = 'exercises',
     List<String>? visibleLanguageCodes,
     bool includeLemmas = true,
     bool includePhrases = true,
@@ -218,6 +221,7 @@ class StatisticsService {
   }) async {
     final queryParams = <String, String>{
       'user_id': userId.toString(),
+      'metric_type': metricType,
       'include_lemmas': includeLemmas.toString(),
       'include_phrases': includePhrases.toString(),
       'include_without_topic': includeWithoutTopic.toString(),
@@ -269,28 +273,66 @@ class StatisticsService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return {
           'success': true,
-          'data': ExercisesDaily.fromJson(data),
+          'data': PracticeDaily.fromJson(data),
         };
       } else {
         try {
           final error = jsonDecode(response.body) as Map<String, dynamic>;
           return {
             'success': false,
-            'message': error['detail'] as String? ?? 'Failed to fetch exercises daily',
+            'message': error['detail'] as String? ?? 'Failed to fetch practice daily',
           };
         } catch (_) {
           return {
             'success': false,
-            'message': 'Failed to fetch exercises daily: ${response.statusCode}',
+            'message': 'Failed to fetch practice daily: ${response.statusCode}',
           };
         }
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Error fetching exercises daily: ${e.toString()}',
+        'message': 'Error fetching practice daily: ${e.toString()}',
       };
     }
+  }
+
+  /// Get exercises per language per day (backward compatibility).
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'data': ExercisesDaily (if successful)
+  /// - 'message': String (if error)
+  @Deprecated('Use getPracticeDaily with metricType: "exercises" instead')
+  static Future<Map<String, dynamic>> getExercisesDaily({
+    required int userId,
+    List<String>? visibleLanguageCodes,
+    bool includeLemmas = true,
+    bool includePhrases = true,
+    List<int>? topicIds,
+    bool includeWithoutTopic = true,
+    List<String>? levels,
+    List<String>? partOfSpeech,
+    int? hasImages,
+    int? hasAudio,
+    int? isComplete,
+    String? search,
+  }) async {
+    return getPracticeDaily(
+      userId: userId,
+      metricType: 'exercises',
+      visibleLanguageCodes: visibleLanguageCodes,
+      includeLemmas: includeLemmas,
+      includePhrases: includePhrases,
+      topicIds: topicIds,
+      includeWithoutTopic: includeWithoutTopic,
+      levels: levels,
+      partOfSpeech: partOfSpeech,
+      hasImages: hasImages,
+      hasAudio: hasAudio,
+      isComplete: isComplete,
+      search: search,
+    );
   }
 }
 

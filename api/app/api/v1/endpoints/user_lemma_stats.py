@@ -13,15 +13,15 @@ from datetime import date, datetime
 import logging
 
 from app.core.database import get_session
-from app.models.models import Lemma, UserLemma, Exercise, User
+from app.models.models import Lemma, UserLemma, Exercise, User, Lesson
 from app.schemas.user_lemma import (
     SummaryStatsResponse,
     LanguageStat,
     LeitnerDistributionResponse,
     LeitnerBinData,
-    ExercisesDailyResponse,
-    LanguageExerciseData,
-    ExerciseDailyData
+    PracticeDailyResponse,
+    LanguagePracticeData,
+    PracticeDailyData
 )
 from app.services.dictionary_service import (
     parse_visible_languages,
@@ -132,12 +132,38 @@ async def get_language_summary_stats(
     # Execute query
     results = session.exec(stats_query).all()
     
+    # Query: Get lesson counts per language
+    # Join: Lesson -> filter by learning_language matching lemma language_code
+    lesson_alias = aliased(Lesson)
+    
+    # Get all language codes from results
+    language_codes_from_results = [row.language_code for row in results]
+    
+    lesson_counts_map: Dict[str, int] = {}
+    if language_codes_from_results:
+        lesson_query = (
+            select(
+                lesson_alias.learning_language,
+                func.count(func.distinct(lesson_alias.id)).label('lesson_count')
+            )
+            .select_from(lesson_alias)
+            .where(
+                lesson_alias.user_id == user_id,
+                lesson_alias.learning_language.in_(language_codes_from_results)  # type: ignore[attr-defined]
+            )
+            .group_by(lesson_alias.learning_language)
+        )
+        
+        lesson_results = session.exec(lesson_query).all()
+        lesson_counts_map = {row.learning_language: row.lesson_count for row in lesson_results}
+    
     # Build response
     language_stats = [
         LanguageStat(
             language_code=row.language_code,
             lemma_count=row.lemma_count or 0,
-            exercise_count=row.exercise_count or 0
+            exercise_count=row.exercise_count or 0,
+            lesson_count=lesson_counts_map.get(row.language_code, 0)
         )
         for row in results
     ]
@@ -249,9 +275,10 @@ async def get_leitner_distribution(
     )
 
 
-@router.get("/exercises-daily", response_model=ExercisesDailyResponse)
+@router.get("/exercises-daily", response_model=PracticeDailyResponse)
 async def get_exercises_daily(
     user_id: int = Query(..., description="User ID"),
+    metric_type: str = Query("exercises", description="Metric type: 'exercises', 'lessons', or 'lemmas'"),
     visible_languages: Optional[str] = Query(None, description="Comma-separated list of visible language codes"),
     include_lemmas: bool = Query(True, description="Include lemmas"),
     include_phrases: bool = Query(True, description="Include phrases"),
@@ -266,10 +293,12 @@ async def get_exercises_daily(
     session: Session = Depends(get_session)
 ):
     """
-    Get exercises per language per day.
+    Get practice data per language per day.
     
-    Returns the count of exercises done per language per day, filtered by the same
-    criteria as the dictionary/learn features.
+    Returns the count of exercises, lessons, or lemmas practiced per language per day,
+    filtered by the same criteria as the dictionary/learn features.
+    
+    metric_type: 'exercises' (default), 'lessons', or 'lemmas'
     """
     # Validate user exists
     user = session.get(User, user_id)
@@ -279,110 +308,260 @@ async def get_exercises_daily(
             detail=f"User with id {user_id} not found"
         )
     
+    # Validate metric_type
+    if metric_type not in ["exercises", "lessons", "lemmas"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="metric_type must be 'exercises', 'lessons', or 'lemmas'"
+        )
+    
     # Parse filter parameters
     visible_language_codes = parse_visible_languages(visible_languages)
     topic_id_list = parse_topic_ids(topic_ids)
     level_list = parse_levels(levels)
     pos_list = parse_part_of_speech(part_of_speech)
     
-    # Build base filtered concept query
-    concept_query = build_base_filtered_query(
-        user_id=user_id,
-        include_lemmas=include_lemmas,
-        include_phrases=include_phrases,
-        topic_id_list=topic_id_list,
-        include_without_topic=include_without_topic,
-        level_list=level_list,
-        pos_list=pos_list,
-        has_images=has_images,
-        has_audio=has_audio,
-        is_complete=is_complete,
-        visible_language_codes=visible_language_codes,
-        search=search
-    )
+    language_data_map: Dict[str, List[PracticeDailyData]] = {}
     
-    # Get filtered concept IDs
-    filtered_concept_ids_subquery = concept_query.subquery()
-    filtered_concept_ids = select(filtered_concept_ids_subquery.c.id)
-    
-    # Query: Get exercises per language per day
-    # Join: Concept -> Lemma -> UserLemma -> Exercise
-    # Group by language_code and date (cast end_time to date)
-    lemma_alias3 = aliased(Lemma)
-    user_lemma_alias3 = aliased(UserLemma)
-    exercise_alias3 = aliased(Exercise)
-    
-    exercises_query = (
-        select(
-            lemma_alias3.language_code,
-            cast(exercise_alias3.end_time, Date).label('exercise_date'),
-            func.count(exercise_alias3.id).label('count')
-        )
-        .select_from(lemma_alias3)
-        .join(
-            user_lemma_alias3,
-            and_(
-                user_lemma_alias3.lemma_id == lemma_alias3.id,
-                user_lemma_alias3.user_id == user_id
+    if metric_type == "lessons":
+        # Query: Get lessons per language per day
+        lesson_alias = aliased(Lesson)
+        
+        lessons_query = (
+            select(
+                lesson_alias.learning_language.label('language_code'),
+                cast(lesson_alias.end_time, Date).label('practice_date'),
+                func.count(func.distinct(lesson_alias.id)).label('count')
+            )
+            .select_from(lesson_alias)
+            .where(
+                lesson_alias.user_id == user_id,
+                lesson_alias.end_time.isnot(None)
             )
         )
-        .join(
-            exercise_alias3,
-            exercise_alias3.user_lemma_id == user_lemma_alias3.id
-        )
-        .where(
-            lemma_alias3.concept_id.in_(filtered_concept_ids),  # type: ignore[attr-defined]
-            lemma_alias3.term.isnot(None),
-            lemma_alias3.term != "",
-            exercise_alias3.end_time.isnot(None)
-        )
-    )
-    
-    # Apply visible languages filter if provided
-    if visible_language_codes:
-        exercises_query = exercises_query.where(lemma_alias3.language_code.in_(visible_language_codes))  # type: ignore[attr-defined]
-    
-    exercises_query = exercises_query.group_by(
-        lemma_alias3.language_code,
-        cast(exercise_alias3.end_time, Date)
-    ).order_by(
-        lemma_alias3.language_code,
-        cast(exercise_alias3.end_time, Date)
-    )
-    
-    # Execute query
-    results = session.exec(exercises_query).all()
-    
-    # Group results by language_code
-    language_data_map: Dict[str, List[ExerciseDailyData]] = {}
-    for row in results:
-        lang_code = row.language_code
-        exercise_date = row.exercise_date
-        count = row.count
         
-        # Convert date to ISO format string
-        if isinstance(exercise_date, date):
-            date_str = exercise_date.isoformat()
-        elif isinstance(exercise_date, datetime):
-            date_str = exercise_date.date().isoformat()
-        else:
-            date_str = str(exercise_date)
+        # Apply visible languages filter if provided
+        if visible_language_codes:
+            lessons_query = lessons_query.where(lesson_alias.learning_language.in_(visible_language_codes))  # type: ignore[attr-defined]
         
-        if lang_code not in language_data_map:
-            language_data_map[lang_code] = []
-        
-        language_data_map[lang_code].append(
-            ExerciseDailyData(date=date_str, count=count)
+        lessons_query = lessons_query.group_by(
+            lesson_alias.learning_language,
+            cast(lesson_alias.end_time, Date)
+        ).order_by(
+            lesson_alias.learning_language,
+            cast(lesson_alias.end_time, Date)
         )
+        
+        # Execute query
+        results = session.exec(lessons_query).all()
+        
+        # Group results by language_code
+        for row in results:
+            lang_code = row.language_code
+            practice_date = row.practice_date
+            count = row.count
+            
+            # Convert date to ISO format string
+            if isinstance(practice_date, date):
+                date_str = practice_date.isoformat()
+            elif isinstance(practice_date, datetime):
+                date_str = practice_date.date().isoformat()
+            else:
+                date_str = str(practice_date)
+            
+            if lang_code not in language_data_map:
+                language_data_map[lang_code] = []
+            
+            language_data_map[lang_code].append(
+                PracticeDailyData(date=date_str, count=count)
+            )
+    
+    elif metric_type == "lemmas":
+        # Query: Get distinct lemmas practiced per language per day
+        # Join: Concept -> Lemma -> UserLemma -> Exercise
+        # Count distinct user_lemma_id per day
+        concept_query = build_base_filtered_query(
+            user_id=user_id,
+            include_lemmas=include_lemmas,
+            include_phrases=include_phrases,
+            topic_id_list=topic_id_list,
+            include_without_topic=include_without_topic,
+            level_list=level_list,
+            pos_list=pos_list,
+            has_images=has_images,
+            has_audio=has_audio,
+            is_complete=is_complete,
+            visible_language_codes=visible_language_codes,
+            search=search
+        )
+        
+        # Get filtered concept IDs
+        filtered_concept_ids_subquery = concept_query.subquery()
+        filtered_concept_ids = select(filtered_concept_ids_subquery.c.id)
+        
+        lemma_alias3 = aliased(Lemma)
+        user_lemma_alias3 = aliased(UserLemma)
+        exercise_alias3 = aliased(Exercise)
+        
+        lemmas_query = (
+            select(
+                lemma_alias3.language_code,
+                cast(exercise_alias3.end_time, Date).label('practice_date'),
+                func.count(func.distinct(user_lemma_alias3.id)).label('count')
+            )
+            .select_from(lemma_alias3)
+            .join(
+                user_lemma_alias3,
+                and_(
+                    user_lemma_alias3.lemma_id == lemma_alias3.id,
+                    user_lemma_alias3.user_id == user_id
+                )
+            )
+            .join(
+                exercise_alias3,
+                exercise_alias3.user_lemma_id == user_lemma_alias3.id
+            )
+            .where(
+                lemma_alias3.concept_id.in_(filtered_concept_ids),  # type: ignore[attr-defined]
+                lemma_alias3.term.isnot(None),
+                lemma_alias3.term != "",
+                exercise_alias3.end_time.isnot(None)
+            )
+        )
+        
+        # Apply visible languages filter if provided
+        if visible_language_codes:
+            lemmas_query = lemmas_query.where(lemma_alias3.language_code.in_(visible_language_codes))  # type: ignore[attr-defined]
+        
+        lemmas_query = lemmas_query.group_by(
+            lemma_alias3.language_code,
+            cast(exercise_alias3.end_time, Date)
+        ).order_by(
+            lemma_alias3.language_code,
+            cast(exercise_alias3.end_time, Date)
+        )
+        
+        # Execute query
+        results = session.exec(lemmas_query).all()
+        
+        # Group results by language_code
+        for row in results:
+            lang_code = row.language_code
+            practice_date = row.practice_date
+            count = row.count
+            
+            # Convert date to ISO format string
+            if isinstance(practice_date, date):
+                date_str = practice_date.isoformat()
+            elif isinstance(practice_date, datetime):
+                date_str = practice_date.date().isoformat()
+            else:
+                date_str = str(practice_date)
+            
+            if lang_code not in language_data_map:
+                language_data_map[lang_code] = []
+            
+            language_data_map[lang_code].append(
+                PracticeDailyData(date=date_str, count=count)
+            )
+    
+    else:  # metric_type == "exercises" (default)
+        # Query: Get exercises per language per day
+        # Join: Concept -> Lemma -> UserLemma -> Exercise
+        # Group by language_code and date (cast end_time to date)
+        concept_query = build_base_filtered_query(
+            user_id=user_id,
+            include_lemmas=include_lemmas,
+            include_phrases=include_phrases,
+            topic_id_list=topic_id_list,
+            include_without_topic=include_without_topic,
+            level_list=level_list,
+            pos_list=pos_list,
+            has_images=has_images,
+            has_audio=has_audio,
+            is_complete=is_complete,
+            visible_language_codes=visible_language_codes,
+            search=search
+        )
+        
+        # Get filtered concept IDs
+        filtered_concept_ids_subquery = concept_query.subquery()
+        filtered_concept_ids = select(filtered_concept_ids_subquery.c.id)
+        
+        lemma_alias3 = aliased(Lemma)
+        user_lemma_alias3 = aliased(UserLemma)
+        exercise_alias3 = aliased(Exercise)
+        
+        exercises_query = (
+            select(
+                lemma_alias3.language_code,
+                cast(exercise_alias3.end_time, Date).label('practice_date'),
+                func.count(exercise_alias3.id).label('count')
+            )
+            .select_from(lemma_alias3)
+            .join(
+                user_lemma_alias3,
+                and_(
+                    user_lemma_alias3.lemma_id == lemma_alias3.id,
+                    user_lemma_alias3.user_id == user_id
+                )
+            )
+            .join(
+                exercise_alias3,
+                exercise_alias3.user_lemma_id == user_lemma_alias3.id
+            )
+            .where(
+                lemma_alias3.concept_id.in_(filtered_concept_ids),  # type: ignore[attr-defined]
+                lemma_alias3.term.isnot(None),
+                lemma_alias3.term != "",
+                exercise_alias3.end_time.isnot(None)
+            )
+        )
+        
+        # Apply visible languages filter if provided
+        if visible_language_codes:
+            exercises_query = exercises_query.where(lemma_alias3.language_code.in_(visible_language_codes))  # type: ignore[attr-defined]
+        
+        exercises_query = exercises_query.group_by(
+            lemma_alias3.language_code,
+            cast(exercise_alias3.end_time, Date)
+        ).order_by(
+            lemma_alias3.language_code,
+            cast(exercise_alias3.end_time, Date)
+        )
+        
+        # Execute query
+        results = session.exec(exercises_query).all()
+        
+        # Group results by language_code
+        for row in results:
+            lang_code = row.language_code
+            practice_date = row.practice_date
+            count = row.count
+            
+            # Convert date to ISO format string
+            if isinstance(practice_date, date):
+                date_str = practice_date.isoformat()
+            elif isinstance(practice_date, datetime):
+                date_str = practice_date.date().isoformat()
+            else:
+                date_str = str(practice_date)
+            
+            if lang_code not in language_data_map:
+                language_data_map[lang_code] = []
+            
+            language_data_map[lang_code].append(
+                PracticeDailyData(date=date_str, count=count)
+            )
     
     # Build response
     language_data = [
-        LanguageExerciseData(
+        LanguagePracticeData(
             language_code=lang_code,
             daily_data=daily_data
         )
         for lang_code, daily_data in sorted(language_data_map.items())
     ]
     
-    return ExercisesDailyResponse(language_data=language_data)
+    return PracticeDailyResponse(language_data=language_data)
 

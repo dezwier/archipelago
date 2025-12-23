@@ -10,6 +10,7 @@ class LanguageStat(BaseModel):
     language_code: str
     lemma_count: int
     exercise_count: int
+    lesson_count: int
 
 
 class SummaryStatsResponse(BaseModel):
@@ -29,19 +30,25 @@ class LeitnerDistributionResponse(BaseModel):
     distribution: List[LeitnerBinData]
 
 
-class ExerciseDailyData(BaseModel):
-    """Data for exercises on a single day."""
+class PracticeDailyData(BaseModel):
+    """Data for practice on a single day."""
     date: str  # ISO format date string (YYYY-MM-DD)
     count: int
 
 
-class LanguageExerciseData(BaseModel):
-    """Exercise data for a single language."""
+class LanguagePracticeData(BaseModel):
+    """Practice data for a single language."""
     language_code: str
-    daily_data: List[ExerciseDailyData]
+    daily_data: List[PracticeDailyData]
 
 
-class ExercisesDailyResponse(BaseModel):
-    """Response for exercises per language per day."""
-    language_data: List[LanguageExerciseData]
+class PracticeDailyResponse(BaseModel):
+    """Response for practice per language per day."""
+    language_data: List[LanguagePracticeData]
+
+
+# Keep old names for backward compatibility
+ExerciseDailyData = PracticeDailyData
+LanguageExerciseData = LanguagePracticeData
+ExercisesDailyResponse = PracticeDailyResponse
 

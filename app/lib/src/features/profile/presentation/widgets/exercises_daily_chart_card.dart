@@ -5,19 +5,67 @@ import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 import 'package:intl/intl.dart';
 
-/// Widget displaying exercises per language per day as an area line chart.
-class ExercisesDailyChartCard extends StatelessWidget {
-  final ExercisesDaily exercisesDaily;
+/// Widget displaying practice data per language per day as an area line chart.
+class ExercisesDailyChartCard extends StatefulWidget {
+  final PracticeDaily? practiceDaily;
   final List<Language> languages;
+  final String initialMetricType;
+  final ValueChanged<String>? onMetricTypeChanged;
 
   const ExercisesDailyChartCard({
     super.key,
-    required this.exercisesDaily,
+    this.practiceDaily,
     required this.languages,
+    this.initialMetricType = 'exercises',
+    this.onMetricTypeChanged,
   });
 
+  @override
+  State<ExercisesDailyChartCard> createState() => _ExercisesDailyChartCardState();
+}
+
+class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
+  late String _selectedMetricType;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedMetricType = widget.initialMetricType;
+  }
+
+  @override
+  void didUpdateWidget(ExercisesDailyChartCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update selected metric type if it changed from parent
+    if (widget.initialMetricType != oldWidget.initialMetricType) {
+      _selectedMetricType = widget.initialMetricType;
+    }
+  }
+
+  String _getTitle() {
+    switch (_selectedMetricType) {
+      case 'lessons':
+        return 'Lessons over Time';
+      case 'lemmas':
+        return 'Lemmas Practiced over Time';
+      default:
+        return 'Exercises over Time';
+    }
+  }
+
+  String _getEmptyMessage() {
+    switch (_selectedMetricType) {
+      case 'lessons':
+        return 'No lesson data available';
+      case 'lemmas':
+        return 'No lemma practice data available';
+      default:
+        return 'No exercise data available';
+    }
+  }
+
   String _getLanguageName(String code) {
-    final language = languages.firstWhere(
+    final language = widget.languages.firstWhere(
       (lang) => lang.code == code,
       orElse: () => Language(code: code, name: code.toUpperCase()),
     );
@@ -26,7 +74,7 @@ class ExercisesDailyChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (exercisesDaily.languageData.isEmpty) {
+    if (widget.practiceDaily == null || widget.practiceDaily!.languageData.isEmpty) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 16.0),
         decoration: BoxDecoration(
@@ -50,14 +98,14 @@ class ExercisesDailyChartCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Exercises over Time',
+                _getTitle(),
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
               ),
               const SizedBox(height: 16),
               Text(
-                'No exercise data available',
+                _getEmptyMessage(),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                     ),
@@ -70,7 +118,7 @@ class ExercisesDailyChartCard extends StatelessWidget {
 
     // Collect all unique dates and sort them
     final allDates = <String>{};
-    for (final langData in exercisesDaily.languageData) {
+    for (final langData in widget.practiceDaily!.languageData) {
       for (final dailyData in langData.dailyData) {
         allDates.add(dailyData.date);
       }
@@ -101,14 +149,14 @@ class ExercisesDailyChartCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Exercises over Time',
+                _getTitle(),
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
               ),
               const SizedBox(height: 16),
               Text(
-                'No exercise data available',
+                _getEmptyMessage(),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                     ),
@@ -121,7 +169,7 @@ class ExercisesDailyChartCard extends StatelessWidget {
 
     // Find max count for scaling
     int maxCount = 1;
-    for (final langData in exercisesDaily.languageData) {
+    for (final langData in widget.practiceDaily!.languageData) {
       for (final dailyData in langData.dailyData) {
         if (dailyData.count > maxCount) {
           maxCount = dailyData.count;
@@ -143,8 +191,8 @@ class ExercisesDailyChartCard extends StatelessWidget {
 
     // Build spots for each language
     final languageSpots = <String, List<FlSpot>>{};
-    for (int i = 0; i < exercisesDaily.languageData.length; i++) {
-      final langData = exercisesDaily.languageData[i];
+    for (int i = 0; i < widget.practiceDaily!.languageData.length; i++) {
+      final langData = widget.practiceDaily!.languageData[i];
       final spots = <FlSpot>[];
       
       // Create a map of date -> count for this language
@@ -186,10 +234,27 @@ class ExercisesDailyChartCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Exercises over Time',
+              _getTitle(),
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
+            ),
+            const SizedBox(height: 16),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'exercises', label: Text('Exercises')),
+                ButtonSegment(value: 'lessons', label: Text('Lessons')),
+                ButtonSegment(value: 'lemmas', label: Text('Lemmas')),
+              ],
+              selected: {_selectedMetricType},
+              onSelectionChanged: (Set<String> newSelection) {
+                final newMetricType = newSelection.first;
+                setState(() {
+                  _selectedMetricType = newMetricType;
+                });
+                // Notify parent to reload data with new metric type
+                widget.onMetricTypeChanged?.call(newMetricType);
+              },
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -285,7 +350,7 @@ class ExercisesDailyChartCard extends StatelessWidget {
                   maxX: (sortedDates.length - 1).toDouble(),
                   minY: 0,
                   maxY: maxCount * 1.1, // Add 10% padding
-                  lineBarsData: exercisesDaily.languageData.asMap().entries.map((entry) {
+                  lineBarsData: widget.practiceDaily!.languageData.asMap().entries.map((entry) {
                     final index = entry.key;
                     final langData = entry.value;
                     final spots = languageSpots[langData.languageCode] ?? [];
@@ -312,7 +377,7 @@ class ExercisesDailyChartCard extends StatelessWidget {
             Wrap(
               spacing: 16,
               runSpacing: 8,
-              children: exercisesDaily.languageData.asMap().entries.map((entry) {
+              children: widget.practiceDaily!.languageData.asMap().entries.map((entry) {
                 final index = entry.key;
                 final langData = entry.value;
                 final emoji = LanguageEmoji.getEmoji(langData.languageCode);

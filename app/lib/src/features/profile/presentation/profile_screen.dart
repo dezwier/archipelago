@@ -44,7 +44,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Statistics state
   SummaryStats? _summaryStats;
   LeitnerDistribution? _leitnerDistribution;
-  ExercisesDaily? _exercisesDaily;
+  PracticeDaily? _practiceDaily;
+  String _practiceMetricType = 'exercises';
   bool _isLoadingStats = false;
   String? _statsError;
 
@@ -535,11 +536,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 languages: _languages,
               ),
             const SizedBox(height: 16),
-            if (_exercisesDaily != null)
-              ExercisesDailyChartCard(
-                exercisesDaily: _exercisesDaily!,
-                languages: _languages,
-              ),
+            ExercisesDailyChartCard(
+              key: ValueKey('practice-daily-${_practiceMetricType}'),
+              practiceDaily: _practiceDaily,
+              languages: _languages,
+              initialMetricType: _practiceMetricType,
+              onMetricTypeChanged: (String newMetricType) {
+                setState(() {
+                  _practiceMetricType = newMetricType;
+                });
+                _loadPracticeDaily();
+              },
+            ),
             const SizedBox(height: 16),
             if (_leitnerDistribution != null && _currentUser!.langLearning != null)
               LeitnerDistributionCard(
@@ -678,9 +686,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
 
-      // Load exercises daily data
-      final exercisesDailyResult = await StatisticsService.getExercisesDaily(
+      // Load practice daily data
+      final practiceDailyResult = await StatisticsService.getPracticeDaily(
         userId: _currentUser!.id,
+        metricType: _practiceMetricType,
         includeLemmas: _filterState.includeLemmas,
         includePhrases: _filterState.includePhrases,
         topicIds: _filterState.topicIdsParam,
@@ -692,9 +701,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         isComplete: _filterState.isCompleteParam,
       );
 
-      ExercisesDaily? exercisesDaily;
-      if (exercisesDailyResult['success'] == true) {
-        exercisesDaily = exercisesDailyResult['data'] as ExercisesDaily;
+      PracticeDaily? practiceDaily;
+      if (practiceDailyResult['success'] == true) {
+        practiceDaily = practiceDailyResult['data'] as PracticeDaily;
       }
 
       if (mounted) {
@@ -705,7 +714,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _statsError = summaryResult['message'] as String? ?? 'Failed to load statistics';
           }
           _leitnerDistribution = leitnerDist;
-          _exercisesDaily = exercisesDaily;
+          _practiceDaily = practiceDaily;
           _isLoadingStats = false;
         });
       }
@@ -714,6 +723,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _statsError = 'Error loading statistics: ${e.toString()}';
           _isLoadingStats = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadPracticeDaily() async {
+    if (_currentUser == null) return;
+
+    try {
+      // Load only practice daily data
+      final practiceDailyResult = await StatisticsService.getPracticeDaily(
+        userId: _currentUser!.id,
+        metricType: _practiceMetricType,
+        includeLemmas: _filterState.includeLemmas,
+        includePhrases: _filterState.includePhrases,
+        topicIds: _filterState.topicIdsParam,
+        includeWithoutTopic: _filterState.showLemmasWithoutTopic,
+        levels: _filterState.levelsParam,
+        partOfSpeech: _filterState.partOfSpeechParam,
+        hasImages: _filterState.hasImagesParam,
+        hasAudio: _filterState.hasAudioParam,
+        isComplete: _filterState.isCompleteParam,
+      );
+
+      PracticeDaily? practiceDaily;
+      if (practiceDailyResult['success'] == true) {
+        practiceDaily = practiceDailyResult['data'] as PracticeDaily;
+      }
+
+      if (mounted) {
+        setState(() {
+          _practiceDaily = practiceDaily;
+        });
+      }
+    } catch (e) {
+      // Silently fail - don't show error for chart refresh
+      if (mounted) {
+        setState(() {
+          // Keep existing data on error
         });
       }
     }

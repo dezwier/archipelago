@@ -121,7 +121,7 @@ class LanguageSummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Padding(
-                      padding: const EdgeInsets.only(left: 32.0),
+                      padding: const EdgeInsets.only(left: 0.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -131,6 +131,10 @@ class LanguageSummaryCard extends StatelessWidget {
                           ),
                           Text(
                             '${stat.exerciseCount} exercises done',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          Text(
+                            '${stat.lessonCount} lessons completed',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
