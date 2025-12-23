@@ -300,6 +300,7 @@ class _LearnScreenState extends State<LearnScreen> {
               cardsToLearn: _controller.cardsToLearn,
               includeNewCards: _controller.includeNewCards,
               includeLearnedCards: _controller.includeLearnedCards,
+              isGenerating: _controller.isRefreshing,
               onCardsToLearnChanged: _controller.setCardsToLearn,
               onFilterPressed: _showFilterSheet,
               onStartLesson: _controller.startLesson,

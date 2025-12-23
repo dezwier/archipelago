@@ -577,6 +577,7 @@ class LearnController extends ChangeNotifier implements FilterState {
     _includeNewCards = includeNewCards;
     _includeLearnedCards = includeLearnedCards;
     await loadNewCards(
+      isRefresh: true, // Use refresh mode to avoid showing big spinner
       includeNewCards: includeNewCards,
       includeLearnedCards: includeLearnedCards,
     );

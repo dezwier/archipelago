@@ -10,6 +10,7 @@ class LessonStartWidget extends StatefulWidget {
   final int cardsToLearn;
   final bool includeNewCards;
   final bool includeLearnedCards;
+  final bool isGenerating;
   final ValueChanged<int>? onCardsToLearnChanged;
   final VoidCallback? onFilterPressed;
   final VoidCallback? onStartLesson;
@@ -25,6 +26,7 @@ class LessonStartWidget extends StatefulWidget {
     required this.cardsToLearn,
     required this.includeNewCards,
     required this.includeLearnedCards,
+    required this.isGenerating,
     this.onCardsToLearnChanged,
     this.onFilterPressed,
     this.onStartLesson,
@@ -33,6 +35,126 @@ class LessonStartWidget extends StatefulWidget {
 
   @override
   State<LessonStartWidget> createState() => _LessonStartWidgetState();
+}
+
+/// Widget that displays the counts section - rebuilds independently
+class _LessonCountsWidget extends StatelessWidget {
+  final int cardCount;
+  final int totalConceptsCount;
+  final int filteredConceptsCount;
+  final int conceptsWithBothLanguagesCount;
+  final int conceptsWithoutCardsCount;
+  final bool includeNewCards;
+  final bool includeLearnedCards;
+
+  const _LessonCountsWidget({
+    required this.cardCount,
+    required this.totalConceptsCount,
+    required this.filteredConceptsCount,
+    required this.conceptsWithBothLanguagesCount,
+    required this.conceptsWithoutCardsCount,
+    required this.includeNewCards,
+    required this.includeLearnedCards,
+  });
+
+  String _getConceptsLabel() {
+    if (includeNewCards && includeLearnedCards) {
+      return 'New and Learned Concepts';
+    } else if (includeNewCards) {
+      return 'New Concepts';
+    } else if (includeLearnedCards) {
+      return 'Learned Concepts';
+    } else {
+      return 'New and Learned Concepts';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCountRow(
+          context: context,
+          label: 'Concepts in dictionary',
+          count: totalConceptsCount,
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+        ),
+        const SizedBox(height: 8),
+        _buildCountRow(
+          context: context,
+          label: 'Concepts after filtering',
+          count: filteredConceptsCount,
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+          indent: 16,
+        ),
+        const SizedBox(height: 8),
+        _buildCountRow(
+          context: context,
+          label: 'Concepts with languages available',
+          count: conceptsWithBothLanguagesCount,
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+          indent: 32,
+        ),
+        const SizedBox(height: 8),
+        _buildCountRow(
+          context: context,
+          label: _getConceptsLabel(),
+          count: conceptsWithoutCardsCount,
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+          indent: 48,
+        ),
+        const SizedBox(height: 8),
+        _buildCountRow(
+          context: context,
+          label: cardCount == 1 ? 'Card ready for this lesson' : 'Cards ready for this lesson',
+          count: cardCount,
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+          indent: 64,
+          isHighlighted: true,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCountRow({
+    required BuildContext context,
+    required String label,
+    required int count,
+    required Color color,
+    double indent = 0,
+    bool isHighlighted = false,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(left: indent),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: color,
+                fontWeight: isHighlighted ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Text(
+            count.toString(),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: color,
+              fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _LessonStartWidgetState extends State<LessonStartWidget> {
@@ -59,18 +181,6 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
     }
     if (widget.includeLearnedCards != oldWidget.includeLearnedCards) {
       _includeLearnedCards = widget.includeLearnedCards;
-    }
-  }
-
-  String _getConceptsLabel() {
-    if (widget.includeNewCards && widget.includeLearnedCards) {
-      return 'New and Learned Concepts';
-    } else if (widget.includeNewCards) {
-      return 'New Concepts';
-    } else if (widget.includeLearnedCards) {
-      return 'Learned Concepts';
-    } else {
-      return 'New and Learned Concepts';
     }
   }
 
@@ -208,16 +318,27 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: widget.onGenerateWorkout != null
-                        ? () {
+                    onPressed: widget.isGenerating || widget.onGenerateWorkout == null
+                        ? null
+                        : () {
                             widget.onGenerateWorkout!(
                               _localCardsToLearn,
                               _includeNewCards,
                               _includeLearnedCards,
                             );
-                          }
-                        : null,
-                    icon: const Icon(Icons.auto_awesome),
+                          },
+                    icon: widget.isGenerating
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            ),
+                          )
+                        : const Icon(Icons.auto_awesome),
                     label: const Text('Generate Lesson'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -249,49 +370,17 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
             const SizedBox(height: 16),
 
             // Cascading counts display (without card wrapper)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildCountRow(
-                  context: context,
-                  label: 'Concepts in dictionary',
-                  count: widget.totalConceptsCount,
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                ),
-                const SizedBox(height: 8),
-                _buildCountRow(
-                  context: context,
-                  label: 'Concepts after filtering',
-                  count: widget.filteredConceptsCount,
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                  indent: 16,
-                ),
-                const SizedBox(height: 8),
-                _buildCountRow(
-                  context: context,
-                  label: 'Concepts with languages available',
-                  count: widget.conceptsWithBothLanguagesCount,
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                  indent: 32,
-                ),
-                const SizedBox(height: 8),
-                _buildCountRow(
-                  context: context,
-                  label: _getConceptsLabel(),
-                  count: widget.conceptsWithoutCardsCount,
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                  indent: 48,
-                ),
-                const SizedBox(height: 8),
-                _buildCountRow(
-                  context: context,
-                  label: widget.cardCount == 1 ? 'Card ready for this lesson' : 'Cards ready for this lesson',
-                  count: widget.cardCount,
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                  indent: 64,
-                  isHighlighted: true,
-                ),
-              ],
+            // Wrapped in RepaintBoundary to optimize rendering when only counts change
+            RepaintBoundary(
+              child: _LessonCountsWidget(
+                cardCount: widget.cardCount,
+                totalConceptsCount: widget.totalConceptsCount,
+                filteredConceptsCount: widget.filteredConceptsCount,
+                conceptsWithBothLanguagesCount: widget.conceptsWithBothLanguagesCount,
+                conceptsWithoutCardsCount: widget.conceptsWithoutCardsCount,
+                includeNewCards: widget.includeNewCards,
+                includeLearnedCards: widget.includeLearnedCards,
+              ),
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -311,42 +400,6 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
             const SizedBox(height: 8),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildCountRow({
-    required BuildContext context,
-    required String label,
-    required int count,
-    required Color color,
-    double indent = 0,
-    bool isHighlighted = false,
-  }) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: EdgeInsets.only(left: indent),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: color,
-                fontWeight: isHighlighted ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Text(
-            count.toString(),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: color,
-              fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w500,
-            ),
-          ),
-        ],
       ),
     );
   }
