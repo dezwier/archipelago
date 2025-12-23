@@ -26,15 +26,31 @@ class LeitnerDistributionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (distribution.distribution.isEmpty) {
-      return Card(
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16.0),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Learning Progress - ${_getLanguageName(distribution.languageCode)}',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                'Leitner Distribution - ${_getLanguageName(distribution.languageCode)}',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
               ),
@@ -54,12 +70,52 @@ class LeitnerDistributionCard extends StatelessWidget {
     final emoji = LanguageEmoji.getEmoji(distribution.languageCode);
     final languageName = _getLanguageName(distribution.languageCode);
     
-    // Find max count for scaling
-    final maxCount = distribution.distribution
+    // Determine bin range: minimum 0-7, extend if higher bins exist
+    final binsInData = distribution.distribution.map((d) => d.bin).toList();
+    final minBin = 1;
+    final maxBinInData = binsInData.isEmpty ? 7 : binsInData.reduce((a, b) => a > b ? a : b);
+    final maxBin = maxBinInData > 7 ? maxBinInData : 7;
+    
+    // Create a map of bin -> count for quick lookup
+    final binCountMap = <int, int>{};
+    for (final binData in distribution.distribution) {
+      binCountMap[binData.bin] = binData.count;
+    }
+    
+    // Create complete list of bins with counts (0 for missing bins)
+    final completeDistribution = <LeitnerBinData>[];
+    for (int bin = minBin; bin <= maxBin; bin++) {
+      completeDistribution.add(
+        LeitnerBinData(
+          bin: bin,
+          count: binCountMap[bin] ?? 0,
+        ),
+      );
+    }
+    
+    // Find max count for scaling (only from actual data, not zeros)
+    final maxCount = completeDistribution
+        .where((d) => d.count > 0)
         .map((d) => d.count)
-        .reduce((a, b) => a > b ? a : b);
+        .fold(0, (a, b) => a > b ? a : b);
 
-    return Card(
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -69,13 +125,13 @@ class LeitnerDistributionCard extends StatelessWidget {
               children: [
                 Text(
                   emoji,
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Learning Progress - $languageName',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    'Leitner Distribution - $languageName',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                   ),
@@ -90,6 +146,7 @@ class LeitnerDistributionCard extends StatelessWidget {
                   alignment: BarChartAlignment.spaceAround,
                   maxY: maxCount > 0 ? maxCount * 1.1 : 10, // Add 10% padding
                   minY: 0,
+                  groupsSpace: 4,
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
@@ -98,9 +155,13 @@ class LeitnerDistributionCard extends StatelessWidget {
                       tooltipPadding: const EdgeInsets.all(8),
                       tooltipMargin: 8,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        final binData = distribution.distribution[groupIndex];
+                        final binValue = group.x.toInt();
+                        final count = completeDistribution.firstWhere(
+                          (d) => d.bin == binValue,
+                          orElse: () => LeitnerBinData(bin: binValue, count: 0),
+                        ).count;
                         return BarTooltipItem(
-                          'Bin ${binData.bin}\n${binData.count} lemmas',
+                          '$count lemmas',
                           TextStyle(
                             color: Theme.of(context).colorScheme.onSurface,
                             fontWeight: FontWeight.bold,
@@ -115,9 +176,9 @@ class LeitnerDistributionCard extends StatelessWidget {
                       sideTitles: SideTitles(
                         showTitles: true,
                         getTitlesWidget: (value, meta) {
-                          // Only show labels for bins that exist in the data
+                          // Show labels for all bins in range
                           final binValue = value.toInt();
-                          if (distribution.distribution.any((d) => d.bin == binValue)) {
+                          if (binValue >= minBin && binValue <= maxBin) {
                             return Padding(
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
@@ -176,13 +237,15 @@ class LeitnerDistributionCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  barGroups: distribution.distribution.map((binData) {
+                  barGroups: completeDistribution.map((binData) {
                     return BarChartGroupData(
                       x: binData.bin, // Use actual bin number as x value
                       barRods: [
                         BarChartRodData(
                           toY: binData.count.toDouble(),
-                          color: Theme.of(context).colorScheme.primary,
+                          color: binData.count > 0
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.primary.withOpacity(0.2),
                           width: 20,
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(4),

@@ -195,5 +195,102 @@ class StatisticsService {
       };
     }
   }
+
+  /// Get exercises per language per day.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'data': ExercisesDaily (if successful)
+  /// - 'message': String (if error)
+  static Future<Map<String, dynamic>> getExercisesDaily({
+    required int userId,
+    List<String>? visibleLanguageCodes,
+    bool includeLemmas = true,
+    bool includePhrases = true,
+    List<int>? topicIds,
+    bool includeWithoutTopic = true,
+    List<String>? levels,
+    List<String>? partOfSpeech,
+    int? hasImages,
+    int? hasAudio,
+    int? isComplete,
+    String? search,
+  }) async {
+    final queryParams = <String, String>{
+      'user_id': userId.toString(),
+      'include_lemmas': includeLemmas.toString(),
+      'include_phrases': includePhrases.toString(),
+      'include_without_topic': includeWithoutTopic.toString(),
+    };
+
+    if (visibleLanguageCodes != null && visibleLanguageCodes.isNotEmpty) {
+      queryParams['visible_languages'] = visibleLanguageCodes.join(',');
+    }
+
+    if (topicIds != null && topicIds.isNotEmpty) {
+      queryParams['topic_ids'] = topicIds.join(',');
+    }
+
+    if (levels != null && levels.isNotEmpty) {
+      queryParams['levels'] = levels.join(',');
+    }
+
+    if (partOfSpeech != null && partOfSpeech.isNotEmpty) {
+      queryParams['part_of_speech'] = partOfSpeech.join(',');
+    }
+
+    if (hasImages != null) {
+      queryParams['has_images'] = hasImages.toString();
+    }
+
+    if (hasAudio != null) {
+      queryParams['has_audio'] = hasAudio.toString();
+    }
+
+    if (isComplete != null) {
+      queryParams['is_complete'] = isComplete.toString();
+    }
+
+    if (search != null && search.isNotEmpty) {
+      queryParams['search'] = search;
+    }
+
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/user-lemma-stats/exercises-daily').replace(
+      queryParameters: queryParams,
+    );
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'data': ExercisesDaily.fromJson(data),
+        };
+      } else {
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to fetch exercises daily',
+          };
+        } catch (_) {
+          return {
+            'success': false,
+            'message': 'Failed to fetch exercises daily: ${response.statusCode}',
+          };
+        }
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error fetching exercises daily: ${e.toString()}',
+      };
+    }
+  }
 }
 

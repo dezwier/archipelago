@@ -30,6 +30,7 @@
   },
   "python.languageServer": "None",
   "terminal.integrated.copyOnSelection": true,
-  "terminal.integrated.rightClickBehavior": "copyPaste"
+  "terminal.integrated.rightClickBehavior": "copyPaste",
+  "cmake.sourceDirectory": "/Users/desiredewaele/git/archipelago/app/linux"
 }
 

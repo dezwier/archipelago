@@ -100,3 +100,75 @@ class LeitnerDistribution {
   }
 }
 
+class ExerciseDailyData {
+  final String date;
+  final int count;
+
+  ExerciseDailyData({
+    required this.date,
+    required this.count,
+  });
+
+  factory ExerciseDailyData.fromJson(Map<String, dynamic> json) {
+    return ExerciseDailyData(
+      date: json['date'] as String,
+      count: json['count'] as int,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'date': date,
+      'count': count,
+    };
+  }
+}
+
+class LanguageExerciseData {
+  final String languageCode;
+  final List<ExerciseDailyData> dailyData;
+
+  LanguageExerciseData({
+    required this.languageCode,
+    required this.dailyData,
+  });
+
+  factory LanguageExerciseData.fromJson(Map<String, dynamic> json) {
+    return LanguageExerciseData(
+      languageCode: json['language_code'] as String,
+      dailyData: (json['daily_data'] as List<dynamic>)
+          .map((item) => ExerciseDailyData.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'language_code': languageCode,
+      'daily_data': dailyData.map((data) => data.toJson()).toList(),
+    };
+  }
+}
+
+class ExercisesDaily {
+  final List<LanguageExerciseData> languageData;
+
+  ExercisesDaily({
+    required this.languageData,
+  });
+
+  factory ExercisesDaily.fromJson(Map<String, dynamic> json) {
+    return ExercisesDaily(
+      languageData: (json['language_data'] as List<dynamic>)
+          .map((item) => LanguageExerciseData.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'language_data': languageData.map((data) => data.toJson()).toList(),
+    };
+  }
+}
+

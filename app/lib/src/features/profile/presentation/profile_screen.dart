@@ -11,6 +11,7 @@ import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
 import 'package:archipelago/src/features/profile/presentation/widgets/language_summary_card.dart';
 import 'package:archipelago/src/features/profile/presentation/widgets/leitner_distribution_card.dart';
+import 'package:archipelago/src/features/profile/presentation/widgets/exercises_daily_chart_card.dart';
 import 'package:archipelago/src/features/profile/presentation/profile_filter_state.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
@@ -43,6 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Statistics state
   SummaryStats? _summaryStats;
   LeitnerDistribution? _leitnerDistribution;
+  ExercisesDaily? _exercisesDaily;
   bool _isLoadingStats = false;
   String? _statsError;
 
@@ -254,6 +256,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
       await _saveUser(user);
       widget.onLoginStateChanged?.call(true);
+      // Load topics and statistics after successful login
+      _loadTopics();
+      _loadStatistics();
       _showSuccess(result['message'] as String);
     } else {
       _showError(result['message'] as String);
@@ -275,6 +280,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             });
             await _saveUser(user);
             widget.onLoginStateChanged?.call(true);
+            // Load topics and statistics after successful registration
+            _loadTopics();
+            _loadStatistics();
           },
         );
       },
@@ -386,12 +394,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileView() {
     return Scaffold(
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.symmetric(vertical: 12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
           const SizedBox(height: 16),
-          Card(
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16.0),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -438,8 +462,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           // Statistics cards
           if (_isLoadingStats)
-            const Card(
-              child: Padding(
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Center(
                   child: CircularProgressIndicator(),
@@ -447,7 +487,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             )
           else if (_statsError != null)
-            Card(
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -476,6 +532,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (_summaryStats != null)
               LanguageSummaryCard(
                 stats: _summaryStats!,
+                languages: _languages,
+              ),
+            const SizedBox(height: 16),
+            if (_exercisesDaily != null)
+              ExercisesDailyChartCard(
+                exercisesDaily: _exercisesDaily!,
                 languages: _languages,
               ),
             const SizedBox(height: 16),
@@ -616,6 +678,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
 
+      // Load exercises daily data
+      final exercisesDailyResult = await StatisticsService.getExercisesDaily(
+        userId: _currentUser!.id,
+        includeLemmas: _filterState.includeLemmas,
+        includePhrases: _filterState.includePhrases,
+        topicIds: _filterState.topicIdsParam,
+        includeWithoutTopic: _filterState.showLemmasWithoutTopic,
+        levels: _filterState.levelsParam,
+        partOfSpeech: _filterState.partOfSpeechParam,
+        hasImages: _filterState.hasImagesParam,
+        hasAudio: _filterState.hasAudioParam,
+        isComplete: _filterState.isCompleteParam,
+      );
+
+      ExercisesDaily? exercisesDaily;
+      if (exercisesDailyResult['success'] == true) {
+        exercisesDaily = exercisesDailyResult['data'] as ExercisesDaily;
+      }
+
       if (mounted) {
         setState(() {
           if (summaryResult['success'] == true) {
@@ -624,6 +705,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _statsError = summaryResult['message'] as String? ?? 'Failed to load statistics';
           }
           _leitnerDistribution = leitnerDist;
+          _exercisesDaily = exercisesDaily;
           _isLoadingStats = false;
         });
       }

@@ -28,3 +28,20 @@ class LeitnerDistributionResponse(BaseModel):
     language_code: str
     distribution: List[LeitnerBinData]
 
+
+class ExerciseDailyData(BaseModel):
+    """Data for exercises on a single day."""
+    date: str  # ISO format date string (YYYY-MM-DD)
+    count: int
+
+
+class LanguageExerciseData(BaseModel):
+    """Exercise data for a single language."""
+    language_code: str
+    daily_data: List[ExerciseDailyData]
+
+
+class ExercisesDailyResponse(BaseModel):
+    """Response for exercises per language per day."""
+    language_data: List[LanguageExerciseData]
+

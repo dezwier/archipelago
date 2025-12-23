@@ -10,6 +10,7 @@ class LessonService {
   /// 
   /// Args:
   ///   userId: User ID
+  ///   kind: Lesson kind ('new', 'learned', or 'all')
   ///   performances: List of ExercisePerformance objects from the lesson
   /// 
   /// Returns a map with:
@@ -19,6 +20,7 @@ class LessonService {
   ///   - 'updated_user_lemmas_count': int (if successful)
   static Future<Map<String, dynamic>> completeLesson({
     required int userId,
+    required String kind,
     required List<ExercisePerformance> performances,
   }) async {
     // Filter out discovery and summary exercises
@@ -136,6 +138,7 @@ class LessonService {
     // Build request payload
     final requestBody = {
       'user_id': userId,
+      'kind': kind,
       'exercises': exercises,
       'user_lemmas': userLemmas,
     };

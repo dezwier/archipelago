@@ -422,8 +422,22 @@ class LearnController extends ChangeNotifier implements FilterState {
     // Sync to backend if user is logged in and we have exercises
     if (_currentUser != null && _exercisePerformances.isNotEmpty) {
       try {
+        // Determine lesson kind from filter settings
+        String kind;
+        if (_includeNewCards && _includeLearnedCards) {
+          kind = 'all';
+        } else if (_includeNewCards) {
+          kind = 'new';
+        } else if (_includeLearnedCards) {
+          kind = 'learned';
+        } else {
+          // Default to 'new' if neither is set (shouldn't happen, but fallback)
+          kind = 'new';
+        }
+        
         final result = await LessonService.completeLesson(
           userId: _currentUser!.id,
+          kind: kind,
           performances: _exercisePerformances,
         );
         

@@ -12,6 +12,7 @@ class Exercise(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     user_lemma_id: int = Field(foreign_key="user_lemma.id")
+    lesson_id: int = Field(foreign_key="lesson.id")
     exercise_type: str  # Exercise type (e.g., "Match Info to Image", "Discovery", etc.)
     result: str  # Exercise result: 'success', 'hint', or 'fail'
     start_time: datetime
@@ -19,4 +20,5 @@ class Exercise(SQLModel, table=True):
     
     # Relationships
     user_lemma: "UserLemma" = Relationship(back_populates="exercises")
+    lesson: "Lesson" = Relationship(back_populates="exercises")
 

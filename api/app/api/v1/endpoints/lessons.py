@@ -11,7 +11,7 @@ from datetime import datetime
 import logging
 
 from app.core.database import get_session
-from app.models.models import User, UserLemma, Lemma, Exercise
+from app.models.models import User, UserLemma, Lemma, Exercise, Lesson
 from app.schemas.lesson import (
     CompleteLessonRequest,
     CompleteLessonResponse
@@ -171,13 +171,14 @@ async def complete_lesson(
     
     This endpoint:
     1. Validates the user exists
-    2. Creates Exercise records for all exercises (excluding discovery/summary)
-    3. Gets or creates UserLemma records for each lemma
-    4. Updates UserLemma SRS fields based on exercise results
-    5. Commits all changes in a transaction
+    2. Creates a Lesson record with metadata (start/end time, kind, learning language)
+    3. Creates Exercise records for all exercises (excluding discovery/summary) linked to the lesson
+    4. Gets or creates UserLemma records for each lemma
+    5. Updates UserLemma SRS fields based on exercise results
+    6. Commits all changes in a transaction
     
     Args:
-        request: CompleteLessonRequest with exercises and user_lemmas
+        request: CompleteLessonRequest with kind, exercises and user_lemmas
         
     Returns:
         CompleteLessonResponse with counts of created/updated records
@@ -198,6 +199,44 @@ async def complete_lesson(
         )
     
     learning_language = user.lang_learning.lower()
+    
+    # Calculate lesson start_time and end_time from exercises
+    # Filter out discovery and summary exercises for timing calculation
+    valid_exercises = [
+        ex for ex in request.exercises 
+        if ex.exercise_type not in ['discovery', 'summary']
+    ]
+    
+    if not valid_exercises:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid exercises provided (only discovery/summary exercises)"
+        )
+    
+    lesson_start_time = min(ex.start_time for ex in valid_exercises)
+    lesson_end_time = max(ex.end_time for ex in valid_exercises)
+    
+    # Validate learning language exists in languages table
+    from app.models.models import Language
+    language = session.exec(
+        select(Language).where(Language.code == learning_language)
+    ).first()
+    if not language:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid learning language code: {learning_language}"
+        )
+    
+    # Create Lesson record
+    lesson = Lesson(
+        user_id=request.user_id,
+        learning_language=learning_language,
+        kind=request.kind,
+        start_time=lesson_start_time,
+        end_time=lesson_end_time
+    )
+    session.add(lesson)
+    session.flush()  # Flush to get the lesson ID
     
     # Get or create UserLemma records for each lemma_id
     user_lemma_map: Dict[int, UserLemma] = {}
@@ -261,9 +300,10 @@ async def complete_lesson(
             logger.error(f"UserLemma not found for lemma_id {exercise_data.lemma_id}")
             continue
         
-        # Create Exercise record
+        # Create Exercise record with lesson_id
         exercise = Exercise(
             user_lemma_id=user_lemma.id,
+            lesson_id=lesson.id,
             exercise_type=exercise_data.exercise_type,
             result=exercise_data.result,
             start_time=exercise_data.start_time,
@@ -272,18 +312,18 @@ async def complete_lesson(
         session.add(exercise)
         created_exercises_count += 1
     
-    # Commit exercise records first
+    # Commit lesson and exercise records together
     try:
         session.commit()
         logger.info(
-            f"Created {created_exercises_count} exercises for user {request.user_id}"
+            f"Created lesson {lesson.id} with {created_exercises_count} exercises for user {request.user_id}"
         )
     except Exception as e:
         session.rollback()
-        logger.error(f"Error creating exercises for user {request.user_id}: {str(e)}")
+        logger.error(f"Error creating lesson and exercises for user {request.user_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create exercises: {str(e)}"
+            detail=f"Failed to create lesson and exercises: {str(e)}"
         )
     
     # Recompute SRS for all affected user lemmas based on Exercise records

@@ -6,18 +6,22 @@ User Lemma statistics endpoints.
 # pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, func
-from sqlalchemy import and_
+from sqlalchemy import and_, cast, Date
 from sqlalchemy.orm import aliased
-from typing import Optional, List, Dict
+from typing import Optional, Dict, List
+from datetime import date, datetime
 import logging
 
 from app.core.database import get_session
-from app.models.models import Concept, Lemma, UserLemma, Exercise, User
+from app.models.models import Lemma, UserLemma, Exercise, User
 from app.schemas.user_lemma import (
     SummaryStatsResponse,
     LanguageStat,
     LeitnerDistributionResponse,
-    LeitnerBinData
+    LeitnerBinData,
+    ExercisesDailyResponse,
+    LanguageExerciseData,
+    ExerciseDailyData
 )
 from app.services.dictionary_service import (
     parse_visible_languages,
@@ -243,4 +247,142 @@ async def get_leitner_distribution(
         language_code=language_code,
         distribution=distribution
     )
+
+
+@router.get("/exercises-daily", response_model=ExercisesDailyResponse)
+async def get_exercises_daily(
+    user_id: int = Query(..., description="User ID"),
+    visible_languages: Optional[str] = Query(None, description="Comma-separated list of visible language codes"),
+    include_lemmas: bool = Query(True, description="Include lemmas"),
+    include_phrases: bool = Query(True, description="Include phrases"),
+    topic_ids: Optional[str] = Query(None, description="Comma-separated list of topic IDs"),
+    include_without_topic: bool = Query(True, description="Include concepts without a topic"),
+    levels: Optional[str] = Query(None, description="Comma-separated list of CEFR levels"),
+    part_of_speech: Optional[str] = Query(None, description="Comma-separated list of part of speech values"),
+    has_images: Optional[int] = Query(None, description="1 = with images, 0 = without images, null = all"),
+    has_audio: Optional[int] = Query(None, description="1 = with audio, 0 = without audio, null = all"),
+    is_complete: Optional[int] = Query(None, description="1 = complete, 0 = incomplete, null = all"),
+    search: Optional[str] = Query(None, description="Search query"),
+    session: Session = Depends(get_session)
+):
+    """
+    Get exercises per language per day.
+    
+    Returns the count of exercises done per language per day, filtered by the same
+    criteria as the dictionary/learn features.
+    """
+    # Validate user exists
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {user_id} not found"
+        )
+    
+    # Parse filter parameters
+    visible_language_codes = parse_visible_languages(visible_languages)
+    topic_id_list = parse_topic_ids(topic_ids)
+    level_list = parse_levels(levels)
+    pos_list = parse_part_of_speech(part_of_speech)
+    
+    # Build base filtered concept query
+    concept_query = build_base_filtered_query(
+        user_id=user_id,
+        include_lemmas=include_lemmas,
+        include_phrases=include_phrases,
+        topic_id_list=topic_id_list,
+        include_without_topic=include_without_topic,
+        level_list=level_list,
+        pos_list=pos_list,
+        has_images=has_images,
+        has_audio=has_audio,
+        is_complete=is_complete,
+        visible_language_codes=visible_language_codes,
+        search=search
+    )
+    
+    # Get filtered concept IDs
+    filtered_concept_ids_subquery = concept_query.subquery()
+    filtered_concept_ids = select(filtered_concept_ids_subquery.c.id)
+    
+    # Query: Get exercises per language per day
+    # Join: Concept -> Lemma -> UserLemma -> Exercise
+    # Group by language_code and date (cast end_time to date)
+    lemma_alias3 = aliased(Lemma)
+    user_lemma_alias3 = aliased(UserLemma)
+    exercise_alias3 = aliased(Exercise)
+    
+    exercises_query = (
+        select(
+            lemma_alias3.language_code,
+            cast(exercise_alias3.end_time, Date).label('exercise_date'),
+            func.count(exercise_alias3.id).label('count')
+        )
+        .select_from(lemma_alias3)
+        .join(
+            user_lemma_alias3,
+            and_(
+                user_lemma_alias3.lemma_id == lemma_alias3.id,
+                user_lemma_alias3.user_id == user_id
+            )
+        )
+        .join(
+            exercise_alias3,
+            exercise_alias3.user_lemma_id == user_lemma_alias3.id
+        )
+        .where(
+            lemma_alias3.concept_id.in_(filtered_concept_ids),  # type: ignore[attr-defined]
+            lemma_alias3.term.isnot(None),
+            lemma_alias3.term != "",
+            exercise_alias3.end_time.isnot(None)
+        )
+    )
+    
+    # Apply visible languages filter if provided
+    if visible_language_codes:
+        exercises_query = exercises_query.where(lemma_alias3.language_code.in_(visible_language_codes))  # type: ignore[attr-defined]
+    
+    exercises_query = exercises_query.group_by(
+        lemma_alias3.language_code,
+        cast(exercise_alias3.end_time, Date)
+    ).order_by(
+        lemma_alias3.language_code,
+        cast(exercise_alias3.end_time, Date)
+    )
+    
+    # Execute query
+    results = session.exec(exercises_query).all()
+    
+    # Group results by language_code
+    language_data_map: Dict[str, List[ExerciseDailyData]] = {}
+    for row in results:
+        lang_code = row.language_code
+        exercise_date = row.exercise_date
+        count = row.count
+        
+        # Convert date to ISO format string
+        if isinstance(exercise_date, date):
+            date_str = exercise_date.isoformat()
+        elif isinstance(exercise_date, datetime):
+            date_str = exercise_date.date().isoformat()
+        else:
+            date_str = str(exercise_date)
+        
+        if lang_code not in language_data_map:
+            language_data_map[lang_code] = []
+        
+        language_data_map[lang_code].append(
+            ExerciseDailyData(date=date_str, count=count)
+        )
+    
+    # Build response
+    language_data = [
+        LanguageExerciseData(
+            language_code=lang_code,
+            daily_data=daily_data
+        )
+        for lang_code, daily_data in sorted(language_data_map.items())
+    ]
+    
+    return ExercisesDailyResponse(language_data=language_data)
 

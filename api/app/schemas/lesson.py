@@ -1,7 +1,7 @@
 """
 Lesson completion schemas.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from datetime import datetime
 
@@ -47,13 +47,23 @@ class UserLemmaUpdate(BaseModel):
 class CompleteLessonRequest(BaseModel):
     """Request to complete a lesson."""
     user_id: int = Field(..., description="User ID")
+    kind: str = Field(..., description="Lesson kind: 'new', 'learned', or 'all'")
     exercises: List[ExerciseData] = Field(..., description="List of exercises completed (excluding discovery/summary)")
     user_lemmas: List[UserLemmaUpdate] = Field(..., description="List of user lemma updates")
+    
+    @field_validator('kind')
+    @classmethod
+    def validate_kind(cls, v: str) -> str:
+        """Validate that kind is one of the allowed values."""
+        if v not in ('new', 'learned', 'all'):
+            raise ValueError("kind must be 'new', 'learned', or 'all'")
+        return v
     
     class Config:
         json_schema_extra = {
             "example": {
                 "user_id": 1,
+                "kind": "new",
                 "exercises": [
                     {
                         "lemma_id": 123,
@@ -89,6 +99,7 @@ class CompleteLessonResponse(BaseModel):
                 "updated_user_lemmas_count": 3
             }
         }
+
 
 
 
