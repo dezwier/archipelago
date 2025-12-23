@@ -3,8 +3,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:archipelago/src/features/profile/data/auth_service.dart';
 import 'package:archipelago/src/features/profile/data/language_service.dart';
+import 'package:archipelago/src/features/profile/data/statistics_service.dart';
+import 'package:archipelago/src/features/create/data/topic_service.dart';
+import 'package:archipelago/src/features/create/domain/topic.dart';
 import 'package:archipelago/src/features/profile/domain/user.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/profile/domain/statistics.dart';
+import 'package:archipelago/src/features/profile/presentation/widgets/language_summary_card.dart';
+import 'package:archipelago/src/features/profile/presentation/widgets/leitner_distribution_card.dart';
+import 'package:archipelago/src/features/profile/presentation/profile_filter_state.dart';
+import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 import 'register_screen.dart';
 
@@ -32,6 +40,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   User? _currentUser;
   List<Language> _languages = [];
 
+  // Statistics state
+  SummaryStats? _summaryStats;
+  LeitnerDistribution? _leitnerDistribution;
+  bool _isLoadingStats = false;
+  String? _statsError;
+
+  // Filter state
+  final _filterState = ProfileFilterState();
+  List<Topic> _topics = [];
+  bool _isLoadingTopics = false;
+
   // Login form controllers
   final _loginUsernameController = TextEditingController();
   final _loginPasswordController = TextEditingController();
@@ -43,11 +62,99 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadSavedUser();
     // Load languages
     _loadLanguages();
+    // Load topics
+    _loadTopics();
     // Register logout callback with parent
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onLogoutCallbackReady?.call(logout);
-      widget.onRefreshCallbackReady?.call(() => _loadSavedUser(force: true));
+      widget.onRefreshCallbackReady?.call(() {
+        _loadSavedUser(force: true);
+        _loadTopics();
+        _loadStatistics();
+      });
     });
+  }
+
+  Future<void> _loadTopics() async {
+    setState(() {
+      _isLoadingTopics = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString('current_user');
+      int? userId;
+      if (userJson != null) {
+        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+        final user = User.fromJson(userMap);
+        userId = user.id;
+      }
+
+      final topics = await TopicService.getTopics(userId: userId);
+
+      if (mounted) {
+        setState(() {
+          _topics = topics;
+          _isLoadingTopics = false;
+          // Set all topics as selected by default if nothing is selected
+          if (topics.isNotEmpty && _filterState.selectedTopicIds.isEmpty) {
+            final topicIds = topics.map((t) => t.id).toSet();
+            _filterState.updateFilters(topicIds: topicIds);
+            // Reload statistics after initializing topics
+            if (_currentUser != null) {
+              _loadStatistics();
+            }
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingTopics = false;
+        });
+      }
+    }
+  }
+
+  void _showFilterSheet() {
+    showFilterSheet(
+      context: context,
+      filterState: _filterState,
+      onApplyFilters: ({
+        Set<int>? topicIds,
+        bool? showLemmasWithoutTopic,
+        Set<String>? levels,
+        Set<String>? partOfSpeech,
+        bool? includeLemmas,
+        bool? includePhrases,
+        bool? hasImages,
+        bool? hasNoImages,
+        bool? hasAudio,
+        bool? hasNoAudio,
+        bool? isComplete,
+        bool? isIncomplete,
+      }) {
+        // Update filter state
+        _filterState.updateFilters(
+          topicIds: topicIds,
+          showLemmasWithoutTopic: showLemmasWithoutTopic,
+          levels: levels,
+          partOfSpeech: partOfSpeech,
+          includeLemmas: includeLemmas,
+          includePhrases: includePhrases,
+          hasImages: hasImages,
+          hasNoImages: hasNoImages,
+          hasAudio: hasAudio,
+          hasNoAudio: hasNoAudio,
+          isComplete: isComplete,
+          isIncomplete: isIncomplete,
+        );
+        // Reload statistics with new filters
+        _loadStatistics();
+      },
+      topics: _topics,
+      isLoadingTopics: _isLoadingTopics,
+    );
   }
 
   Future<void> _loadLanguages() async {
@@ -82,6 +189,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _isInitializing = false;
           });
           widget.onLoginStateChanged?.call(true);
+          // Load statistics when user is loaded
+          _loadStatistics();
         }
       } else {
         if (mounted) {
@@ -275,11 +384,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileView() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Scaffold(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           const SizedBox(height: 16),
           Card(
             child: Padding(
@@ -325,7 +435,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          // Statistics cards
+          if (_isLoadingStats)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            )
+          else if (_statsError != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Text(
+                      'Error loading statistics',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _statsError!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _loadStatistics,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else ...[
+            if (_summaryStats != null)
+              LanguageSummaryCard(
+                stats: _summaryStats!,
+                languages: _languages,
+              ),
+            const SizedBox(height: 16),
+            if (_leitnerDistribution != null && _currentUser!.langLearning != null)
+              LeitnerDistributionCard(
+                distribution: _leitnerDistribution!,
+                languages: _languages,
+              ),
+          ],
         ],
+      ),
+      ),
+      floatingActionButton: FloatingActionButton.small(
+        heroTag: 'profile_filter_fab',
+        onPressed: _showFilterSheet,
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        child: const Icon(Icons.filter_list),
+        tooltip: 'Filter',
       ),
     );
   }
@@ -399,6 +568,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     } catch (e) {
       return isoDate;
+    }
+  }
+
+  Future<void> _loadStatistics() async {
+    if (_currentUser == null) return;
+
+    setState(() {
+      _isLoadingStats = true;
+      _statsError = null;
+    });
+
+    try {
+      // Load summary stats with current filter state
+      final summaryResult = await StatisticsService.getLanguageSummaryStats(
+        userId: _currentUser!.id,
+        includeLemmas: _filterState.includeLemmas,
+        includePhrases: _filterState.includePhrases,
+        topicIds: _filterState.topicIdsParam,
+        includeWithoutTopic: _filterState.showLemmasWithoutTopic,
+        levels: _filterState.levelsParam,
+        partOfSpeech: _filterState.partOfSpeechParam,
+        hasImages: _filterState.hasImagesParam,
+        hasAudio: _filterState.hasAudioParam,
+        isComplete: _filterState.isCompleteParam,
+      );
+
+      // Load Leitner distribution for learning language
+      LeitnerDistribution? leitnerDist;
+      if (_currentUser!.langLearning != null && _currentUser!.langLearning!.isNotEmpty) {
+        final leitnerResult = await StatisticsService.getLeitnerDistribution(
+          userId: _currentUser!.id,
+          languageCode: _currentUser!.langLearning!,
+          includeLemmas: _filterState.includeLemmas,
+          includePhrases: _filterState.includePhrases,
+          topicIds: _filterState.topicIdsParam,
+          includeWithoutTopic: _filterState.showLemmasWithoutTopic,
+          levels: _filterState.levelsParam,
+          partOfSpeech: _filterState.partOfSpeechParam,
+          hasImages: _filterState.hasImagesParam,
+          hasAudio: _filterState.hasAudioParam,
+          isComplete: _filterState.isCompleteParam,
+        );
+
+        if (leitnerResult['success'] == true) {
+          leitnerDist = leitnerResult['data'] as LeitnerDistribution;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          if (summaryResult['success'] == true) {
+            _summaryStats = summaryResult['data'] as SummaryStats;
+          } else {
+            _statsError = summaryResult['message'] as String? ?? 'Failed to load statistics';
+          }
+          _leitnerDistribution = leitnerDist;
+          _isLoadingStats = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _statsError = 'Error loading statistics: ${e.toString()}';
+          _isLoadingStats = false;
+        });
+      }
     }
   }
 
