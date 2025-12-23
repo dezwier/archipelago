@@ -49,7 +49,7 @@ class LeitnerDistributionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Leitner Distribution - ${_getLanguageName(distribution.languageCode)}',
+                'Leitner Bins - ${_getLanguageName(distribution.languageCode)}',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -130,7 +130,7 @@ class LeitnerDistributionCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Leitner Distribution - $languageName',
+                    'Leitner Bins - $languageName',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -256,13 +256,6 @@ class LeitnerDistributionCard extends StatelessWidget {
                   }).toList(),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Distribution of lemmas across Leitner bins',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  ),
             ),
           ],
         ),

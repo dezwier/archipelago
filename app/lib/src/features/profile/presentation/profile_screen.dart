@@ -46,6 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   PracticeDaily? _practiceDaily;
   String _practiceMetricType = 'exercises';
   bool _isLoadingStats = false;
+  bool _isRefreshingStats = false;
   String? _statsError;
 
   // Filter state
@@ -388,7 +389,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await Future.wait([
       _loadSavedUser(force: true),
       _loadTopics(),
-      _loadStatistics(),
+      _loadStatistics(isRefresh: true),
     ]);
   }
 
@@ -453,14 +454,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const Divider(height: 40),
                   // Summary statistics
-                  if (_isLoadingStats)
+                  if (_isLoadingStats && !_isRefreshingStats)
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.all(16.0),
                         child: CircularProgressIndicator(),
                       ),
                     )
-                  else if (_statsError != null)
+                  else if (_statsError != null && !_isRefreshingStats)
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -492,7 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
           // Statistics cards
-          if (_isLoadingStats)
+          if (_isLoadingStats && !_isRefreshingStats)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16.0),
               decoration: BoxDecoration(
@@ -517,7 +518,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             )
-          else if (_statsError != null)
+          else if (_statsError != null && !_isRefreshingStats)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16.0),
               decoration: BoxDecoration(
@@ -616,14 +617,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final timeLabel = minutes >= 60 ? 'Hours' : 'Minutes';
           
           return Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
+            padding: const EdgeInsets.only(bottom: 0.0),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Center(
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.only(top: 0, bottom: 12),
                       child: Text(
                         emoji,
                         style: Theme.of(context).textTheme.displaySmall,
@@ -687,11 +688,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
 
-  Future<void> _loadStatistics() async {
+  Future<void> _loadStatistics({bool isRefresh = false}) async {
     if (_currentUser == null) return;
 
     setState(() {
-      _isLoadingStats = true;
+      if (isRefresh) {
+        _isRefreshingStats = true;
+      } else {
+        _isLoadingStats = true;
+      }
       _statsError = null;
     });
 
@@ -762,6 +767,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _leitnerDistribution = leitnerDist;
           _practiceDaily = practiceDaily;
           _isLoadingStats = false;
+          _isRefreshingStats = false;
         });
       }
     } catch (e) {
@@ -769,6 +775,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _statsError = 'Error loading statistics: ${e.toString()}';
           _isLoadingStats = false;
+          _isRefreshingStats = false;
         });
       }
     }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
-import 'package:archipelago/src/utils/language_emoji.dart';
 import 'package:intl/intl.dart';
 
 /// Widget displaying practice data per language per day as an area line chart.
@@ -75,6 +74,21 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
     );
     return language.name;
   }
+
+  Color _getLanguageColor(String languageCode) {
+    switch (languageCode.toLowerCase()) {
+      case 'it':
+        // Italian pastel dark green
+        return const Color(0xFF6B8E5A);
+      case 'fr':
+        // French dark pastel blue
+        return const Color(0xFF5A7A9A);
+      default:
+        // Default colors for other languages
+        return Theme.of(context).colorScheme.primary;
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -181,8 +195,9 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
       }
     }
 
-    // Define colors for each language
-    final languageColors = [
+    // Create a map of language code to color
+    final languageColorMap = <String, Color>{};
+    final defaultColors = [
       Theme.of(context).colorScheme.primary,
       Theme.of(context).colorScheme.secondary,
       Theme.of(context).colorScheme.tertiary,
@@ -192,6 +207,20 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
       Colors.pink,
       Colors.amber,
     ];
+    
+    int defaultColorIndex = 0;
+    for (final langData in widget.practiceDaily!.languageData) {
+      if (!languageColorMap.containsKey(langData.languageCode)) {
+        // Use specific colors for Italian and French, otherwise use default colors
+        if (langData.languageCode.toLowerCase() == 'it' || 
+            langData.languageCode.toLowerCase() == 'fr') {
+          languageColorMap[langData.languageCode] = _getLanguageColor(langData.languageCode);
+        } else {
+          languageColorMap[langData.languageCode] = defaultColors[defaultColorIndex % defaultColors.length];
+          defaultColorIndex++;
+        }
+      }
+    }
 
     // Build spots for each language
     final languageSpots = <String, List<FlSpot>>{};
@@ -373,11 +402,34 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                   maxX: (sortedDates.length - 1).toDouble(),
                   minY: 0,
                   maxY: maxCount * 1.1, // Add 10% padding
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipColor: (_) => Theme.of(context).colorScheme.surfaceContainerHighest,
+                      getTooltipItems: (List<LineBarSpot> touchedSpots) {
+                        return touchedSpots.map((LineBarSpot touchedSpot) {
+                          // Use barIndex to find the language
+                          if (touchedSpot.barIndex >= 0 && 
+                              touchedSpot.barIndex < widget.practiceDaily!.languageData.length) {
+                            final langData = widget.practiceDaily!.languageData[touchedSpot.barIndex];
+                            final languageCode = langData.languageCode;
+                            final languageName = _getLanguageName(languageCode);
+                            return LineTooltipItem(
+                              '$languageName: ${touchedSpot.y.toInt()}',
+                              TextStyle(
+                                color: languageColorMap[languageCode] ?? Colors.black,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          }
+                          return null;
+                        }).toList();
+                      },
+                    ),
+                  ),
                   lineBarsData: widget.practiceDaily!.languageData.asMap().entries.map((entry) {
-                    final index = entry.key;
                     final langData = entry.value;
                     final spots = languageSpots[langData.languageCode] ?? [];
-                    final color = languageColors[index % languageColors.length];
+                    final color = languageColorMap[langData.languageCode] ?? Theme.of(context).colorScheme.primary;
                     
                     return LineChartBarData(
                       spots: spots,
@@ -385,7 +437,17 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                       color: color,
                       barWidth: 3,
                       isStrokeCapRound: true,
-                      dotData: const FlDotData(show: false),
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          return FlDotCirclePainter(
+                            radius: 4,
+                            color: color,
+                            strokeWidth: 2,
+                            strokeColor: Colors.white,
+                          );
+                        },
+                      ),
                       belowBarData: BarAreaData(
                         show: true,
                         color: color.withOpacity(0.2),
@@ -395,43 +457,7 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            // Legend
-            Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              children: widget.practiceDaily!.languageData.asMap().entries.map((entry) {
-                final index = entry.key;
-                final langData = entry.value;
-                final emoji = LanguageEmoji.getEmoji(langData.languageCode);
-                final languageName = _getLanguageName(langData.languageCode);
-                final color = languageColors[index % languageColors.length];
-                
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      emoji,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      languageName,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
+          
           ],
         ),
       ),
