@@ -5,6 +5,7 @@ import 'package:archipelago/src/features/profile/domain/user.dart';
 import 'package:archipelago/src/common_widgets/filter_interface.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/features/learn/data/learn_service.dart';
+import 'package:archipelago/src/features/learn/data/lesson_service.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
@@ -400,11 +401,36 @@ class LearnController extends ChangeNotifier implements FilterState {
   }
   
   /// Finish the lesson (completed normally - shows report card)
-  void finishLesson() {
+  /// Syncs exercises and user lemma progress to backend
+  Future<void> finishLesson() async {
+    // Show report card immediately (offline-first approach)
     _showReportCard = true;
     _isLessonActive = false;
     _currentLessonIndex = 0;
     notifyListeners();
+    
+    // Sync to backend if user is logged in and we have exercises
+    if (_currentUser != null && _exercisePerformances.isNotEmpty) {
+      try {
+        final result = await LessonService.completeLesson(
+          userId: _currentUser!.id,
+          performances: _exercisePerformances,
+        );
+        
+        if (result['success'] == true) {
+          // Success - lesson synced to backend
+          // Could show a subtle success indicator if needed
+          // Lesson synced successfully
+        } else {
+          // Error syncing - log but don't block user
+          // Note: We don't show an error to the user since report card is already shown
+          // In a production app, you might want to queue this for retry
+        }
+      } catch (e) {
+        // Network or other error - log but don't block user
+        // Error syncing lesson, but user can continue
+      }
+    }
   }
   
   /// Dismiss the lesson early (does not show report card)

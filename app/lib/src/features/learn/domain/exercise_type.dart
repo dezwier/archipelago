@@ -36,4 +36,30 @@ enum ExerciseType {
         return '3.1 Close Exercise';
     }
   }
+
+  /// Get API value (snake_case) for the exercise type
+  String get apiValue {
+    switch (this) {
+      case ExerciseType.discovery:
+        return 'discovery';
+      case ExerciseType.summary:
+        return 'summary';
+      case ExerciseType.matchInfoImage:
+        return 'match_info_image';
+      case ExerciseType.matchAudioImage:
+        return 'match_audio_image';
+      case ExerciseType.matchImageInfo:
+        return 'match_image_info';
+      case ExerciseType.matchImageAudio:
+        return 'match_image_audio';
+      case ExerciseType.matchDescriptionPhrase:
+        return 'match_description_phrase';
+      case ExerciseType.matchPhraseDescription:
+        return 'match_phrase_description';
+      case ExerciseType.scaffoldFromImage:
+        return 'scaffold_from_image';
+      case ExerciseType.closeExercise:
+        return 'close_exercise';
+    }
+  }
 }

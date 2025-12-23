@@ -4,7 +4,7 @@ API v1 router aggregation.
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
     auth, languages, dictionary, concepts, lemma, topics,
-    lemma_generation, concept_image, lemma_audio, flashcard_export
+    lemma_generation, concept_image, lemma_audio, flashcard_export, lessons
 )
 
 api_router = APIRouter()
@@ -21,4 +21,5 @@ api_router.include_router(lemma_generation.router)
 api_router.include_router(concept_image.router)
 api_router.include_router(lemma_audio.router)
 api_router.include_router(flashcard_export.router)
+api_router.include_router(lessons.router)
 
