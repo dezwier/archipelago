@@ -96,7 +96,7 @@ class _LearnScreenState extends State<LearnScreen> {
         bool? hasNoAudio,
         bool? isComplete,
         bool? isIncomplete,
-      }) {
+      }) async {
         _controller.batchUpdateFilters(
           topicIds: topicIds,
           showLemmasWithoutTopic: showLemmasWithoutTopic,
@@ -111,6 +111,16 @@ class _LearnScreenState extends State<LearnScreen> {
           isComplete: isComplete,
           isIncomplete: isIncomplete,
         );
+        // Update counters after filters are applied
+        if (_getCurrentWidgetSettings != null) {
+          final settings = _getCurrentWidgetSettings!();
+          await _controller.refresh(
+            cardsToLearn: settings['cardsToLearn'] as int,
+            cardMode: settings['cardMode'] as String,
+          );
+        } else {
+          await _controller.refresh();
+        }
       },
       topics: _topics,
       isLoadingTopics: _isLoadingTopics,
@@ -313,15 +323,20 @@ class _LearnScreenState extends State<LearnScreen> {
               conceptsWithoutCardsCount: _controller.conceptsWithoutCardsCount,
               cardsToLearn: _controller.cardsToLearn,
               cardMode: _controller.cardMode,
-              isGenerating: _controller.isRefreshing,
               onCardsToLearnChanged: _controller.setCardsToLearn,
               onFilterPressed: _showFilterSheet,
-              onStartLesson: _controller.startLesson,
-              onGenerateWorkout: (cardsToLearn, cardMode) {
-                _controller.generateWorkout(
+              onSettingsChanged: (cardsToLearn, cardMode) async {
+                await _controller.refresh(
                   cardsToLearn: cardsToLearn,
                   cardMode: cardMode,
                 );
+              },
+              onGenerateAndStartLesson: (cardsToLearn, cardMode) async {
+                await _controller.generateWorkout(
+                  cardsToLearn: cardsToLearn,
+                  cardMode: cardMode,
+                );
+                _controller.startLesson();
               },
               onGetCurrentSettingsReady: (getCurrentSettings) {
                 _getCurrentWidgetSettings = getCurrentSettings;

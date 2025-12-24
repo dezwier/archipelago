@@ -9,11 +9,10 @@ class LessonStartWidget extends StatefulWidget {
   final int conceptsWithoutCardsCount;
   final int cardsToLearn;
   final String cardMode; // 'new' or 'learned'
-  final bool isGenerating;
   final ValueChanged<int>? onCardsToLearnChanged;
   final VoidCallback? onFilterPressed;
-  final VoidCallback? onStartLesson;
-  final void Function(int cardsToLearn, String cardMode)? onGenerateWorkout;
+  final void Function(int cardsToLearn, String cardMode)? onSettingsChanged;
+  final Future<void> Function(int cardsToLearn, String cardMode)? onGenerateAndStartLesson;
   final void Function(Map<String, dynamic> Function() getCurrentSettings)? onGetCurrentSettingsReady;
 
   const LessonStartWidget({
@@ -25,11 +24,10 @@ class LessonStartWidget extends StatefulWidget {
     required this.conceptsWithoutCardsCount,
     required this.cardsToLearn,
     required this.cardMode,
-    required this.isGenerating,
     this.onCardsToLearnChanged,
     this.onFilterPressed,
-    this.onStartLesson,
-    this.onGenerateWorkout,
+    this.onSettingsChanged,
+    this.onGenerateAndStartLesson,
     this.onGetCurrentSettingsReady,
   });
 
@@ -271,6 +269,8 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                                 setState(() {
                                   _cardMode = newMode;
                                 });
+                                // Update counters when mode changes
+                                widget.onSettingsChanged?.call(_localCardsToLearn, newMode);
                               }
                             },
                             showSelectedIcon: false,
@@ -322,6 +322,8 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                                 setState(() {
                                   _localCardsToLearn = newCount;
                                 });
+                                // Update counters when cards count changes
+                                widget.onSettingsChanged?.call(newCount, _cardMode);
                               }
                             },
                             showSelectedIcon: false,
@@ -346,40 +348,6 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 16),
-                // Generate Workout button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: widget.isGenerating || widget.onGenerateWorkout == null
-                        ? null
-                        : () {
-                            widget.onGenerateWorkout!(
-                              _localCardsToLearn,
-                              _cardMode,
-                            );
-                          },
-                    icon: widget.isGenerating
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Theme.of(context).colorScheme.onPrimary,
-                              ),
-                            ),
-                          )
-                        : const Icon(Icons.auto_awesome),
-                    label: const Text('Generate Lesson'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -418,7 +386,14 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: widget.onStartLesson,
+                onPressed: widget.onGenerateAndStartLesson != null
+                    ? () async {
+                        await widget.onGenerateAndStartLesson!(
+                          _localCardsToLearn,
+                          _cardMode,
+                        );
+                      }
+                    : null,
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('Start Lesson'),
                 style: ElevatedButton.styleFrom(
