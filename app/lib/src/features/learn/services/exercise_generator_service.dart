@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:archipelago/src/features/learn/config/exercise_config.dart';
+import 'package:archipelago/src/features/learn/config/new_cards_exercise_config.dart';
 import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 
@@ -7,7 +7,7 @@ import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 class ExerciseGeneratorService {
   /// Generate all exercises for a list of concepts
   /// 
-  /// Uses ExerciseConfig to determine which exercises to generate.
+  /// Uses the provided exercise config to determine which exercises to generate.
   /// Exercises are generated in the order specified by the configuration.
   /// 
   /// Generation order: All exercises of each type are generated together before moving to the next type.
@@ -18,13 +18,22 @@ class ExerciseGeneratorService {
   /// - Each match exercise card gets its own shuffled option list for random option ordering
   /// - If randomizeSelection is enabled, randomly select exercises per concept
   /// - If randomizeOrdering is enabled, shuffle exercise order per concept
-  static List<Exercise> generateExercises(List<Map<String, dynamic>> concepts) {
+  /// 
+  /// [configExercises] - The list of exercise configuration entries to use.
+  /// Defaults to NewCardsExerciseConfig.exercises for backward compatibility.
+  static List<Exercise> generateExercises(
+    List<Map<String, dynamic>> concepts, {
+    List<ExerciseConfigEntry>? configExercises,
+  }) {
     final List<Exercise> exercises = [];
     final random = Random();
+    
+    // Use provided config or default to new cards config
+    final exercisesConfig = configExercises ?? NewCardsExerciseConfig.exercises;
 
     // Generate exercises grouped by type, respecting config order
     // Loop through config entries first, then for each entry generate exercises for all concepts
-    for (final configEntryWithIndex in ExerciseConfig.exercises.asMap().entries) {
+    for (final configEntryWithIndex in exercisesConfig.asMap().entries) {
       final configIndex = configEntryWithIndex.key;
       final configEntry = configEntryWithIndex.value;
       

@@ -1,11 +1,11 @@
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 
-/// Configuration for exercise generation
+/// Configuration for exercise generation for new cards
 /// 
 /// Defines which exercises are included in a lesson and how they are generated.
 /// This structure allows for easy modification of exercise composition and
 /// can be extended in the future to support per-concept exercise selection.
-class ExerciseConfig {
+class NewCardsExerciseConfig {
   /// Whether to randomly select exercises per concept (instead of using all configured exercises)
   /// When true, up to [maxExercisesPerConcept] exercises will be randomly selected for each concept
   static const bool randomizeSelection = false;
@@ -149,3 +149,4 @@ class ExerciseConfigEntry {
           parameters: parameters,
         );
 }
+

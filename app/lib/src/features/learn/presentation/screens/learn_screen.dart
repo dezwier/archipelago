@@ -51,8 +51,7 @@ class _LearnScreenState extends State<LearnScreen> {
       final settings = _getCurrentWidgetSettings!();
       return _controller.refresh(
         cardsToLearn: settings['cardsToLearn'] as int,
-        includeNewCards: settings['includeNewCards'] as bool,
-        includeLearnedCards: settings['includeLearnedCards'] as bool,
+        cardMode: settings['cardMode'] as String,
       );
     } else {
       return _controller.refresh();
@@ -313,17 +312,15 @@ class _LearnScreenState extends State<LearnScreen> {
               conceptsWithBothLanguagesCount: _controller.conceptsWithBothLanguagesCount,
               conceptsWithoutCardsCount: _controller.conceptsWithoutCardsCount,
               cardsToLearn: _controller.cardsToLearn,
-              includeNewCards: _controller.includeNewCards,
-              includeLearnedCards: _controller.includeLearnedCards,
+              cardMode: _controller.cardMode,
               isGenerating: _controller.isRefreshing,
               onCardsToLearnChanged: _controller.setCardsToLearn,
               onFilterPressed: _showFilterSheet,
               onStartLesson: _controller.startLesson,
-              onGenerateWorkout: (cardsToLearn, includeNewCards, includeLearnedCards) {
+              onGenerateWorkout: (cardsToLearn, cardMode) {
                 _controller.generateWorkout(
                   cardsToLearn: cardsToLearn,
-                  includeNewCards: includeNewCards,
-                  includeLearnedCards: includeLearnedCards,
+                  cardMode: cardMode,
                 );
               },
               onGetCurrentSettingsReady: (getCurrentSettings) {

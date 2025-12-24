@@ -8,13 +8,12 @@ class LessonStartWidget extends StatefulWidget {
   final int conceptsWithBothLanguagesCount;
   final int conceptsWithoutCardsCount;
   final int cardsToLearn;
-  final bool includeNewCards;
-  final bool includeLearnedCards;
+  final String cardMode; // 'new' or 'learned'
   final bool isGenerating;
   final ValueChanged<int>? onCardsToLearnChanged;
   final VoidCallback? onFilterPressed;
   final VoidCallback? onStartLesson;
-  final void Function(int cardsToLearn, bool includeNewCards, bool includeLearnedCards)? onGenerateWorkout;
+  final void Function(int cardsToLearn, String cardMode)? onGenerateWorkout;
   final void Function(Map<String, dynamic> Function() getCurrentSettings)? onGetCurrentSettingsReady;
 
   const LessonStartWidget({
@@ -25,8 +24,7 @@ class LessonStartWidget extends StatefulWidget {
     required this.conceptsWithBothLanguagesCount,
     required this.conceptsWithoutCardsCount,
     required this.cardsToLearn,
-    required this.includeNewCards,
-    required this.includeLearnedCards,
+    required this.cardMode,
     required this.isGenerating,
     this.onCardsToLearnChanged,
     this.onFilterPressed,
@@ -46,8 +44,7 @@ class _LessonCountsWidget extends StatelessWidget {
   final int filteredConceptsCount;
   final int conceptsWithBothLanguagesCount;
   final int conceptsWithoutCardsCount;
-  final bool includeNewCards;
-  final bool includeLearnedCards;
+  final String cardMode; // 'new' or 'learned'
 
   const _LessonCountsWidget({
     required this.cardCount,
@@ -55,19 +52,16 @@ class _LessonCountsWidget extends StatelessWidget {
     required this.filteredConceptsCount,
     required this.conceptsWithBothLanguagesCount,
     required this.conceptsWithoutCardsCount,
-    required this.includeNewCards,
-    required this.includeLearnedCards,
+    required this.cardMode,
   });
 
   String _getConceptsLabel() {
-    if (includeNewCards && includeLearnedCards) {
-      return 'New and Learned Concepts';
-    } else if (includeNewCards) {
+    if (cardMode == 'new') {
       return 'New Concepts';
-    } else if (includeLearnedCards) {
+    } else if (cardMode == 'learned') {
       return 'Learned Concepts';
     } else {
-      return 'New and Learned Concepts';
+      return 'Concepts';
     }
   }
 
@@ -160,24 +154,21 @@ class _LessonCountsWidget extends StatelessWidget {
 }
 
 class _LessonStartWidgetState extends State<LessonStartWidget> {
-  bool _includeNewCards = true;
-  bool _includeLearnedCards = false;
+  String _cardMode = 'new';
   int _localCardsToLearn = 4;
 
   @override
   void initState() {
     super.initState();
     _localCardsToLearn = widget.cardsToLearn;
-    _includeNewCards = widget.includeNewCards;
-    _includeLearnedCards = widget.includeLearnedCards;
+    _cardMode = widget.cardMode;
     
     // Register callback to expose current settings
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onGetCurrentSettingsReady?.call(() {
         return {
           'cardsToLearn': _localCardsToLearn,
-          'includeNewCards': _includeNewCards,
-          'includeLearnedCards': _includeLearnedCards,
+          'cardMode': _cardMode,
         };
       });
     });
@@ -189,11 +180,8 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
     if (widget.cardsToLearn != oldWidget.cardsToLearn) {
       _localCardsToLearn = widget.cardsToLearn;
     }
-    if (widget.includeNewCards != oldWidget.includeNewCards) {
-      _includeNewCards = widget.includeNewCards;
-    }
-    if (widget.includeLearnedCards != oldWidget.includeLearnedCards) {
-      _includeLearnedCards = widget.includeLearnedCards;
+    if (widget.cardMode != oldWidget.cardMode) {
+      _cardMode = widget.cardMode;
     }
   }
 
@@ -231,7 +219,7 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Filters and To Include side by side
+                // Filters, Mode, and Number of Cards side by side
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -246,7 +234,7 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                             color: colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 9),
                         if (widget.onFilterPressed != null)
                           _buildFilterChip(
                             context: context,
@@ -257,74 +245,107 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                           ),
                       ],
                     ),
-                    const SizedBox(width: 16),
-                    // To Include section
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'To Include',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: colorScheme.onSurfaceVariant,
+                    const SizedBox(width: 20),
+                    // Mode selection section
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Mode',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            _buildToggleChip(
-                              context: context,
-                              label: 'New Cards',
-                              isSelected: _includeNewCards,
-                              onTap: () {
+                          const SizedBox(height: 4),
+                          SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(value: 'new', label: Text('New')),
+                              ButtonSegment(value: 'learned', label: Text('Learned')),
+                            ],
+                            selected: <String>{_cardMode},
+                            onSelectionChanged: (Set<String> newSelection) {
+                              if (newSelection.isNotEmpty) {
+                                final newMode = newSelection.first;
                                 setState(() {
-                                  _includeNewCards = !_includeNewCards;
+                                  _cardMode = newMode;
                                 });
-                              },
+                              }
+                            },
+                            showSelectedIcon: false,
+                            style: ButtonStyle(
+                              shape: WidgetStateProperty.all<RoundedRectangleBorder>(
+                                RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              padding: WidgetStateProperty.all<EdgeInsets>(
+                                const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                              ),
+                              minimumSize: WidgetStateProperty.all<Size>(
+                                const Size(0, 32),
+                              ),
+                              textStyle: WidgetStateProperty.all<TextStyle>(
+                                const TextStyle(fontSize: 13),
+                              ),
                             ),
-                            const SizedBox(width: 8),
-                            _buildToggleChip(
-                              context: context,
-                              label: 'Learned Cards',
-                              isSelected: _includeLearnedCards,
-                              onTap: () {
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 0),
+                    // Number of cards section
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Cards',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          SegmentedButton<int>(
+                            segments: const [
+                              ButtonSegment(value: 2, label: Text('2')),
+                              ButtonSegment(value: 4, label: Text('4')),
+                              ButtonSegment(value: 6, label: Text('6')),
+                              ButtonSegment(value: 8, label: Text('8')),
+                            ],
+                            selected: <int>{_localCardsToLearn},
+                            onSelectionChanged: (Set<int> newSelection) {
+                              if (newSelection.isNotEmpty) {
+                                final newCount = newSelection.first;
                                 setState(() {
-                                  _includeLearnedCards = !_includeLearnedCards;
+                                  _localCardsToLearn = newCount;
                                 });
-                              },
+                              }
+                            },
+                            showSelectedIcon: false,
+                            style: ButtonStyle(
+                              shape: WidgetStateProperty.all<RoundedRectangleBorder>(
+                                RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              padding: WidgetStateProperty.all<EdgeInsets>(
+                                const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                              ),
+                              minimumSize: WidgetStateProperty.all<Size>(
+                                const Size(0, 32),
+                              ),
+                              textStyle: WidgetStateProperty.all<TextStyle>(
+                                const TextStyle(fontSize: 13),
+                              ),
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 16),
-                // Number of cards section
-                Text(
-                  'Number of Cards',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [2, 4, 6, 8].map((count) {
-                    final isSelected = _localCardsToLearn == count;
-                    return _buildFilterChip(
-                      context: context,
-                      label: count.toString(),
-                      isSelected: isSelected,
-                      onTap: () {
-                        setState(() {
-                          _localCardsToLearn = count;
-                        });
-                      },
-                    );
-                  }).toList(),
                 ),
                 const SizedBox(height: 16),
                 // Generate Workout button
@@ -336,8 +357,7 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                         : () {
                             widget.onGenerateWorkout!(
                               _localCardsToLearn,
-                              _includeNewCards,
-                              _includeLearnedCards,
+                              _cardMode,
                             );
                           },
                     icon: widget.isGenerating
@@ -391,8 +411,7 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                 filteredConceptsCount: widget.filteredConceptsCount,
                 conceptsWithBothLanguagesCount: widget.conceptsWithBothLanguagesCount,
                 conceptsWithoutCardsCount: widget.conceptsWithoutCardsCount,
-                includeNewCards: widget.includeNewCards,
-                includeLearnedCards: widget.includeLearnedCards,
+                cardMode: widget.cardMode,
               ),
             ),
             const SizedBox(height: 16),
@@ -466,44 +485,5 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
     );
   }
 
-  Widget _buildToggleChip({
-    required BuildContext context,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? colorScheme.primaryContainer
-              : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected
-                ? colorScheme.primary
-                : colorScheme.outline.withValues(alpha: 0.3),
-            width: 1,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected
-                  ? colorScheme.onPrimaryContainer
-                  : colorScheme.onSurface,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 

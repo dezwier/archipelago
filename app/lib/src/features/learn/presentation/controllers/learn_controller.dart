@@ -10,6 +10,8 @@ import 'package:archipelago/src/features/learn/domain/exercise.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_type.dart';
 import 'package:archipelago/src/features/learn/domain/exercise_performance.dart';
 import 'package:archipelago/src/features/learn/services/exercise_generator_service.dart';
+import 'package:archipelago/src/features/learn/config/new_cards_exercise_config.dart';
+import 'package:archipelago/src/features/learn/config/learned_cards_exercise_config.dart';
 import 'package:archipelago/src/constants/api_config.dart';
 
 class LearnController extends ChangeNotifier implements FilterState {
@@ -33,8 +35,7 @@ class LearnController extends ChangeNotifier implements FilterState {
   int _currentLessonIndex = 0; // Now tracks exercise index
   int _cardsToLearn = 4; // Number of cards to learn
   bool _showReportCard = false;
-  bool _includeNewCards = true; // Track if new cards are included
-  bool _includeLearnedCards = false; // Track if learned cards are included
+  String _cardMode = 'new'; // 'new' or 'learned' - only one can be selected at a time
   
   // Performance tracking
   List<ExercisePerformance> _exercisePerformances = [];
@@ -78,8 +79,10 @@ class LearnController extends ChangeNotifier implements FilterState {
   int get currentLessonIndex => _currentLessonIndex;
   int get cardsToLearn => _cardsToLearn;
   bool get showReportCard => _showReportCard;
-  bool get includeNewCards => _includeNewCards;
-  bool get includeLearnedCards => _includeLearnedCards;
+  String get cardMode => _cardMode;
+  // Computed getters for backward compatibility with UI
+  bool get includeNewCards => _cardMode == 'new';
+  bool get includeLearnedCards => _cardMode == 'learned';
   
   // Performance tracking getters
   List<ExercisePerformance> get exercisePerformances => List.unmodifiable(_exercisePerformances);
@@ -275,9 +278,12 @@ class LearnController extends ChangeNotifier implements FilterState {
   /// Load new cards based on current filters
   Future<void> loadNewCards({
     bool isRefresh = false,
-    bool includeNewCards = true,
-    bool includeLearnedCards = false,
+    String? cardMode,
   }) async {
+    // Use provided cardMode or current one
+    final mode = cardMode ?? _cardMode;
+    final includeNewCards = mode == 'new';
+    final includeLearnedCards = mode == 'learned';
     if (_currentUser == null || _learningLanguage == null) {
       _isLoading = false;
       _isRefreshing = false;
@@ -332,8 +338,11 @@ class LearnController extends ChangeNotifier implements FilterState {
         _conceptsWithoutCardsCount = result['concepts_without_cards_count'] as int? ?? 0;
         _errorMessage = null;
         
-        // Generate exercises from concepts
-        _exercises = ExerciseGeneratorService.generateExercises(_concepts);
+        // Generate exercises from concepts using appropriate config based on cardMode
+        final configExercises = mode == 'learned'
+            ? LearnedCardsExerciseConfig.exercises
+            : NewCardsExerciseConfig.exercises;
+        _exercises = ExerciseGeneratorService.generateExercises(_concepts, configExercises: configExercises);
         
         // If no concepts found, show helpful message
         if (_concepts.isEmpty) {
@@ -377,8 +386,7 @@ class LearnController extends ChangeNotifier implements FilterState {
   /// If settings are provided, use those; otherwise use current controller state
   Future<void> refresh({
     int? cardsToLearn,
-    bool? includeNewCards,
-    bool? includeLearnedCards,
+    String? cardMode,
   }) async {
     await _loadCurrentUser();
     if (_currentUser != null && _currentUser!.langLearning != null && _currentUser!.langLearning!.isNotEmpty) {
@@ -387,8 +395,7 @@ class LearnController extends ChangeNotifier implements FilterState {
     // Use generateWorkout to refresh with provided settings or current settings (same as Generate Lesson button)
     await generateWorkout(
       cardsToLearn: cardsToLearn ?? _cardsToLearn,
-      includeNewCards: includeNewCards ?? _includeNewCards,
-      includeLearnedCards: includeLearnedCards ?? _includeLearnedCards,
+      cardMode: cardMode ?? _cardMode,
     );
   }
   
@@ -432,18 +439,8 @@ class LearnController extends ChangeNotifier implements FilterState {
     // Sync to backend if user is logged in and we have exercises
     if (_currentUser != null && _exercisePerformances.isNotEmpty) {
       try {
-        // Determine lesson kind from filter settings
-        String kind;
-        if (_includeNewCards && _includeLearnedCards) {
-          kind = 'all';
-        } else if (_includeNewCards) {
-          kind = 'new';
-        } else if (_includeLearnedCards) {
-          kind = 'learned';
-        } else {
-          // Default to 'new' if neither is set (shouldn't happen, but fallback)
-          kind = 'new';
-        }
+        // Determine lesson kind from cardMode
+        final kind = _cardMode; // 'new' or 'learned'
         
         final result = await LessonService.completeLesson(
           userId: _currentUser!.id,
@@ -594,16 +591,13 @@ class LearnController extends ChangeNotifier implements FilterState {
   /// Generate workout with specified parameters
   Future<void> generateWorkout({
     required int cardsToLearn,
-    required bool includeNewCards,
-    required bool includeLearnedCards,
+    required String cardMode,
   }) async {
     _cardsToLearn = cardsToLearn;
-    _includeNewCards = includeNewCards;
-    _includeLearnedCards = includeLearnedCards;
+    _cardMode = cardMode;
     await loadNewCards(
       isRefresh: true, // Use refresh mode to avoid showing big spinner
-      includeNewCards: includeNewCards,
-      includeLearnedCards: includeLearnedCards,
+      cardMode: cardMode,
     );
   }
 }

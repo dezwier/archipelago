@@ -290,6 +290,22 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                 widget.onMetricTypeChanged?.call(newMetricType);
               },
               showSelectedIcon: false,
+              style: ButtonStyle(
+                shape: WidgetStateProperty.all<RoundedRectangleBorder>(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                padding: WidgetStateProperty.all<EdgeInsets>(
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                ),
+                minimumSize: WidgetStateProperty.all<Size>(
+                  const Size(0, 32),
+                ),
+                textStyle: WidgetStateProperty.all<TextStyle>(
+                  const TextStyle(fontSize: 13),
+                ),
+              ),
             ),
             const SizedBox(height: 18),
             SizedBox(
