@@ -13,7 +13,7 @@ class FilterConfig(BaseModel):
     """
     user_id: Optional[int] = None
     visible_languages: Optional[str] = None  # Comma-separated list of visible language codes
-    include_lemmas: bool = True  # Include lemmas (concept.is_phrase is False)
+    include_lemmas: bool = False  # Include lemmas (concept.is_phrase is False)
     include_phrases: bool = True  # Include phrases (concept.is_phrase is True)
     topic_ids: Optional[str] = None  # Comma-separated list of topic IDs to filter by
     include_without_topic: bool = True  # Include concepts without a topic (topic_id is null)
@@ -30,7 +30,7 @@ class FilterConfig(BaseModel):
             "example": {
                 "user_id": 1,
                 "visible_languages": "en,es",
-                "include_lemmas": True,
+                "include_lemmas": False,
                 "include_phrases": True,
                 "topic_ids": "1,2,3",
                 "include_without_topic": True,

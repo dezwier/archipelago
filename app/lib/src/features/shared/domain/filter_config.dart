@@ -19,7 +19,7 @@ class FilterConfig {
   const FilterConfig({
     this.userId,
     this.visibleLanguages,
-    this.includeLemmas = true,
+    this.includeLemmas = false,
     this.includePhrases = true,
     this.topicIds,
     this.includeWithoutTopic = true,
@@ -36,7 +36,7 @@ class FilterConfig {
     return FilterConfig(
       userId: json['user_id'] as int?,
       visibleLanguages: json['visible_languages'] as String?,
-      includeLemmas: json['include_lemmas'] as bool? ?? true,
+      includeLemmas: json['include_lemmas'] as bool? ?? false,
       includePhrases: json['include_phrases'] as bool? ?? true,
       topicIds: json['topic_ids'] as String?,
       includeWithoutTopic: json['include_without_topic'] as bool? ?? true,

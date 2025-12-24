@@ -166,7 +166,7 @@ class GetConceptsWithMissingLanguagesRequest(BaseModel):
     part_of_speech: Optional[List[str]] = Field(None, description="Optional list of part of speech values to filter by")
     topic_ids: Optional[List[int]] = Field(None, description="Optional list of topic IDs to filter by")
     include_without_topic: bool = Field(False, description="Include concepts without a topic (topic_id is null)")
-    include_lemmas: bool = Field(True, description="Include lemmas (is_phrase is False)")
+    include_lemmas: bool = Field(False, description="Include lemmas (is_phrase is False)")
     include_phrases: bool = Field(True, description="Include phrases (is_phrase is True)")
     search: Optional[str] = Field(None, description="Optional search query to filter by concept.term and lemma.term")
     has_images: Optional[int] = Field(None, description="1 = include only concepts with images, 0 = include only concepts without images, null = include all")

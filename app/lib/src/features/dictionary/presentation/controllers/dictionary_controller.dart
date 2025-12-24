@@ -52,7 +52,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   bool _ownLemmasFilter = false; // Filter for own user id cards
   
   // Lemmas/Phrases filter state
-  bool _includeLemmas = true; // Include lemmas (is_phrase is false)
+  bool _includeLemmas = false; // Include lemmas (is_phrase is false)
   bool _includePhrases = true; // Include phrases (is_phrase is true)
   
   // Include with filter state

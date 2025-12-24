@@ -49,7 +49,7 @@ class LearnController extends ChangeNotifier implements FilterState {
     'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
     'Conjunction', 'Determiner / Article', 'Interjection', 'Numeral'
   };
-  bool _includeLemmas = true;
+  bool _includeLemmas = false;
   bool _includePhrases = true;
   bool _hasImages = true;
   bool _hasNoImages = true;
