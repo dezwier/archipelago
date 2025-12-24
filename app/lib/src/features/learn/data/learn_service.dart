@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:archipelago/src/constants/api_config.dart';
+import 'package:archipelago/src/features/shared/domain/filter_config.dart';
 
 /// Service for learning feature - retrieving new cards for learning
 class LearnService {
@@ -35,67 +36,40 @@ class LearnService {
     bool includeWithUserLemma = false, // Include concepts that have a user lemma
     bool includeWithoutUserLemma = true, // Include concepts that don't have a user lemma
   }) async {
-    final uri = Uri.parse('${ApiConfig.apiBaseUrl}/lessons/generate');
-    final queryParams = <String, String>{
-      'user_id': userId.toString(),
+    // Create FilterConfig from parameters
+    final filterConfig = FilterConfig(
+      userId: userId,
+      visibleLanguages: null, // Will be set in backend based on native/learning languages
+      includeLemmas: includeLemmas,
+      includePhrases: includePhrases,
+      topicIds: topicIds != null && topicIds.isNotEmpty ? topicIds.join(',') : null,
+      includeWithoutTopic: includeWithoutTopic,
+      levels: levels != null && levels.isNotEmpty ? levels.join(',') : null,
+      partOfSpeech: partOfSpeech != null && partOfSpeech.isNotEmpty ? partOfSpeech.join(',') : null,
+      hasImages: hasImages,
+      hasAudio: hasAudio,
+      isComplete: isComplete,
+      search: search,
+    );
+    
+    // Create request body
+    final requestBody = {
+      'filter_config': filterConfig.toJson(),
       'language': language,
+      if (nativeLanguage != null && nativeLanguage.isNotEmpty) 'native_language': nativeLanguage,
+      if (maxN != null) 'max_n': maxN,
+      'include_with_user_lemma': includeWithUserLemma,
+      'include_without_user_lemma': includeWithoutUserLemma,
     };
     
-    // Add native_language if provided
-    if (nativeLanguage != null && nativeLanguage.isNotEmpty) {
-      queryParams['native_language'] = nativeLanguage;
-    }
-    
-    // Add max_n if provided
-    if (maxN != null) {
-      queryParams['max_n'] = maxN.toString();
-    }
-    
-    // Add filter parameters (same as dictionary endpoint)
-    if (search != null && search.isNotEmpty) {
-      queryParams['search'] = search;
-    }
-    
-    // Explicitly send include_lemmas and include_phrases to ensure they're processed correctly
-    queryParams['include_lemmas'] = includeLemmas.toString();
-    queryParams['include_phrases'] = includePhrases.toString();
-    
-    if (topicIds != null && topicIds.isNotEmpty) {
-      queryParams['topic_ids'] = topicIds.join(',');
-    }
-    
-    if (includeWithoutTopic) {
-      queryParams['include_without_topic'] = 'true';
-    }
-    
-    if (levels != null && levels.isNotEmpty) {
-      queryParams['levels'] = levels.join(',');
-    }
-    
-    if (partOfSpeech != null && partOfSpeech.isNotEmpty) {
-      queryParams['part_of_speech'] = partOfSpeech.join(',');
-    }
-    
-    if (hasImages != null) {
-      queryParams['has_images'] = hasImages.toString();
-    }
-    
-    if (hasAudio != null) {
-      queryParams['has_audio'] = hasAudio.toString();
-    }
-    
-    if (isComplete != null) {
-      queryParams['is_complete'] = isComplete.toString();
-    }
-    
-    // Add user_lemma inclusion parameters
-    queryParams['include_with_user_lemma'] = includeWithUserLemma.toString();
-    queryParams['include_without_user_lemma'] = includeWithoutUserLemma.toString();
-    
-    final url = uri.replace(queryParameters: queryParams);
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/lessons/generate');
     
     try {
-      final response = await http.get(url);
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
+      );
       
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;

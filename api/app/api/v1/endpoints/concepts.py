@@ -18,7 +18,7 @@ from app.schemas.concept import (
     ConceptWithMissingLanguages, UpdateConceptRequest
 )
 from app.schemas.utils import normalize_part_of_speech
-from app.services.dictionary_service import (
+from app.services.filter_service import (
     parse_topic_ids,
     parse_levels,
     parse_part_of_speech,

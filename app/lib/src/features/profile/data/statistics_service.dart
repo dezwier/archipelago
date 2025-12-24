@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
+import 'package:archipelago/src/features/shared/domain/filter_config.dart';
 
 /// Service for fetching user statistics.
 class StatisticsService {
@@ -25,53 +26,36 @@ class StatisticsService {
     int? isComplete,
     String? search,
   }) async {
-    final queryParams = <String, String>{
-      'user_id': userId.toString(),
-      'include_lemmas': includeLemmas.toString(),
-      'include_phrases': includePhrases.toString(),
-      'include_without_topic': includeWithoutTopic.toString(),
-    };
-
-    if (visibleLanguageCodes != null && visibleLanguageCodes.isNotEmpty) {
-      queryParams['visible_languages'] = visibleLanguageCodes.join(',');
-    }
-
-    if (topicIds != null && topicIds.isNotEmpty) {
-      queryParams['topic_ids'] = topicIds.join(',');
-    }
-
-    if (levels != null && levels.isNotEmpty) {
-      queryParams['levels'] = levels.join(',');
-    }
-
-    if (partOfSpeech != null && partOfSpeech.isNotEmpty) {
-      queryParams['part_of_speech'] = partOfSpeech.join(',');
-    }
-
-    if (hasImages != null) {
-      queryParams['has_images'] = hasImages.toString();
-    }
-
-    if (hasAudio != null) {
-      queryParams['has_audio'] = hasAudio.toString();
-    }
-
-    if (isComplete != null) {
-      queryParams['is_complete'] = isComplete.toString();
-    }
-
-    if (search != null && search.isNotEmpty) {
-      queryParams['search'] = search;
-    }
-
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/user-lemma-stats/summary').replace(
-      queryParameters: queryParams,
+    // Create FilterConfig from parameters
+    final filterConfig = FilterConfig(
+      userId: userId,
+      visibleLanguages: visibleLanguageCodes != null && visibleLanguageCodes.isNotEmpty 
+          ? visibleLanguageCodes.join(',') 
+          : null,
+      includeLemmas: includeLemmas,
+      includePhrases: includePhrases,
+      topicIds: topicIds != null && topicIds.isNotEmpty ? topicIds.join(',') : null,
+      includeWithoutTopic: includeWithoutTopic,
+      levels: levels != null && levels.isNotEmpty ? levels.join(',') : null,
+      partOfSpeech: partOfSpeech != null && partOfSpeech.isNotEmpty ? partOfSpeech.join(',') : null,
+      hasImages: hasImages,
+      hasAudio: hasAudio,
+      isComplete: isComplete,
+      search: search,
     );
-
+    
+    // Create request body
+    final requestBody = {
+      'filter_config': filterConfig.toJson(),
+    };
+    
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/user-lemma-stats/summary');
+    
     try {
-      final response = await http.get(
+      final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
       );
 
       if (response.statusCode == 200) {
@@ -122,50 +106,35 @@ class StatisticsService {
     int? isComplete,
     String? search,
   }) async {
-    final queryParams = <String, String>{
-      'user_id': userId.toString(),
-      'language_code': languageCode,
-      'include_lemmas': includeLemmas.toString(),
-      'include_phrases': includePhrases.toString(),
-      'include_without_topic': includeWithoutTopic.toString(),
-    };
-
-    if (topicIds != null && topicIds.isNotEmpty) {
-      queryParams['topic_ids'] = topicIds.join(',');
-    }
-
-    if (levels != null && levels.isNotEmpty) {
-      queryParams['levels'] = levels.join(',');
-    }
-
-    if (partOfSpeech != null && partOfSpeech.isNotEmpty) {
-      queryParams['part_of_speech'] = partOfSpeech.join(',');
-    }
-
-    if (hasImages != null) {
-      queryParams['has_images'] = hasImages.toString();
-    }
-
-    if (hasAudio != null) {
-      queryParams['has_audio'] = hasAudio.toString();
-    }
-
-    if (isComplete != null) {
-      queryParams['is_complete'] = isComplete.toString();
-    }
-
-    if (search != null && search.isNotEmpty) {
-      queryParams['search'] = search;
-    }
-
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/user-lemma-stats/leitner-distribution').replace(
-      queryParameters: queryParams,
+    // Create FilterConfig from parameters
+    final filterConfig = FilterConfig(
+      userId: userId,
+      visibleLanguages: languageCode, // Single language for this endpoint
+      includeLemmas: includeLemmas,
+      includePhrases: includePhrases,
+      topicIds: topicIds != null && topicIds.isNotEmpty ? topicIds.join(',') : null,
+      includeWithoutTopic: includeWithoutTopic,
+      levels: levels != null && levels.isNotEmpty ? levels.join(',') : null,
+      partOfSpeech: partOfSpeech != null && partOfSpeech.isNotEmpty ? partOfSpeech.join(',') : null,
+      hasImages: hasImages,
+      hasAudio: hasAudio,
+      isComplete: isComplete,
+      search: search,
     );
-
+    
+    // Create request body
+    final requestBody = {
+      'filter_config': filterConfig.toJson(),
+      'language_code': languageCode,
+    };
+    
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/user-lemma-stats/leitner-distribution');
+    
     try {
-      final response = await http.get(
+      final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
       );
 
       if (response.statusCode == 200) {
@@ -219,54 +188,37 @@ class StatisticsService {
     int? isComplete,
     String? search,
   }) async {
-    final queryParams = <String, String>{
-      'user_id': userId.toString(),
-      'metric_type': metricType,
-      'include_lemmas': includeLemmas.toString(),
-      'include_phrases': includePhrases.toString(),
-      'include_without_topic': includeWithoutTopic.toString(),
-    };
-
-    if (visibleLanguageCodes != null && visibleLanguageCodes.isNotEmpty) {
-      queryParams['visible_languages'] = visibleLanguageCodes.join(',');
-    }
-
-    if (topicIds != null && topicIds.isNotEmpty) {
-      queryParams['topic_ids'] = topicIds.join(',');
-    }
-
-    if (levels != null && levels.isNotEmpty) {
-      queryParams['levels'] = levels.join(',');
-    }
-
-    if (partOfSpeech != null && partOfSpeech.isNotEmpty) {
-      queryParams['part_of_speech'] = partOfSpeech.join(',');
-    }
-
-    if (hasImages != null) {
-      queryParams['has_images'] = hasImages.toString();
-    }
-
-    if (hasAudio != null) {
-      queryParams['has_audio'] = hasAudio.toString();
-    }
-
-    if (isComplete != null) {
-      queryParams['is_complete'] = isComplete.toString();
-    }
-
-    if (search != null && search.isNotEmpty) {
-      queryParams['search'] = search;
-    }
-
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/user-lemma-stats/exercises-daily').replace(
-      queryParameters: queryParams,
+    // Create FilterConfig from parameters
+    final filterConfig = FilterConfig(
+      userId: userId,
+      visibleLanguages: visibleLanguageCodes != null && visibleLanguageCodes.isNotEmpty 
+          ? visibleLanguageCodes.join(',') 
+          : null,
+      includeLemmas: includeLemmas,
+      includePhrases: includePhrases,
+      topicIds: topicIds != null && topicIds.isNotEmpty ? topicIds.join(',') : null,
+      includeWithoutTopic: includeWithoutTopic,
+      levels: levels != null && levels.isNotEmpty ? levels.join(',') : null,
+      partOfSpeech: partOfSpeech != null && partOfSpeech.isNotEmpty ? partOfSpeech.join(',') : null,
+      hasImages: hasImages,
+      hasAudio: hasAudio,
+      isComplete: isComplete,
+      search: search,
     );
-
+    
+    // Create request body
+    final requestBody = {
+      'filter_config': filterConfig.toJson(),
+      'metric_type': metricType,
+    };
+    
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/user-lemma-stats/exercises-daily');
+    
     try {
-      final response = await http.get(
+      final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
       );
 
       if (response.statusCode == 200) {

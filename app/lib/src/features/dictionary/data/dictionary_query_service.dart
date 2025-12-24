@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:archipelago/src/constants/api_config.dart';
+import 'package:archipelago/src/features/shared/domain/filter_config.dart';
 
 /// Service for querying and fetching dictionary data.
 class DictionaryQueryService {
@@ -33,74 +34,37 @@ class DictionaryQueryService {
     int? hasAudio, // 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
     int? isComplete, // 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
   }) async {
-    final queryParams = <String, String>{
-      'page': page.toString(),
-      'page_size': pageSize.toString(),
+    // Create FilterConfig from parameters
+    final filterConfig = FilterConfig(
+      userId: userId,
+      visibleLanguages: visibleLanguageCodes.isNotEmpty ? visibleLanguageCodes.join(',') : null,
+      includeLemmas: includeLemmas,
+      includePhrases: includePhrases,
+      topicIds: topicIds != null && topicIds.isNotEmpty ? topicIds.join(',') : null,
+      includeWithoutTopic: includeWithoutTopic,
+      levels: levels != null && levels.isNotEmpty ? levels.join(',') : null,
+      partOfSpeech: partOfSpeech != null && partOfSpeech.isNotEmpty ? partOfSpeech.join(',') : null,
+      hasImages: hasImages,
+      hasAudio: hasAudio,
+      isComplete: isComplete,
+      search: search,
+    );
+    
+    // Create request body
+    final requestBody = {
+      'filter_config': filterConfig.toJson(),
+      'page': page,
+      'page_size': pageSize,
       'sort_by': sortBy,
     };
     
-    // Only include user_id if provided
-    if (userId != null) {
-      queryParams['user_id'] = userId.toString();
-    }
-    
-    if (search != null && search.isNotEmpty) {
-      queryParams['search'] = search;
-    }
-    
-    // Add visible_languages parameter - filters cards to these languages only
-    // If empty, don't pass it (API will return cards for all languages)
-    if (visibleLanguageCodes.isNotEmpty) {
-      queryParams['visible_languages'] = visibleLanguageCodes.join(',');
-    }
-    
-    // Explicitly send include_lemmas and include_phrases to ensure they're processed correctly
-    queryParams['include_lemmas'] = includeLemmas.toString();
-    queryParams['include_phrases'] = includePhrases.toString();
-    
-    // Add topic_ids parameter - filters to concepts with these topic IDs
-    if (topicIds != null && topicIds.isNotEmpty) {
-      queryParams['topic_ids'] = topicIds.join(',');
-    }
-    
-    // Add include_without_topic parameter - include concepts without a topic
-    if (includeWithoutTopic) {
-      queryParams['include_without_topic'] = 'true';
-    }
-    
-    // Add levels parameter - filters to concepts with these CEFR levels
-    if (levels != null && levels.isNotEmpty) {
-      queryParams['levels'] = levels.join(',');
-    }
-    
-    // Add part_of_speech parameter - filters to concepts with these part of speech values
-    if (partOfSpeech != null && partOfSpeech.isNotEmpty) {
-      queryParams['part_of_speech'] = partOfSpeech.join(',');
-    }
-    
-    // Add has_images parameter - 1 = include only concepts with images, 0 = include only concepts without images, null = include all
-    if (hasImages != null) {
-      queryParams['has_images'] = hasImages.toString();
-    }
-    
-    // Add has_audio parameter - 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
-    if (hasAudio != null) {
-      queryParams['has_audio'] = hasAudio.toString();
-    }
-    
-    // Add is_complete parameter - 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
-    if (isComplete != null) {
-      queryParams['is_complete'] = isComplete.toString();
-    }
-    
-    final url = Uri.parse('${ApiConfig.apiBaseUrl}/dictionary').replace(
-      queryParameters: queryParams,
-    );
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/dictionary');
     
     try {
-      final response = await http.get(
+      final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
       );
 
       if (response.statusCode == 200) {

@@ -4,11 +4,11 @@ User Lemma statistics endpoints.
 # pyright: reportAttributeAccessIssue=false
 # pyright: reportCallIssue=false
 # pyright: reportArgumentType=false
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, func
 from sqlalchemy import and_, cast, Date
 from sqlalchemy.orm import aliased
-from typing import Optional, Dict, List
+from typing import Dict, List
 from datetime import date, datetime
 import logging
 
@@ -23,12 +23,10 @@ from app.schemas.user_lemma import (
     LanguagePracticeData,
     PracticeDailyData
 )
-from app.services.dictionary_service import (
-    parse_visible_languages,
-    parse_topic_ids,
-    parse_levels,
-    parse_part_of_speech,
-    build_base_filtered_query,
+from app.schemas.filter import StatsSummaryRequest, StatsLeitnerRequest, StatsExercisesDailyRequest
+from app.services.filter_service import (
+    build_filtered_query,
+    get_visible_language_codes,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,20 +34,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/user-lemma-stats", tags=["user-lemma-stats"])
 
 
-@router.get("/summary", response_model=SummaryStatsResponse)
+@router.post("/summary", response_model=SummaryStatsResponse)
 async def get_language_summary_stats(
-    user_id: int = Query(..., description="User ID"),
-    visible_languages: Optional[str] = Query(None, description="Comma-separated list of visible language codes"),
-    include_lemmas: bool = Query(True, description="Include lemmas"),
-    include_phrases: bool = Query(True, description="Include phrases"),
-    topic_ids: Optional[str] = Query(None, description="Comma-separated list of topic IDs"),
-    include_without_topic: bool = Query(True, description="Include concepts without a topic"),
-    levels: Optional[str] = Query(None, description="Comma-separated list of CEFR levels"),
-    part_of_speech: Optional[str] = Query(None, description="Comma-separated list of part of speech values"),
-    has_images: Optional[int] = Query(None, description="1 = with images, 0 = without images, null = all"),
-    has_audio: Optional[int] = Query(None, description="1 = with audio, 0 = without audio, null = all"),
-    is_complete: Optional[int] = Query(None, description="1 = complete, 0 = incomplete, null = all"),
-    search: Optional[str] = Query(None, description="Search query"),
+    request: StatsSummaryRequest,
     session: Session = Depends(get_session)
 ):
     """
@@ -58,6 +45,14 @@ async def get_language_summary_stats(
     Returns lemma counts and exercise counts per language, filtered by the same
     criteria as the dictionary/learn features.
     """
+    # Extract user_id from filter_config
+    user_id = request.filter_config.user_id
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required in filter_config"
+        )
+    
     # Validate user exists
     user = session.get(User, user_id)
     if not user:
@@ -66,27 +61,11 @@ async def get_language_summary_stats(
             detail=f"User with id {user_id} not found"
         )
     
-    # Parse filter parameters
-    visible_language_codes = parse_visible_languages(visible_languages)
-    topic_id_list = parse_topic_ids(topic_ids)
-    level_list = parse_levels(levels)
-    pos_list = parse_part_of_speech(part_of_speech)
+    # Get visible language codes for later use
+    visible_language_codes = get_visible_language_codes(request.filter_config)
     
-    # Build base filtered concept query
-    concept_query = build_base_filtered_query(
-        user_id=user_id,
-        include_lemmas=include_lemmas,
-        include_phrases=include_phrases,
-        topic_id_list=topic_id_list,
-        include_without_topic=include_without_topic,
-        level_list=level_list,
-        pos_list=pos_list,
-        has_images=has_images,
-        has_audio=has_audio,
-        is_complete=is_complete,
-        visible_language_codes=visible_language_codes,
-        search=search
-    )
+    # Build filtered concept query using FilterConfig
+    concept_query = build_filtered_query(request.filter_config)
     
     # Get filtered concept IDs
     filtered_concept_ids_subquery = concept_query.subquery()
@@ -182,20 +161,9 @@ async def get_language_summary_stats(
     return SummaryStatsResponse(language_stats=language_stats)
 
 
-@router.get("/leitner-distribution", response_model=LeitnerDistributionResponse)
+@router.post("/leitner-distribution", response_model=LeitnerDistributionResponse)
 async def get_leitner_distribution(
-    user_id: int = Query(..., description="User ID"),
-    language_code: str = Query(..., description="Learning language code"),
-    include_lemmas: bool = Query(True, description="Include lemmas"),
-    include_phrases: bool = Query(True, description="Include phrases"),
-    topic_ids: Optional[str] = Query(None, description="Comma-separated list of topic IDs"),
-    include_without_topic: bool = Query(True, description="Include concepts without a topic"),
-    levels: Optional[str] = Query(None, description="Comma-separated list of CEFR levels"),
-    part_of_speech: Optional[str] = Query(None, description="Comma-separated list of part of speech values"),
-    has_images: Optional[int] = Query(None, description="1 = with images, 0 = without images, null = all"),
-    has_audio: Optional[int] = Query(None, description="1 = with audio, 0 = without audio, null = all"),
-    is_complete: Optional[int] = Query(None, description="1 = complete, 0 = incomplete, null = all"),
-    search: Optional[str] = Query(None, description="Search query"),
+    request: StatsLeitnerRequest,
     session: Session = Depends(get_session)
 ):
     """
@@ -204,6 +172,14 @@ async def get_leitner_distribution(
     Returns the distribution of user_lemmas across Leitner bins (dynamically inferred
     from actual data, not hardcoded to 0-5).
     """
+    # Extract user_id from filter_config
+    user_id = request.filter_config.user_id
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required in filter_config"
+        )
+    
     # Validate user exists
     user = session.get(User, user_id)
     if not user:
@@ -213,28 +189,13 @@ async def get_leitner_distribution(
         )
     
     # Normalize language code
-    language_code = language_code.lower()
+    language_code = request.language_code.lower()
     
-    # Parse filter parameters
-    topic_id_list = parse_topic_ids(topic_ids)
-    level_list = parse_levels(levels)
-    pos_list = parse_part_of_speech(part_of_speech)
+    # Update filter_config with language_code
+    request.filter_config.visible_languages = language_code
     
-    # Build base filtered concept query
-    concept_query = build_base_filtered_query(
-        user_id=user_id,
-        include_lemmas=include_lemmas,
-        include_phrases=include_phrases,
-        topic_id_list=topic_id_list,
-        include_without_topic=include_without_topic,
-        level_list=level_list,
-        pos_list=pos_list,
-        has_images=has_images,
-        has_audio=has_audio,
-        is_complete=is_complete,
-        visible_language_codes=[language_code],
-        search=search
-    )
+    # Build filtered concept query using FilterConfig
+    concept_query = build_filtered_query(request.filter_config)
     
     # Get filtered concept IDs
     filtered_concept_ids_subquery = concept_query.subquery()
@@ -286,21 +247,9 @@ async def get_leitner_distribution(
     )
 
 
-@router.get("/exercises-daily", response_model=PracticeDailyResponse)
+@router.post("/exercises-daily", response_model=PracticeDailyResponse)
 async def get_exercises_daily(
-    user_id: int = Query(..., description="User ID"),
-    metric_type: str = Query("exercises", description="Metric type: 'exercises', 'lessons', 'lemmas', or 'time'"),
-    visible_languages: Optional[str] = Query(None, description="Comma-separated list of visible language codes"),
-    include_lemmas: bool = Query(True, description="Include lemmas"),
-    include_phrases: bool = Query(True, description="Include phrases"),
-    topic_ids: Optional[str] = Query(None, description="Comma-separated list of topic IDs"),
-    include_without_topic: bool = Query(True, description="Include concepts without a topic"),
-    levels: Optional[str] = Query(None, description="Comma-separated list of CEFR levels"),
-    part_of_speech: Optional[str] = Query(None, description="Comma-separated list of part of speech values"),
-    has_images: Optional[int] = Query(None, description="1 = with images, 0 = without images, null = all"),
-    has_audio: Optional[int] = Query(None, description="1 = with audio, 0 = without audio, null = all"),
-    is_complete: Optional[int] = Query(None, description="1 = complete, 0 = incomplete, null = all"),
-    search: Optional[str] = Query(None, description="Search query"),
+    request: StatsExercisesDailyRequest,
     session: Session = Depends(get_session)
 ):
     """
@@ -311,6 +260,14 @@ async def get_exercises_daily(
     
     metric_type: 'exercises' (default), 'lessons', 'lemmas', or 'time'
     """
+    # Extract user_id from filter_config
+    user_id = request.filter_config.user_id
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required in filter_config"
+        )
+    
     # Validate user exists
     user = session.get(User, user_id)
     if not user:
@@ -320,21 +277,18 @@ async def get_exercises_daily(
         )
     
     # Validate metric_type
-    if metric_type not in ["exercises", "lessons", "lemmas", "time"]:
+    if request.metric_type not in ["exercises", "lessons", "lemmas", "time"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="metric_type must be 'exercises', 'lessons', 'lemmas', or 'time'"
         )
     
-    # Parse filter parameters
-    visible_language_codes = parse_visible_languages(visible_languages)
-    topic_id_list = parse_topic_ids(topic_ids)
-    level_list = parse_levels(levels)
-    pos_list = parse_part_of_speech(part_of_speech)
+    # Get visible language codes for later use
+    visible_language_codes = get_visible_language_codes(request.filter_config)
     
     language_data_map: Dict[str, List[PracticeDailyData]] = {}
     
-    if metric_type == "time":
+    if request.metric_type == "time":
         # Query: Get total minutes spent per language per day from lessons
         lesson_alias = aliased(Lesson)
         
@@ -390,7 +344,7 @@ async def get_exercises_daily(
                 PracticeDailyData(date=date_str, count=count)
             )
     
-    elif metric_type == "lessons":
+    elif request.metric_type == "lessons":
         # Query: Get lessons per language per day
         lesson_alias = aliased(Lesson)
         
@@ -443,24 +397,11 @@ async def get_exercises_daily(
                 PracticeDailyData(date=date_str, count=count)
             )
     
-    elif metric_type == "lemmas":
+    elif request.metric_type == "lemmas":
         # Query: Get distinct lemmas practiced per language per day
         # Join: Concept -> Lemma -> UserLemma -> Exercise
         # Count distinct user_lemma_id per day
-        concept_query = build_base_filtered_query(
-            user_id=user_id,
-            include_lemmas=include_lemmas,
-            include_phrases=include_phrases,
-            topic_id_list=topic_id_list,
-            include_without_topic=include_without_topic,
-            level_list=level_list,
-            pos_list=pos_list,
-            has_images=has_images,
-            has_audio=has_audio,
-            is_complete=is_complete,
-            visible_language_codes=visible_language_codes,
-            search=search
-        )
+        concept_query = build_filtered_query(request.filter_config)
         
         # Get filtered concept IDs
         filtered_concept_ids_subquery = concept_query.subquery()
@@ -536,20 +477,7 @@ async def get_exercises_daily(
         # Query: Get exercises per language per day
         # Join: Concept -> Lemma -> UserLemma -> Exercise
         # Group by language_code and date (cast end_time to date)
-        concept_query = build_base_filtered_query(
-            user_id=user_id,
-            include_lemmas=include_lemmas,
-            include_phrases=include_phrases,
-            topic_id_list=topic_id_list,
-            include_without_topic=include_without_topic,
-            level_list=level_list,
-            pos_list=pos_list,
-            has_images=has_images,
-            has_audio=has_audio,
-            is_complete=is_complete,
-            visible_language_codes=visible_language_codes,
-            search=search
-        )
+        concept_query = build_filtered_query(request.filter_config)
         
         # Get filtered concept IDs
         filtered_concept_ids_subquery = concept_query.subquery()

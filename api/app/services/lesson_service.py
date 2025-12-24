@@ -14,11 +14,10 @@ from app.models.models import Concept, Lemma, UserLemma, User
 from app.schemas.lemma import NewCardsResponse, ConceptWithLemmas, LemmaResponse
 from app.utils.text_utils import ensure_capitalized
 from app.services.lemma_service import validate_language_codes
-from app.services.dictionary_service import (
-    parse_topic_ids,
-    parse_levels,
-    parse_part_of_speech,
+from app.schemas.filter import FilterConfig
+from app.services.filter_service import (
     build_base_filtered_query,
+    parse_filter_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,16 +29,7 @@ def generate_lesson_concepts(
     language: str,  # Learning language
     native_language: Optional[str] = None,  # Native language (optional, will use user's if not provided)
     max_n: Optional[int] = None,  # Randomly select n concepts to return
-    search: Optional[str] = None,  # Optional search query for concept.term and lemma.term
-    include_lemmas: bool = True,  # Include lemmas (concept.is_phrase is False)
-    include_phrases: bool = True,  # Include phrases (concept.is_phrase is True)
-    topic_ids: Optional[str] = None,  # Comma-separated list of topic IDs to filter by
-    include_without_topic: bool = True,  # Include concepts without a topic (topic_id is null)
-    levels: Optional[str] = None,  # Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
-    part_of_speech: Optional[str] = None,  # Comma-separated list of part of speech values to filter by
-    has_images: Optional[int] = None,  # 1 = include only concepts with images, 0 = include only concepts without images, null = include all
-    has_audio: Optional[int] = None,  # 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
-    is_complete: Optional[int] = None,  # 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
+    filter_config: Optional[FilterConfig] = None,  # Filter configuration
     include_with_user_lemma: bool = False,  # Include concepts that have a user lemma for the user
     include_without_user_lemma: bool = True,  # Include concepts that don't have a user lemma for the user
 ) -> NewCardsResponse:
@@ -56,16 +46,7 @@ def generate_lesson_concepts(
         language: Learning language code (required)
         native_language: Native language code (optional, will use user's native language if not provided)
         max_n: Optional maximum number of concepts to randomly return. If not provided, returns all matching concepts.
-        search: Optional search query to filter by concept.term and lemma.term
-        include_lemmas: Include lemmas (concept.is_phrase is False)
-        include_phrases: Include phrases (concept.is_phrase is True)
-        topic_ids: Comma-separated list of topic IDs to filter by
-        include_without_topic: Include concepts without a topic (topic_id is null)
-        levels: Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
-        part_of_speech: Comma-separated list of part of speech values to filter by
-        has_images: 1 = include only concepts with images, 0 = include only concepts without images, null = include all
-        has_audio: 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
-        is_complete: 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
+        filter_config: FilterConfig object with filter parameters
         include_with_user_lemma: Include concepts that have a user lemma for the user
         include_without_user_lemma: Include concepts that don't have a user lemma for the user
     
@@ -118,34 +99,39 @@ def generate_lesson_concepts(
     )
     total_concepts_count = session.exec(total_concepts_query).one()
     
-    # Parse filter parameters (same as dictionary endpoint)
-    topic_id_list = parse_topic_ids(topic_ids)
-    level_list = parse_levels(levels)
-    pos_list = parse_part_of_speech(part_of_speech)
-    
     # Set visible_languages to [native_language, learning_language] for filtering
     visible_language_codes = [native_language_code, learning_language_code]
+    
+    # Update filter_config with visible_languages if provided
+    if filter_config is None:
+        filter_config = FilterConfig(user_id=user_id)
+    
+    # Override visible_languages in filter_config to use native and learning languages
+    filter_config.visible_languages = ",".join(visible_language_codes)
+    
+    # Parse filter config to get parsed values
+    parsed_filters = parse_filter_config(filter_config)
     
     # Log filter parameters for debugging
     logger.info(
         "generate_lesson_concepts: user_id=%s, language=%s, include_lemmas=%s, include_phrases=%s, topic_ids=%s, include_without_topic=%s, include_with_user_lemma=%s, include_without_user_lemma=%s",
-        user_id, learning_language_code, include_lemmas, include_phrases, topic_ids, include_without_topic, include_with_user_lemma, include_without_user_lemma
+        user_id, learning_language_code, parsed_filters["include_lemmas"], parsed_filters["include_phrases"], filter_config.topic_ids, parsed_filters["include_without_topic"], include_with_user_lemma, include_without_user_lemma
     )
     
-    # Build base filtered query using dictionary logic
+    # Build base filtered query using filter service
     concept_query = build_base_filtered_query(
-        user_id=user_id,
-        include_lemmas=include_lemmas,
-        include_phrases=include_phrases,
-        topic_id_list=topic_id_list,
-        include_without_topic=include_without_topic,
-        level_list=level_list,
-        pos_list=pos_list,
-        has_images=has_images,
-        has_audio=has_audio,
-        is_complete=is_complete,
+        user_id=parsed_filters["user_id"],
+        include_lemmas=parsed_filters["include_lemmas"],
+        include_phrases=parsed_filters["include_phrases"],
+        topic_id_list=parsed_filters["topic_id_list"],
+        include_without_topic=parsed_filters["include_without_topic"],
+        level_list=parsed_filters["level_list"],
+        pos_list=parsed_filters["pos_list"],
+        has_images=parsed_filters["has_images"],
+        has_audio=parsed_filters["has_audio"],
+        is_complete=parsed_filters["is_complete"],
         visible_language_codes=visible_language_codes,
-        search=search
+        search=parsed_filters["search"]
     )
     
     # Execute query to get filtered concepts

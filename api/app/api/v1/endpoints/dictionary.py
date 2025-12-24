@@ -6,20 +6,19 @@ Dictionary endpoints for retrieving paired dictionary items.
 # pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select, func, or_
-from typing import Optional
 from app.core.database import get_session
 from app.models.models import Concept, Lemma
 from app.schemas.concept import DictionaryResponse
+from app.schemas.filter import DictionaryFilterRequest
 from app.services.dictionary_service import (
     validate_request_parameters,
-    parse_visible_languages,
-    parse_topic_ids,
-    parse_levels,
-    parse_part_of_speech,
-    build_base_filtered_query,
     apply_sorting,
     build_paired_dictionary_items,
     calculate_concepts_with_all_visible_languages,
+)
+from app.services.filter_service import (
+    build_filtered_query,
+    get_visible_language_codes,
 )
 import logging
 
@@ -28,23 +27,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dictionary", tags=["dictionary"])
 
 
-@router.get("", response_model=DictionaryResponse)
+@router.post("", response_model=DictionaryResponse)
 async def get_dictionary(
-    user_id: Optional[int] = None,
-    page: int = 1,
-    page_size: int = 20,
-    sort_by: str = "alphabetical",  # Options: "alphabetical", "recent", "random"
-    search: Optional[str] = None,  # Optional search query for concept.term and lemma.term
-    visible_languages: Optional[str] = None,  # Comma-separated list of visible language codes - lemmas are filtered to these languages
-    include_lemmas: bool = True,  # Include lemmas (concept.is_phrase is False)
-    include_phrases: bool = True,  # Include phrases (concept.is_phrase is True)
-    topic_ids: Optional[str] = None,  # Comma-separated list of topic IDs to filter by
-    include_without_topic: bool = True,  # Include concepts without a topic (topic_id is null)
-    levels: Optional[str] = None,  # Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
-    part_of_speech: Optional[str] = None,  # Comma-separated list of part of speech values to filter by
-    has_images: Optional[int] = None,  # 1 = include only concepts with images, 0 = include only concepts without images, null = include all
-    has_audio: Optional[int] = None,  # 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
-    is_complete: Optional[int] = None,  # 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
+    request: DictionaryFilterRequest,
     session: Session = Depends(get_session)
 ):
     """
@@ -52,45 +37,16 @@ async def get_dictionary(
     Optimized to do filtering, sorting, and pagination at the database level.
     
     Args:
-        user_id: The user ID (optional - for future use)
-        page: Page number (1-indexed, default: 1)
-        page_size: Number of items per page (default: 20)
-        sort_by: Sort order - "alphabetical" (default), "recent" (by created_at, newest first), or "random"
-        search: Optional search query to filter by concept.term and lemma.term (for visible languages)
-        visible_languages: Comma-separated list of visible language codes - only lemmas for these languages are returned
-        include_lemmas: Include lemmas (concept.is_phrase is False)
-        include_phrases: Include phrases (concept.is_phrase is True)
-        topic_ids: Comma-separated list of topic IDs to filter by
-        include_without_topic: Include concepts without a topic (topic_id is null)
-        levels: Comma-separated list of CEFR levels (A1, A2, B1, B2, C1, C2) to filter by
-        part_of_speech: Comma-separated list of part of speech values to filter by
-        has_images: 1 = include only concepts with images, 0 = include only concepts without images, null = include all
-        has_audio: 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
-        is_complete: 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
+        request: DictionaryFilterRequest containing filter_config, page, page_size, and sort_by
     """
     # Validate and parse parameters
-    validate_request_parameters(sort_by, page, page_size)
+    validate_request_parameters(request.sort_by, request.page, request.page_size)
     
-    visible_language_codes = parse_visible_languages(visible_languages)
-    topic_id_list = parse_topic_ids(topic_ids)
-    level_list = parse_levels(levels)
-    pos_list = parse_part_of_speech(part_of_speech)
+    # Get visible language codes for later use
+    visible_language_codes = get_visible_language_codes(request.filter_config)
     
-    # Build base filtered query
-    concept_query = build_base_filtered_query(
-        user_id=user_id,
-        include_lemmas=include_lemmas,
-        include_phrases=include_phrases,
-        topic_id_list=topic_id_list,
-        include_without_topic=include_without_topic,
-        level_list=level_list,
-        pos_list=pos_list,
-        has_images=has_images,
-        has_audio=has_audio,
-        is_complete=is_complete,
-        visible_language_codes=visible_language_codes,
-        search=search
-    )
+    # Build filtered query using FilterConfig
+    concept_query = build_filtered_query(request.filter_config)
 
     # Get total count before pagination (for concepts matching search)
     # Count distinct concepts to avoid any potential duplicates
@@ -101,11 +57,11 @@ async def get_dictionary(
     total = session.exec(total_count_query).one()
     
     # Apply sorting
-    concept_query = apply_sorting(concept_query, sort_by, visible_language_codes)
+    concept_query = apply_sorting(concept_query, request.sort_by, visible_language_codes)
 
     # Apply pagination at database level
-    offset = (page - 1) * page_size
-    concept_query = concept_query.offset(offset).limit(page_size)
+    offset = (request.page - 1) * request.page_size
+    concept_query = concept_query.offset(offset).limit(request.page_size)
     
     # Execute query to get paginated concepts
     concepts = session.exec(concept_query).all()
@@ -173,34 +129,24 @@ async def get_dictionary(
     )
 
     # Calculate pagination metadata
-    has_next = offset + page_size < total
-    has_previous = page > 1
+    has_next = offset + request.page_size < total
+    has_previous = request.page > 1
     
     # Calculate concepts with all visible languages (only if visible_languages specified)
     concepts_with_all_visible_languages = None
     if visible_language_codes and len(visible_language_codes) > 0:
         concepts_with_all_visible_languages = calculate_concepts_with_all_visible_languages(
             session=session,
-            visible_language_codes=visible_language_codes,
-            user_id=user_id,
-            include_lemmas=include_lemmas,
-            include_phrases=include_phrases,
-            topic_id_list=topic_id_list,
-            include_without_topic=include_without_topic,
-            level_list=level_list,
-            pos_list=pos_list,
-            has_images=has_images,
-            has_audio=has_audio,
-            is_complete=is_complete,
-            search=search
+            filter_config=request.filter_config,
+            visible_language_codes=visible_language_codes
         )
 
     
     return DictionaryResponse(
         items=paired_items,
         total=total,
-        page=page,
-        page_size=page_size,
+        page=request.page,
+        page_size=request.page_size,
         has_next=has_next,
         has_previous=has_previous,
         concepts_with_all_visible_languages=concepts_with_all_visible_languages,
