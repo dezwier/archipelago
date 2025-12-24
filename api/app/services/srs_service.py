@@ -121,15 +121,16 @@ def update_srs_for_lesson(
     Update UserLemma SRS fields based on exercises in a specific lesson.
     
     This function:
-    - Only updates if last_review_time from exercises is after the current next_review_at
+    - Only updates if last_exercise_end_time >= next_review_at (or next_review_at is None)
     - Queries exercises for the user_lemma in the specific lesson
     - Determines if user_lemma is new (no previous exercises before this lesson)
     - Applies bin logic:
       - New user_lemma: set bins to 1
-      - Existing + all exercises correct: increment bins +1 (max max_bins)
       - Existing + any exercise failed: decrement bins -2 (min 1)
-    - Updates next_review_at using Fibonacci intervals
-    - Updates last_review_time if any exercise was successful
+      - Existing + any hint (no fail): no change (+0)
+      - Existing + all success: increment bins +1 (max max_bins)
+    - Updates last_review_time to last exercise end_time (regardless of result)
+    - Updates next_review_at using Fibonacci intervals based on last_exercise_end_time
     
     Args:
         session: Database session
@@ -153,20 +154,8 @@ def update_srs_for_lesson(
         # No exercises in this lesson, no update needed
         return
     
-    # Find last review time from lesson exercises
-    lesson_last_review_time: Optional[datetime] = None
-    for exercise in lesson_exercises:
-        if exercise.result == 'success':
-            if lesson_last_review_time is None or exercise.end_time > lesson_last_review_time:
-                lesson_last_review_time = exercise.end_time
-    
-    # Only update if last_review_time is after the current next_review_at
-    # Allow update if next_review_at is None (new lemma) or if we have a review time after next_review_at
-    if user_lemma.next_review_at is not None:
-        # If next_review_at is set, we need a review time that's after it
-        if lesson_last_review_time is None or lesson_last_review_time <= user_lemma.next_review_at:
-            # No review or review is not after next_review_at, skip update
-            return
+    # Get last exercise end_time (regardless of result)
+    last_exercise_end_time = max(ex.end_time for ex in lesson_exercises)
     
     # Determine if user_lemma is new (no exercises before this lesson)
     # Check if there are any exercises with lesson_id < current lesson_id
@@ -181,40 +170,53 @@ def update_srs_for_lesson(
     
     is_new = previous_exercises is None and user_lemma.leitner_bin == 0
     
-    # Collect exercise results from this lesson
-    exercise_results = [ex.result for ex in lesson_exercises]
-    has_any_fail = 'fail' in exercise_results
-    all_correct = not has_any_fail  # All are either 'success' or 'hint'
-    
-    # Apply bin logic
     if is_new:
-        # New user_lemma: set bins to 1
-        new_bin = 1
-    elif all_correct:
-        # Existing + all exercises correct: increment bins +1 (max max_bins)
-        current_bin = user_lemma.leitner_bin if user_lemma.leitner_bin is not None else 0
+        # First occurrence: hardcode with bin=1, last_review_time, next_review_at = last_review_time + 23h
+        user_lemma.leitner_bin = 1
+        user_lemma.last_review_time = last_exercise_end_time
+        user_lemma.next_review_at = last_exercise_end_time + timedelta(hours=23)
+        return
+    
+    # Lemma already exists: check if we should update
+    current_bin = user_lemma.leitner_bin if user_lemma.leitner_bin is not None else 0
+    current_next_review_at = user_lemma.next_review_at
+    
+    if current_next_review_at is None:
+        # No next_review_at set, update it
+        should_update = True
+    else:
+        # Only update if last_exercise_end_time >= next_review_at
+        should_update = last_exercise_end_time >= current_next_review_at
+    
+    if not should_update:
+        # Skip this lemma (last_exercise_end_time < next_review_at)
+        return
+    
+    # Update UserLemma
+    # Set last_review_time to last exercise end_time (regardless of result)
+    user_lemma.last_review_time = last_exercise_end_time
+    
+    # Determine bin update based on exercise results
+    has_fail = any(ex.result == 'fail' for ex in lesson_exercises)
+    has_hint = any(ex.result == 'hint' for ex in lesson_exercises)
+    all_success = all(ex.result == 'success' for ex in lesson_exercises)
+    
+    if has_fail:
+        # Any exercise failed: decrement bin by 2 (min 1)
+        new_bin = max(1, current_bin - 2)
+    elif has_hint:
+        # Any hint used (but no failures): no change (+0)
+        new_bin = current_bin
+    elif all_success:
+        # All exercises succeeded: increment bin by 1 (max max_bins)
         new_bin = min(max_bins, current_bin + 1)
     else:
-        # Existing + any exercise failed: decrement bins -2 (min 1)
-        current_bin = user_lemma.leitner_bin if user_lemma.leitner_bin is not None else 0
-        new_bin = max(1, current_bin - 2)
+        # Fallback (shouldn't happen)
+        new_bin = current_bin
     
-    # Update user_lemma fields
     user_lemma.leitner_bin = new_bin
     
-    # Update last_review_time if there was any success in this lesson
-    if lesson_last_review_time:
-        if user_lemma.last_review_time is None or lesson_last_review_time > user_lemma.last_review_time:
-            user_lemma.last_review_time = lesson_last_review_time
-    
-    # Calculate next review time based on new bin using Fibonacci intervals
-    # Use last_review_time as base if available, otherwise use the most recent exercise end_time
-    if user_lemma.last_review_time:
-        base_time = user_lemma.last_review_time
-    else:
-        # No review time available, use the most recent exercise end_time
-        base_time = lesson_exercises[-1].end_time
-    
+    # Calculate next_review_at based on bin and fibonacci
     if interval_style == 'fibonacci':
         interval_days = calculate_fibonacci_interval(new_bin, first_day_interval)
     else:
@@ -223,7 +225,7 @@ def update_srs_for_lesson(
         interval_days = LEITNER_INTERVALS[bin_index]
     
     # Use 23 hours per day to account for users doing exercises around the same time each day
-    user_lemma.next_review_at = base_time + timedelta(hours=interval_days * 23)
+    user_lemma.next_review_at = last_exercise_end_time + timedelta(hours=interval_days * 23)
 
 
 def recompute_user_lemma_srs(
