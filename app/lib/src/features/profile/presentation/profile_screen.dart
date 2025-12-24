@@ -454,14 +454,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const Divider(height: 40),
                   // Summary statistics
-                  if (_isLoadingStats && !_isRefreshingStats)
+                  if (_isLoadingStats && !_isRefreshingStats && _summaryStats == null)
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.all(16.0),
                         child: CircularProgressIndicator(),
                       ),
                     )
-                  else if (_statsError != null && !_isRefreshingStats)
+                  else if (_statsError != null && !_isRefreshingStats && _summaryStats == null)
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -493,7 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
           // Statistics cards
-          if (_isLoadingStats && !_isRefreshingStats)
+          if (_isLoadingStats && !_isRefreshingStats && _practiceDaily == null && (_leitnerDistribution == null || _currentUser?.langLearning == null))
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16.0),
               decoration: BoxDecoration(
@@ -518,7 +518,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             )
-          else if (_statsError != null && !_isRefreshingStats)
+          else if (_statsError != null && !_isRefreshingStats && _practiceDaily == null && (_leitnerDistribution == null || _currentUser?.langLearning == null))
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16.0),
               decoration: BoxDecoration(
