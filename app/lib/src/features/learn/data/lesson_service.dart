@@ -65,24 +65,24 @@ class LessonService {
 
     // Group exercises by lemma_id to calculate user_lemma updates
     final Map<int, List<Map<String, dynamic>>> exercisesByLemma = {};
-    final Map<int, DateTime?> lastSuccessTimes = {};
+    final Map<int, DateTime?> lastReviewTimes = {};
 
     for (final exercise in exercises) {
       final lemmaId = exercise['lemma_id'] as int;
       
       if (!exercisesByLemma.containsKey(lemmaId)) {
         exercisesByLemma[lemmaId] = [];
-        lastSuccessTimes[lemmaId] = null;
+        lastReviewTimes[lemmaId] = null;
       }
       
       exercisesByLemma[lemmaId]!.add(exercise);
       
-      // Track last success time
+      // Track last review time
       if (exercise['result'] == 'success') {
         final endTime = DateTime.parse(exercise['end_time'] as String);
-        final currentLastSuccess = lastSuccessTimes[lemmaId];
-        if (currentLastSuccess == null || endTime.isAfter(currentLastSuccess)) {
-          lastSuccessTimes[lemmaId] = endTime;
+        final currentLastReview = lastReviewTimes[lemmaId];
+        if (currentLastReview == null || endTime.isAfter(currentLastReview)) {
+          lastReviewTimes[lemmaId] = endTime;
         }
       }
     }
@@ -129,7 +129,7 @@ class LessonService {
       
       return {
         'lemma_id': lemmaId,
-        'last_success_time': lastSuccessTimes[lemmaId]?.toUtc().toIso8601String(),
+        'last_review_time': lastReviewTimes[lemmaId]?.toUtc().toIso8601String(),
         'leitner_bin': leitnerBin,
         'next_review_at': nextReviewAt.toUtc().toIso8601String(),
       };

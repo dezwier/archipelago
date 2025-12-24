@@ -50,7 +50,7 @@
         - card_id (FK)
         - image_path (string)
         - created_time (timestamp)
-        - last_success_time (timestamp)
+        - last_review_time (timestamp)
         - status (enum)
         - next_review_at (timestamp) - Calculated by SRS.
 

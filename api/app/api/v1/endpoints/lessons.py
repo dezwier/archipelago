@@ -34,7 +34,7 @@ async def recompute_srs(
     """
     Recompute UserLemma SRS fields based on Exercise records.
     
-    This endpoint recomputes last_success_time, leitner_bin, and next_review_at
+    This endpoint recomputes last_review_time, leitner_bin, and next_review_at
     for UserLemma records based on all Exercise records in the database.
     Processes exercises lesson-by-lesson in chronological order.
     

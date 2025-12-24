@@ -14,7 +14,7 @@ class UserLemma(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id")
     lemma_id: int = Field(foreign_key="lemma.id")
     created_time: datetime = Field(default_factory=datetime.utcnow)
-    last_success_time: Optional[datetime] = None
+    last_review_time: Optional[datetime] = None
     leitner_bin: int = Field(default=0)
     next_review_at: Optional[datetime] = None  # Calculated by SRS
     

@@ -7,6 +7,7 @@ Lesson generation service for creating lessons with concepts and lemmas.
 from sqlmodel import Session, select
 from sqlalchemy import func, and_, or_
 from typing import Optional
+from datetime import datetime
 import logging
 import random
 
@@ -231,9 +232,9 @@ def generate_lesson_concepts(
         learning_lemmas_without = session.exec(learning_lemmas_query_without).all()
     
     if include_with_user_lemma:
-        # Query for lemmas WITH user_lemma
+        # Query for lemmas WITH user_lemma, also get UserLemma data for prioritization
         learning_lemmas_query_with = (
-            select(Lemma)
+            select(Lemma, UserLemma)
             .join(
                 UserLemma,
                 and_(
@@ -248,7 +249,13 @@ def generate_lesson_concepts(
                 Lemma.term != ""
             )
         )
-        learning_lemmas_with = session.exec(learning_lemmas_query_with).all()
+        learning_lemmas_with_results = session.exec(learning_lemmas_query_with).all()
+        # Extract just the Lemma objects for now
+        learning_lemmas_with = [result[0] for result in learning_lemmas_with_results]
+        # Store (lemma, user_lemma) tuples for prioritization
+        learning_lemmas_with_user_data = [(result[0], result[1]) for result in learning_lemmas_with_results]
+    else:
+        learning_lemmas_with_user_data = []
     
     # Combine learning lemmas from both queries
     learning_lemmas = list(learning_lemmas_without) + list(learning_lemmas_with)
@@ -260,8 +267,67 @@ def generate_lesson_concepts(
     concepts_without_cards_count = len(eligible_concept_ids)
     logger.info("Concepts matching user_lemma criteria: %s", concepts_without_cards_count)
     
-    # Randomly select n concepts if max_n is provided
-    if max_n is not None and len(eligible_concept_ids) > max_n:
+    # Apply prioritization logic for learned cards if max_n is provided and include_with_user_lemma is True
+    if max_n is not None and len(eligible_concept_ids) > max_n and include_with_user_lemma:
+        current_time = datetime.utcnow()
+        
+        # Get concept IDs with their user_lemma data (next_review_at and leitner_bin)
+        concept_user_lemma_map = {}
+        for lemma, user_lemma in learning_lemmas_with_user_data:
+            concept_id = lemma.concept_id
+            if concept_id not in concept_user_lemma_map:
+                concept_user_lemma_map[concept_id] = []
+            concept_user_lemma_map[concept_id].append((user_lemma.next_review_at, user_lemma.leitner_bin))
+        
+        # Find concepts with due cards (next_review_at < current_time)
+        due_concept_ids = []
+        for concept_id, user_lemma_data_list in concept_user_lemma_map.items():
+            # Check if any user_lemma for this concept is due
+            # Find the highest bin among due user_lemmas for this concept
+            max_bin_for_concept = None
+            for next_review_at, leitner_bin in user_lemma_data_list:
+                if next_review_at is not None and next_review_at < current_time:
+                    if max_bin_for_concept is None or leitner_bin > max_bin_for_concept:
+                        max_bin_for_concept = leitner_bin
+            
+            # If this concept has any due cards, add it with the highest bin
+            if max_bin_for_concept is not None:
+                due_concept_ids.append((concept_id, max_bin_for_concept))
+        
+        if due_concept_ids:
+            # Sort by leitner_bin DESC (higher bins first)
+            due_concept_ids.sort(key=lambda x: x[1], reverse=True)
+            prioritized_concept_ids = [concept_id for concept_id, _ in due_concept_ids]
+            
+            # Take up to max_n from prioritized list
+            selected_concept_ids = prioritized_concept_ids[:max_n]
+            
+            # If we need more, fill with random other learned cards
+            if len(selected_concept_ids) < max_n:
+                remaining_concept_ids = [
+                    concept_id for concept_id in eligible_concept_ids 
+                    if concept_id not in selected_concept_ids
+                ]
+                remaining_needed = max_n - len(selected_concept_ids)
+                if remaining_concept_ids:
+                    additional_concept_ids = random.sample(
+                        remaining_concept_ids, 
+                        min(remaining_needed, len(remaining_concept_ids))
+                    )
+                    selected_concept_ids.extend(additional_concept_ids)
+            
+            eligible_concept_ids = selected_concept_ids
+            logger.info(
+                "Prioritized selection: %s due cards (sorted by bin), %s total selected",
+                len(prioritized_concept_ids),
+                len(eligible_concept_ids)
+            )
+        else:
+            # No due cards, choose randomly from all learned cards
+            eligible_concept_ids = random.sample(eligible_concept_ids, max_n)
+            logger.info("No due cards found, randomly selected %s concepts", len(eligible_concept_ids))
+    elif max_n is not None and len(eligible_concept_ids) > max_n:
+        # Randomly select n concepts if max_n is provided (for non-learned cards or when include_with_user_lemma is False)
         eligible_concept_ids = random.sample(eligible_concept_ids, max_n)
     
     # Filter learning lemmas to only those from selected concepts

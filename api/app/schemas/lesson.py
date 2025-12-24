@@ -29,7 +29,7 @@ class ExerciseData(BaseModel):
 class UserLemmaUpdate(BaseModel):
     """UserLemma update data for lesson completion."""
     lemma_id: int = Field(..., description="Lemma ID")
-    last_success_time: Optional[datetime] = Field(None, description="Latest success time if any exercise succeeded")
+    last_review_time: Optional[datetime] = Field(None, description="Latest review time if any exercise succeeded")
     leitner_bin: int = Field(..., description="Updated Leitner bin (0-5)")
     next_review_at: Optional[datetime] = Field(None, description="Next review time")
     
@@ -37,7 +37,7 @@ class UserLemmaUpdate(BaseModel):
         json_schema_extra = {
             "example": {
                 "lemma_id": 123,
-                "last_success_time": "2024-01-01T10:00:30Z",
+                "last_review_time": "2024-01-01T10:00:30Z",
                 "leitner_bin": 1,
                 "next_review_at": "2024-01-03T10:00:30Z"
             }
@@ -76,7 +76,7 @@ class CompleteLessonRequest(BaseModel):
                 "user_lemmas": [
                     {
                         "lemma_id": 123,
-                        "last_success_time": "2024-01-01T10:00:30Z",
+                        "last_review_time": "2024-01-01T10:00:30Z",
                         "leitner_bin": 1,
                         "next_review_at": "2024-01-03T10:00:30Z"
                     }

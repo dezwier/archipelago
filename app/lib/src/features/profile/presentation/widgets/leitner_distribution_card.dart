@@ -306,7 +306,7 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                         
                         // For stacked bars, show both segments in tooltip
                         return BarTooltipItem(
-                          '${countNotDue} not due\n$countDue due\nTotal: $totalCount',
+                          'Done: ${countNotDue}\nDue: ${countDue}\nTotal: $totalCount',
                           TextStyle(
                             color: Theme.of(context).colorScheme.onSurface,
                             fontWeight: FontWeight.bold,
