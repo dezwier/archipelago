@@ -6,8 +6,7 @@ Lesson completion endpoints.
 # pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from typing import Dict, Optional
 import logging
 
 from app.core.database import get_session
@@ -18,160 +17,12 @@ from app.schemas.lesson import (
     CompleteLessonResponse
 )
 from app.schemas.lemma import NewCardsResponse
-from app.services.srs_service import calculate_next_review_at, update_srs_for_lesson
+from app.services.srs_service import update_srs_for_lesson, recompute_user_lemma_srs
 from app.services.lesson_service import generate_lesson_concepts
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
-
-
-def recompute_user_lemma_srs(
-    session: Session,
-    user_lemma: UserLemma,
-    first_day_interval: int = 1,
-    interval_style: str = 'fibonacci',
-    max_bins: int = 7
-) -> None:
-    """
-    Recompute UserLemma SRS fields (last_success_time, leitner_bin, next_review_at)
-    based on all Exercise records for this user_lemma, processing lesson-by-lesson.
-    
-    This function processes exercises grouped by lesson, applying the same logic
-    as update_srs_for_lesson() for each lesson in chronological order.
-    
-    Args:
-        session: Database session
-        user_lemma: UserLemma instance to update
-        first_day_interval: First day interval (default 1)
-        interval_style: Interval style ('fibonacci' or other, default 'fibonacci')
-        max_bins: Maximum bin number (default 7)
-    """
-    from app.services.srs_service import calculate_fibonacci_interval, LEITNER_INTERVALS
-    
-    # Get all exercises for this user_lemma
-    exercises = session.exec(
-        select(Exercise)
-        .where(Exercise.user_lemma_id == user_lemma.id)
-        .order_by(Exercise.end_time)  # type: ignore
-    ).all()
-    
-    if not exercises:
-        # No exercises, reset to initial state
-        user_lemma.leitner_bin = 0
-        user_lemma.last_success_time = None
-        user_lemma.next_review_at = calculate_next_review_at(0)
-        return
-    
-    # Group exercises by lesson_id
-    exercises_by_lesson: Dict[int, List[Exercise]] = {}
-    lesson_ids = set()
-    
-    for exercise in exercises:
-        lesson_ids.add(exercise.lesson_id)
-        if exercise.lesson_id not in exercises_by_lesson:
-            exercises_by_lesson[exercise.lesson_id] = []
-        exercises_by_lesson[exercise.lesson_id].append(exercise)
-    
-    # Get lessons and order by end_time
-    # Convert set to list for the query
-    lesson_ids_list = list(lesson_ids)
-    if not lesson_ids_list:
-        # No lessons, reset to initial state
-        user_lemma.leitner_bin = 0
-        user_lemma.last_success_time = None
-        user_lemma.next_review_at = calculate_next_review_at(0)
-        return
-    
-    # Query lessons - using type ignore for SQLModel's in_ method
-    lesson_query = select(Lesson).where(Lesson.id.in_(lesson_ids_list))  # type: ignore[attr-defined]
-    lesson_query = lesson_query.order_by(Lesson.end_time)  # type: ignore
-    lessons = session.exec(lesson_query).all()
-    
-    # Create lesson lookup by id
-    lesson_map = {lesson.id: lesson for lesson in lessons}
-    
-    # Sort lesson_ids by lesson end_time
-    sorted_lesson_ids = sorted(
-        lesson_ids,
-        key=lambda lid: lesson_map[lid].end_time if lid in lesson_map else datetime.min
-    )
-    
-    # Process lessons in chronological order
-    current_bin = 0  # Start from bin 0
-    last_success_time: Optional[datetime] = None
-    last_lesson_end_time: Optional[datetime] = None
-    
-    for lesson_id in sorted_lesson_ids:
-        lesson_exercises = exercises_by_lesson[lesson_id]
-        lesson = lesson_map.get(lesson_id)
-        
-        if not lesson_exercises:
-            continue
-        
-        # Determine if this is the first lesson (user_lemma is new)
-        is_new = current_bin == 0 and lesson_id == sorted_lesson_ids[0]
-        
-        # Collect exercise results from this lesson
-        exercise_results = [ex.result for ex in lesson_exercises]
-        has_any_fail = 'fail' in exercise_results
-        all_correct = not has_any_fail  # All are either 'success' or 'hint'
-        
-        # Find last success time from lesson exercises
-        lesson_last_success: Optional[datetime] = None
-        for exercise in lesson_exercises:
-            if exercise.result == 'success':
-                if lesson_last_success is None or exercise.end_time > lesson_last_success:
-                    lesson_last_success = exercise.end_time
-        
-        # Apply bin logic (same as update_srs_for_lesson)
-        if is_new:
-            # New user_lemma: set bins to 1
-            current_bin = 1
-        elif all_correct:
-            # Existing + all exercises correct: increment bins +1 (max max_bins)
-            current_bin = min(max_bins, current_bin + 1)
-        else:
-            # Existing + any exercise failed: decrement bins -2 (min 1)
-            current_bin = max(1, current_bin - 2)
-        
-        # Update last_success_time if there was any success in this lesson
-        if lesson_last_success:
-            if last_success_time is None or lesson_last_success > last_success_time:
-                last_success_time = lesson_last_success
-        
-        # Track the most recent lesson end_time for next_review_at calculation
-        if lesson:
-            if last_lesson_end_time is None or lesson.end_time > last_lesson_end_time:
-                last_lesson_end_time = lesson.end_time
-        else:
-            # Fallback to most recent exercise end_time if lesson not found
-            exercise_end_time = max(ex.end_time for ex in lesson_exercises)
-            if last_lesson_end_time is None or exercise_end_time > last_lesson_end_time:
-                last_lesson_end_time = exercise_end_time
-    
-    # Update user_lemma fields
-    user_lemma.leitner_bin = current_bin
-    user_lemma.last_success_time = last_success_time
-    
-    # Calculate next review time based on final bin using Fibonacci intervals
-    # Use last_success_time as base if available, otherwise use the most recent lesson end_time
-    if last_success_time:
-        base_time = last_success_time
-    elif last_lesson_end_time:
-        base_time = last_lesson_end_time
-    else:
-        base_time = datetime.utcnow()
-    
-    if interval_style == 'fibonacci':
-        interval_days = calculate_fibonacci_interval(current_bin, first_day_interval)
-    else:
-        # Fallback to old Leitner intervals if needed
-        bin_index = max(0, min(5, current_bin))
-        interval_days = LEITNER_INTERVALS[bin_index]
-    
-    # Use 23 hours per day to account for users doing exercises around the same time each day
-    user_lemma.next_review_at = base_time + timedelta(hours=interval_days * 23)
 
 
 @router.post("/recompute-srs", status_code=status.HTTP_200_OK)
@@ -208,46 +59,15 @@ async def recompute_srs(
             detail=f"User with id {user_id} not found"
         )
     
-    # Get user lemmas to update
-    if lemma_id:
-        # Recompute for specific lemma
-        user_lemma = session.exec(
-            select(UserLemma).where(
-                UserLemma.user_id == user_id,
-                UserLemma.lemma_id == lemma_id
-            )
-        ).first()
-        
-        if not user_lemma:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"UserLemma not found for user {user_id} and lemma {lemma_id}"
-            )
-        
-        recompute_user_lemma_srs(
-            session,
-            user_lemma,
-            first_day_interval=FIRST_DAY_INTERVAL,
-            interval_style=INTERVAL_STYLE,
-            max_bins=MAX_BINS
-        )
-        updated_count = 1
-    else:
-        # Recompute for all user lemmas
-        user_lemmas = session.exec(
-            select(UserLemma).where(UserLemma.user_id == user_id)
-        ).all()
-        
-        updated_count = 0
-        for user_lemma in user_lemmas:
-            recompute_user_lemma_srs(
-                session,
-                user_lemma,
-                first_day_interval=FIRST_DAY_INTERVAL,
-                interval_style=INTERVAL_STYLE,
-                max_bins=MAX_BINS
-            )
-            updated_count += 1
+    # Recompute SRS for all exercises (or filtered by lemma_id)
+    updated_count = recompute_user_lemma_srs(
+        session,
+        user_id,
+        lemma_id=lemma_id,
+        first_day_interval=FIRST_DAY_INTERVAL,
+        interval_style=INTERVAL_STYLE,
+        max_bins=MAX_BINS
+    )
     
     # Commit changes
     try:

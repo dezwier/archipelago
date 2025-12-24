@@ -3,11 +3,15 @@ SRS (Spaced Repetition System) service implementing the Leitner system.
 
 This service handles updating user lemma progress based on exercise results.
 """
+import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict
 from sqlmodel import Session, select
 from app.models.user_lemma import UserLemma
 from app.models.exercise import Exercise
+from app.models.lesson import Lesson
+
+logger = logging.getLogger(__name__)
 
 
 # Leitner bin review intervals in days
@@ -117,6 +121,7 @@ def update_srs_for_lesson(
     Update UserLemma SRS fields based on exercises in a specific lesson.
     
     This function:
+    - Only updates if last_success_time from exercises is after the current next_review_at
     - Queries exercises for the user_lemma in the specific lesson
     - Determines if user_lemma is new (no previous exercises before this lesson)
     - Applies bin logic:
@@ -148,6 +153,21 @@ def update_srs_for_lesson(
         # No exercises in this lesson, no update needed
         return
     
+    # Find last success time from lesson exercises
+    lesson_last_success_time: Optional[datetime] = None
+    for exercise in lesson_exercises:
+        if exercise.result == 'success':
+            if lesson_last_success_time is None or exercise.end_time > lesson_last_success_time:
+                lesson_last_success_time = exercise.end_time
+    
+    # Only update if last_success_time is after the current next_review_at
+    # Allow update if next_review_at is None (new lemma) or if we have a success time after next_review_at
+    if user_lemma.next_review_at is not None:
+        # If next_review_at is set, we need a success time that's after it
+        if lesson_last_success_time is None or lesson_last_success_time <= user_lemma.next_review_at:
+            # No success or success is not after next_review_at, skip update
+            return
+    
     # Determine if user_lemma is new (no exercises before this lesson)
     # Check if there are any exercises with lesson_id < current lesson_id
     # or if leitner_bin is 0 and no previous exercises exist
@@ -166,13 +186,6 @@ def update_srs_for_lesson(
     has_any_fail = 'fail' in exercise_results
     all_correct = not has_any_fail  # All are either 'success' or 'hint'
     
-    # Find last success time from lesson exercises
-    last_success_time: Optional[datetime] = None
-    for exercise in lesson_exercises:
-        if exercise.result == 'success':
-            if last_success_time is None or exercise.end_time > last_success_time:
-                last_success_time = exercise.end_time
-    
     # Apply bin logic
     if is_new:
         # New user_lemma: set bins to 1
@@ -190,9 +203,9 @@ def update_srs_for_lesson(
     user_lemma.leitner_bin = new_bin
     
     # Update last_success_time if there was any success in this lesson
-    if last_success_time:
-        if user_lemma.last_success_time is None or last_success_time > user_lemma.last_success_time:
-            user_lemma.last_success_time = last_success_time
+    if lesson_last_success_time:
+        if user_lemma.last_success_time is None or lesson_last_success_time > user_lemma.last_success_time:
+            user_lemma.last_success_time = lesson_last_success_time
     
     # Calculate next review time based on new bin using Fibonacci intervals
     # Use last_success_time as base if available, otherwise use the most recent exercise end_time
@@ -213,46 +226,231 @@ def update_srs_for_lesson(
     user_lemma.next_review_at = base_time + timedelta(hours=interval_days * 23)
 
 
-def update_user_lemma_srs(
-    user_lemma: UserLemma,
-    exercise_results: List[str],
-    last_success_time: datetime = None
-) -> None:
+def recompute_user_lemma_srs(
+    session: Session,
+    user_id: int,
+    lemma_id: Optional[int] = None,
+    first_day_interval: int = 1,
+    interval_style: str = 'fibonacci',
+    max_bins: int = 7
+) -> int:
     """
-    Update UserLemma SRS fields based on exercise results.
+    Recompute UserLemma SRS fields (last_success_time, leitner_bin, next_review_at)
+    based on all Exercise records for the user, processing lesson-by-lesson.
     
-    This function aggregates all exercise results for a user lemma and updates:
-    - leitner_bin: Based on the overall performance
-    - last_success_time: Set if any exercise was successful
-    - next_review_at: Calculated based on new bin
+    This function:
+    - Loops through all lessons for the user in chronological order
+    - For each lesson, retrieves unique lemmas and their exercises
+    - For each lemma in the lesson:
+      - If it's the first occurrence of the lemma: creates/updates with bin=1, 
+        last_success_time=last exercise end_time, next_review_at=last_success_time+23h
+      - If lemma already exists: only updates if last_exercise_end_time >= next_review_at
+        - Updates last_success_time to last exercise end_time (regardless of result)
+        - Updates bin: -2 if any fail, +0 if any hint (no fail), +1 if all success
+        - Updates next_review_at based on bin and fibonacci intervals
     
     Args:
-        user_lemma: UserLemma instance to update
-        exercise_results: List of exercise result strings ('success', 'hint', 'fail')
-        last_success_time: Latest success time from exercises (optional)
+        session: Database session
+        user_id: User ID to recompute SRS for
+        lemma_id: Optional lemma ID to filter by. If provided, only processes exercises for that lemma.
+        first_day_interval: First day interval (default 1)
+        interval_style: Interval style ('fibonacci' or other, default 'fibonacci')
+        max_bins: Maximum bin number (default 7)
+    
+    Returns:
+        Number of UserLemma records processed/updated
     """
-    if not exercise_results:
-        # No exercises, no update needed
-        return
+    # Get all lessons for this user, ordered chronologically
+    query = select(Lesson).where(Lesson.user_id == user_id).order_by(Lesson.end_time)  # type: ignore
+    lessons = session.exec(query).all()
     
-    # Determine overall result: if any success, treat as success; otherwise use last result
-    has_success = 'success' in exercise_results
-    if has_success:
-        overall_result = 'success'
-    else:
-        # Use the last result to determine bin movement
-        overall_result = exercise_results[-1]
+    if not lessons:
+        logger.info(f"Recompute SRS for user {user_id}: No lessons found")
+        return 0
     
-    # Update bin based on overall result
-    new_bin = update_leitner_bin(user_lemma.leitner_bin, overall_result)
-    user_lemma.leitner_bin = new_bin
+    logger.info(f"Recompute SRS for user {user_id}: Processing {len(lessons)} lesson(s)")
     
-    # Update last_success_time if there was any success
-    if has_success and last_success_time:
-        user_lemma.last_success_time = last_success_time
+    processed_count = 0
+    # Track which lemmas we've seen (first occurrence)
+    seen_lemma_ids: set[int] = set()
+    # Map lemma_id to UserLemma for quick lookup
+    user_lemma_map: Dict[int, UserLemma] = {}
     
-    # Calculate next review time based on new bin
-    user_lemma.next_review_at = calculate_next_review_at(new_bin)
+    # Process each lesson chronologically
+    for lesson_index, lesson in enumerate(lessons, 1):
+        logger.info(
+            f"Processing lesson {lesson_index}/{len(lessons)} (lesson_id={lesson.id}, "
+            f"end_time={lesson.end_time})"
+        )
+        
+        # Get all exercises for this lesson
+        lesson_exercises = session.exec(
+            select(Exercise).where(Exercise.lesson_id == lesson.id)  # type: ignore
+        ).all()
+        
+        if not lesson_exercises:
+            logger.info(f"  Lesson {lesson.id}: No exercises found, skipping")
+            continue
+        
+        logger.info(f"  Lesson {lesson.id}: Found {len(lesson_exercises)} exercise(s)")
+        
+        # Group exercises by lemma_id
+        # First, we need to get lemma_id from each exercise via user_lemma_id
+        exercises_by_lemma: Dict[int, List[Exercise]] = {}
+        
+        for exercise in lesson_exercises:
+            # Get UserLemma to find lemma_id
+            user_lemma = session.get(UserLemma, exercise.user_lemma_id)
+            if not user_lemma:
+                logger.warning(f"  Lesson {lesson.id}: Exercise {exercise.id} has invalid user_lemma_id {exercise.user_lemma_id}, skipping")
+                continue
+            
+            # Filter by lemma_id if provided
+            if lemma_id is not None and user_lemma.lemma_id != lemma_id:
+                continue
+            
+            lemma_id_for_exercise = user_lemma.lemma_id
+            if lemma_id_for_exercise not in exercises_by_lemma:
+                exercises_by_lemma[lemma_id_for_exercise] = []
+            exercises_by_lemma[lemma_id_for_exercise].append(exercise)
+        
+        logger.info(f"  Lesson {lesson.id}: Found {len(exercises_by_lemma)} unique lemma(s)")
+        
+        # Process each unique lemma in this lesson
+        for lemma_id_in_lesson, lemma_exercises in exercises_by_lemma.items():
+            # Get last exercise end_time for this lemma in this lesson (regardless of result)
+            last_exercise_end_time = max(ex.end_time for ex in lemma_exercises)
+            
+            # Get or create UserLemma
+            if lemma_id_in_lesson not in user_lemma_map:
+                # Try to get existing UserLemma
+                user_lemma = session.exec(
+                    select(UserLemma).where(
+                        UserLemma.user_id == user_id,
+                        UserLemma.lemma_id == lemma_id_in_lesson
+                    )
+                ).first()
+                
+                if not user_lemma:
+                    # Create new UserLemma
+                    user_lemma = UserLemma(
+                        user_id=user_id,
+                        lemma_id=lemma_id_in_lesson,
+                        leitner_bin=0,
+                        next_review_at=None
+                    )
+                    session.add(user_lemma)
+                    session.flush()  # Flush to get the ID
+                
+                user_lemma_map[lemma_id_in_lesson] = user_lemma
+            
+            user_lemma = user_lemma_map[lemma_id_in_lesson]
+            
+            # Check if this is the first occurrence of this lemma
+            is_first_occurrence = lemma_id_in_lesson not in seen_lemma_ids
+            
+            if is_first_occurrence:
+                # First occurrence: hardcode with bin=1, last_success_time, next_review_at = last_success_time + 23h
+                logger.info(
+                    f"  Lesson {lesson.id}, Lemma {lemma_id_in_lesson}: First occurrence - "
+                    f"initializing with bin=1, last_success_time={last_exercise_end_time}, "
+                    f"next_review_at={last_exercise_end_time + timedelta(hours=23)}"
+                )
+                user_lemma.leitner_bin = 1
+                user_lemma.last_success_time = last_exercise_end_time
+                user_lemma.next_review_at = last_exercise_end_time + timedelta(hours=23)
+                seen_lemma_ids.add(lemma_id_in_lesson)
+                processed_count += 1
+            else:
+                # Lemma already exists: check if we should update
+                current_bin = user_lemma.leitner_bin if user_lemma.leitner_bin is not None else 0
+                current_next_review_at = user_lemma.next_review_at
+                
+                if current_next_review_at is None:
+                    # No next_review_at set, update it
+                    should_update = True
+                    logger.info(
+                        f"  Lesson {lesson.id}, Lemma {lemma_id_in_lesson}: Existing lemma "
+                        f"(bin={current_bin}) - no next_review_at set, will update"
+                    )
+                else:
+                    # Only update if last_exercise_end_time >= next_review_at
+                    should_update = last_exercise_end_time >= current_next_review_at
+                    if should_update:
+                        logger.info(
+                            f"  Lesson {lesson.id}, Lemma {lemma_id_in_lesson}: Existing lemma "
+                            f"(bin={current_bin}) - last_exercise_end_time ({last_exercise_end_time}) >= "
+                            f"next_review_at ({current_next_review_at}), will update"
+                        )
+                    else:
+                        logger.info(
+                            f"  Lesson {lesson.id}, Lemma {lemma_id_in_lesson}: Existing lemma "
+                            f"(bin={current_bin}) - last_exercise_end_time ({last_exercise_end_time}) < "
+                            f"next_review_at ({current_next_review_at}), skipping"
+                        )
+                
+                if not should_update:
+                    # Skip this lemma (last_success_time < next_review_at)
+                    continue
+                
+                # Update UserLemma
+                # Set last_success_time to last exercise end_time (regardless of result)
+                user_lemma.last_success_time = last_exercise_end_time
+                
+                # Determine bin update based on exercise results
+                exercise_results = [ex.result for ex in lemma_exercises]
+                has_fail = any(ex.result == 'fail' for ex in lemma_exercises)
+                has_hint = any(ex.result == 'hint' for ex in lemma_exercises)
+                all_success = all(ex.result == 'success' for ex in lemma_exercises)
+                
+                logger.info(
+                    f"  Lesson {lesson.id}, Lemma {lemma_id_in_lesson}: Exercise results - "
+                    f"{exercise_results} (has_fail={has_fail}, has_hint={has_hint}, all_success={all_success})"
+                )
+                
+                if has_fail:
+                    # Any exercise failed: decrement bin by 2 (min 1)
+                    new_bin = max(1, current_bin - 2)
+                    bin_change = f"{current_bin} -> {new_bin} (-2)"
+                elif has_hint:
+                    # Any hint used (but no failures): no change (+0)
+                    new_bin = current_bin
+                    bin_change = f"{current_bin} -> {new_bin} (+0)"
+                elif all_success:
+                    # All exercises succeeded: increment bin by 1 (max max_bins)
+                    new_bin = min(max_bins, current_bin + 1)
+                    bin_change = f"{current_bin} -> {new_bin} (+1)"
+                else:
+                    # Fallback (shouldn't happen)
+                    new_bin = current_bin
+                    bin_change = f"{current_bin} -> {new_bin} (no change)"
+                
+                user_lemma.leitner_bin = new_bin
+                
+                # Calculate next_review_at based on bin and fibonacci
+                if interval_style == 'fibonacci':
+                    interval_days = calculate_fibonacci_interval(new_bin, first_day_interval)
+                else:
+                    # Fallback to old Leitner intervals if needed
+                    bin_index = max(0, min(5, new_bin))
+                    interval_days = LEITNER_INTERVALS[bin_index]
+                
+                # Use 23 hours per day to account for users doing exercises around the same time each day
+                new_next_review_at = last_exercise_end_time + timedelta(hours=interval_days * 23)
+                user_lemma.next_review_at = new_next_review_at
+                
+                logger.info(
+                    f"  Lesson {lesson.id}, Lemma {lemma_id_in_lesson}: Updated - bin={bin_change}, "
+                    f"last_success_time={last_exercise_end_time}, "
+                    f"next_review_at={new_next_review_at} (interval={interval_days} days)"
+                )
+                processed_count += 1
+    
+    logger.info(
+        f"Recompute SRS for user {user_id}: Completed - processed {processed_count} lemma(s) "
+        f"across {len(lessons)} lesson(s)"
+    )
+    return processed_count
 
 
 
