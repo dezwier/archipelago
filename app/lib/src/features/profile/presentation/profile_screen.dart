@@ -9,7 +9,6 @@ import 'package:archipelago/src/features/create/domain/topic.dart';
 import 'package:archipelago/src/features/profile/domain/user.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
-import 'package:archipelago/src/features/profile/presentation/widgets/leitner_distribution_card.dart';
 import 'package:archipelago/src/features/profile/presentation/widgets/exercises_daily_chart_card.dart';
 import 'package:archipelago/src/features/profile/presentation/profile_filter_state.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
@@ -573,14 +572,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _loadPracticeDaily();
               },
             ),
-            const SizedBox(height: 16),
-            if (_leitnerDistribution != null && _currentUser!.langLearning != null)
-              LeitnerDistributionCard(
-                distribution: _leitnerDistribution!,
-                languages: _languages,
-                userId: _currentUser!.id,
-                onRefresh: () => _loadStatistics(isRefresh: true),
-              ),
           ],
         ],
       ),

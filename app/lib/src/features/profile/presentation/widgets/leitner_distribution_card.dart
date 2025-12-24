@@ -93,7 +93,7 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
   Widget build(BuildContext context) {
     if (widget.distribution.distribution.isEmpty) {
       return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16.0),
+        margin: const EdgeInsets.symmetric(horizontal: 0.0),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
@@ -202,7 +202,7 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
         .fold(0, (a, b) => a > b ? a : b);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      margin: const EdgeInsets.symmetric(horizontal: 0.0),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
@@ -219,7 +219,7 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -232,7 +232,7 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Leitner Bins - $languageName',
+                    'Leitner Bins',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -263,7 +263,7 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 8),
             SizedBox(
               height: 200,
               child: BarChart(

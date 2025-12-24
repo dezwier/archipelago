@@ -6,6 +6,10 @@ import 'package:archipelago/src/features/learn/presentation/widgets/lesson_repor
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/features/create/data/topic_service.dart';
 import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/profile/data/statistics_service.dart';
+import 'package:archipelago/src/features/profile/data/language_service.dart';
+import 'package:archipelago/src/features/profile/domain/statistics.dart';
+import 'package:archipelago/src/features/profile/domain/language.dart';
 
 class LearnScreen extends StatefulWidget {
   const LearnScreen({super.key});
@@ -19,6 +23,11 @@ class _LearnScreenState extends State<LearnScreen> {
   List<Topic> _topics = [];
   bool _isLoadingTopics = false;
   Map<String, dynamic> Function()? _getCurrentWidgetSettings;
+  
+  // Leitner distribution state
+  LeitnerDistribution? _leitnerDistribution;
+  bool _isLoadingLeitner = false;
+  List<Language> _languages = [];
 
   @override
   void initState() {
@@ -29,6 +38,8 @@ class _LearnScreenState extends State<LearnScreen> {
     // Initialize controller and load topics after user is loaded
     _controller.initialize().then((_) {
       _loadTopics();
+      _loadLanguages();
+      _loadLeitnerDistribution();
     });
   }
 
@@ -49,13 +60,15 @@ class _LearnScreenState extends State<LearnScreen> {
     // Get current widget settings if available, otherwise use controller's current state
     if (_getCurrentWidgetSettings != null) {
       final settings = _getCurrentWidgetSettings!();
-      return _controller.refresh(
+      await _controller.refresh(
         cardsToLearn: settings['cardsToLearn'] as int,
         cardMode: settings['cardMode'] as String,
       );
     } else {
-      return _controller.refresh();
+      await _controller.refresh();
     }
+    // Also refresh Leitner distribution when refreshing
+    _loadLeitnerDistribution();
   }
 
   Future<void> _loadTopics() async {
@@ -71,6 +84,72 @@ class _LearnScreenState extends State<LearnScreen> {
         _topics = topics;
         _isLoadingTopics = false;
       });
+    }
+  }
+
+  Future<void> _loadLanguages() async {
+    final languages = await LanguageService.getLanguages();
+    if (mounted) {
+      setState(() {
+        _languages = languages;
+      });
+    }
+  }
+
+  Future<void> _loadLeitnerDistribution() async {
+    final user = _controller.currentUser;
+    final learningLanguage = _controller.learningLanguage;
+    
+    if (user == null || learningLanguage == null || learningLanguage.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _leitnerDistribution = null;
+          _isLoadingLeitner = false;
+        });
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoadingLeitner = true;
+    });
+
+    try {
+      // Convert LearnController filters to StatisticsService format
+      final result = await StatisticsService.getLeitnerDistribution(
+        userId: user.id,
+        languageCode: learningLanguage,
+        includeLemmas: _controller.includeLemmas,
+        includePhrases: _controller.includePhrases,
+        topicIds: _controller.getEffectiveTopicIds(),
+        includeWithoutTopic: _controller.showLemmasWithoutTopic,
+        levels: _controller.getEffectiveLevels(),
+        partOfSpeech: _controller.getEffectivePartOfSpeech(),
+        hasImages: _controller.getEffectiveHasImages(),
+        hasAudio: _controller.getEffectiveHasAudio(),
+        isComplete: _controller.getEffectiveIsComplete(),
+      );
+
+      if (mounted) {
+        if (result['success'] == true) {
+          setState(() {
+            _leitnerDistribution = result['data'] as LeitnerDistribution;
+            _isLoadingLeitner = false;
+          });
+        } else {
+          setState(() {
+            _leitnerDistribution = null;
+            _isLoadingLeitner = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _leitnerDistribution = null;
+          _isLoadingLeitner = false;
+        });
+      }
     }
   }
 
@@ -121,6 +200,8 @@ class _LearnScreenState extends State<LearnScreen> {
         } else {
           await _controller.refresh();
         }
+        // Also reload Leitner distribution when filters change
+        _loadLeitnerDistribution();
       },
       topics: _topics,
       isLoadingTopics: _isLoadingTopics,
@@ -341,6 +422,11 @@ class _LearnScreenState extends State<LearnScreen> {
               onGetCurrentSettingsReady: (getCurrentSettings) {
                 _getCurrentWidgetSettings = getCurrentSettings;
               },
+              leitnerDistribution: _leitnerDistribution,
+              languages: _languages,
+              userId: _controller.currentUser?.id,
+              onRefreshLeitner: () => _loadLeitnerDistribution(),
+              isLoadingLeitner: _isLoadingLeitner,
             ),
           );
         },

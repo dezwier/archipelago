@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:archipelago/src/features/profile/presentation/widgets/leitner_distribution_card.dart';
+import 'package:archipelago/src/features/profile/domain/statistics.dart';
+import 'package:archipelago/src/features/profile/domain/language.dart';
 
 /// Widget that displays a start screen for the lesson
 class LessonStartWidget extends StatefulWidget {
@@ -14,6 +17,11 @@ class LessonStartWidget extends StatefulWidget {
   final void Function(int cardsToLearn, String cardMode)? onSettingsChanged;
   final Future<void> Function(int cardsToLearn, String cardMode)? onGenerateAndStartLesson;
   final void Function(Map<String, dynamic> Function() getCurrentSettings)? onGetCurrentSettingsReady;
+  final LeitnerDistribution? leitnerDistribution;
+  final List<Language> languages;
+  final int? userId;
+  final VoidCallback? onRefreshLeitner;
+  final bool isLoadingLeitner;
 
   const LessonStartWidget({
     super.key,
@@ -29,6 +37,11 @@ class LessonStartWidget extends StatefulWidget {
     this.onSettingsChanged,
     this.onGenerateAndStartLesson,
     this.onGetCurrentSettingsReady,
+    this.leitnerDistribution,
+    this.languages = const [],
+    this.userId,
+    this.onRefreshLeitner,
+    this.isLoadingLeitner = false,
   });
 
   @override
@@ -83,7 +96,6 @@ class _LessonCountsWidget extends StatelessWidget {
           label: 'Concepts after filtering',
           count: filteredConceptsCount,
           color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-          indent: 16,
         ),
         const SizedBox(height: 8),
         _buildCountRow(
@@ -91,7 +103,6 @@ class _LessonCountsWidget extends StatelessWidget {
           label: 'Concepts with languages available',
           count: conceptsWithBothLanguagesCount,
           color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-          indent: 32,
         ),
         const SizedBox(height: 8),
         _buildCountRow(
@@ -99,7 +110,6 @@ class _LessonCountsWidget extends StatelessWidget {
           label: _getConceptsLabel(),
           count: conceptsWithoutCardsCount,
           color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-          indent: 48,
         ),
         const SizedBox(height: 8),
         _buildCountRow(
@@ -107,7 +117,6 @@ class _LessonCountsWidget extends StatelessWidget {
           label: cardCount == 1 ? 'Card ready for this lesson' : 'Cards ready for this lesson',
           count: cardCount,
           color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-          indent: 64,
           isHighlighted: true,
         ),
       ],
@@ -199,13 +208,13 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
             Row(
               children: [
                 Icon(
-                  Icons.settings,
+                  Icons.school_outlined,
                   size: 20,
                   color: colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Lesson Settings',
+                  'Ready to Learn',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -351,23 +360,6 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                 ),
               ],
             ),
-            const SizedBox(height: 32),
-            Row(
-              children: [
-                Icon(
-                  Icons.school_outlined,
-                  size: 20,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Ready to Learn',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
             const SizedBox(height: 16),
 
             // Cascading counts display (without card wrapper)
@@ -404,6 +396,33 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            // Leitner distribution chart
+            if (widget.leitnerDistribution != null && widget.languages.isNotEmpty && widget.userId != null)
+              LeitnerDistributionCard(
+                distribution: widget.leitnerDistribution!,
+                languages: widget.languages,
+                userId: widget.userId!,
+                onRefresh: widget.onRefreshLeitner,
+              )
+            else if (widget.isLoadingLeitner)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+              ),
             const SizedBox(height: 8),
           ],
         ),
