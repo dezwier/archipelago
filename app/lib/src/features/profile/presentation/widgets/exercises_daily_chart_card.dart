@@ -308,60 +308,109 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
               ),
             ),
             const SizedBox(height: 18),
-            SizedBox(
-              height: 200,
-              child: LineChart(
-                LineChartData(
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    getDrawingHorizontalLine: (value) {
-                      return FlLine(
-                        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                        strokeWidth: 1,
-                      );
-                    },
-                  ),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        getTitlesWidget: (value, meta) {
-                          final index = value.toInt();
-                          if (index >= 0 && index < sortedDates.length) {
-                            final dateStr = sortedDates[index];
-                            try {
-                              final date = DateTime.parse(dateStr);
-                              // Show date label for every nth date to avoid crowding
-                              final interval = (sortedDates.length / 8).ceil();
-                              if (index % interval == 0 || index == sortedDates.length - 1) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 8.0),
-                                  child: Text(
-                                    DateFormat('MM/dd').format(date),
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                );
-                              }
-                            } catch (_) {
-                              // If parsing fails, show the string
-                              if (index % 5 == 0 || index == sortedDates.length - 1) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 8.0),
-                                  child: Text(
-                                    dateStr.length > 5 ? dateStr.substring(5) : dateStr,
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                );
-                              }
-                            }
-                          }
-                          return const SizedBox.shrink();
+            Builder(
+              builder: (context) {
+                // Pre-calculate which indices should show labels and their text, avoiding duplicates
+                final maxLabels = 10;
+                final interval = sortedDates.length <= maxLabels 
+                    ? 1  // Show all if 10 or fewer
+                    : (sortedDates.length / maxLabels).ceil();  // Space out if more
+                
+                final indicesToShow = <int>{};
+                // Add indices at intervals
+                for (int i = 0; i < sortedDates.length; i += interval) {
+                  indicesToShow.add(i);
+                }
+                // Always include the last index if not already included
+                if (!indicesToShow.contains(sortedDates.length - 1)) {
+                  indicesToShow.add(sortedDates.length - 1);
+                }
+                
+                // Pre-calculate label text for each index, ensuring no duplicate formatted dates
+                final labelMap = <int, String>{};
+                final shownDateStrings = <String>{};
+                // Keep track of which indices we actually want to show (for double-checking)
+                final validIndices = indicesToShow.toSet();
+                
+                // Sort indices to process in order
+                final sortedIndices = indicesToShow.toList()..sort();
+                
+                for (final index in sortedIndices) {
+                  if (index >= 0 && index < sortedDates.length) {
+                    final dateStr = sortedDates[index];
+                    String? labelText;
+                    
+                    try {
+                      final date = DateTime.parse(dateStr);
+                      final formattedDate = DateFormat('dd/MM').format(date);
+                      // Only add if we haven't seen this formatted date before
+                      if (!shownDateStrings.contains(formattedDate)) {
+                        labelText = formattedDate;
+                        shownDateStrings.add(formattedDate);
+                        labelMap[index] = labelText;
+                      }
+                    } catch (_) {
+                      // If parsing fails, use the string
+                      final displayStr = dateStr.length > 5 ? dateStr.substring(5) : dateStr;
+                      if (!shownDateStrings.contains(displayStr)) {
+                        labelText = displayStr;
+                        shownDateStrings.add(displayStr);
+                        labelMap[index] = labelText;
+                      }
+                    }
+                  }
+                }
+                
+                return SizedBox(
+                  height: 200,
+                  child: LineChart(
+                    LineChartData(
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                            strokeWidth: 1,
+                          );
                         },
                       ),
-                    ),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 40,
+                            getTitlesWidget: (value, meta) {
+                              // Only show labels at exact integer positions that match our calculated indices
+                              // Check if value is exactly an integer (or very close due to floating point)
+                              final index = value.round();
+                              if ((value - index).abs() > 0.001) {
+                                // Not an integer position, don't show label
+                                return const SizedBox.shrink();
+                              }
+                              
+                              // Only show if:
+                              // 1. Index is in our valid indices set (the ones we calculated)
+                              // 2. Index is in our label map (has a label assigned)
+                              // 3. Index is within bounds
+                              if (index >= 0 && 
+                                  index < sortedDates.length && 
+                                  validIndices.contains(index) &&
+                                  labelMap.containsKey(index)) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Text(
+                                    labelMap[index]!,
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                );
+                              }
+                              // Return empty widget for all other positions
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ),
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
@@ -472,6 +521,8 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                   }).toList(),
                 ),
               ),
+                );
+              },
             ),
           
           ],

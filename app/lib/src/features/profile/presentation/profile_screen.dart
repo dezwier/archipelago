@@ -608,7 +608,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ...stats.languageStats.map((stat) {
+        ...stats.languageStats.asMap().entries.map((entry) {
+          final index = entry.key;
+          final stat = entry.value;
+          final isLast = index == stats.languageStats.length - 1;
           final emoji = LanguageEmoji.getEmoji(stat.languageCode);
           final minutes = (stat.totalTimeSeconds / 60).round();
           final timeValue = minutes >= 60 
@@ -616,48 +619,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
               : minutes.toString();
           final timeLabel = minutes >= 60 ? 'Hours' : 'Minutes';
           
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 0.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 0, bottom: 12),
-                      child: Text(
-                        emoji,
-                        style: Theme.of(context).textTheme.displaySmall,
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 0.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 0, bottom: 12),
+                          child: Text(
+                            emoji,
+                            style: Theme.of(context).textTheme.displaySmall,
+                          ),
+                        ),
                       ),
                     ),
+                    Expanded(
+                      child: _buildInlineStatItem(
+                        value: stat.lemmaCount.toString(),
+                        label: 'Lemmas',
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildInlineStatItem(
+                        value: stat.lessonCount.toString(),
+                        label: 'Lessons',
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildInlineStatItem(
+                        value: stat.exerciseCount.toString(),
+                        label: 'Exercises',
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildInlineStatItem(
+                        value: timeValue,
+                        label: timeLabel,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!isLast)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
                   ),
                 ),
-                Expanded(
-                  child: _buildInlineStatItem(
-                    value: stat.lemmaCount.toString(),
-                    label: 'Lemmas',
-                  ),
-                ),
-                Expanded(
-                  child: _buildInlineStatItem(
-                    value: stat.lessonCount.toString(),
-                    label: 'Lessons',
-                  ),
-                ),
-                Expanded(
-                  child: _buildInlineStatItem(
-                    value: stat.exerciseCount.toString(),
-                    label: 'Exercises',
-                  ),
-                ),
-                Expanded(
-                  child: _buildInlineStatItem(
-                    value: timeValue,
-                    label: timeLabel,
-                  ),
-                ),
-              ],
-            ),
+            ],
           );
         }).toList(),
       ],
