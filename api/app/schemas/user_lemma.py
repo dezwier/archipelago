@@ -23,6 +23,8 @@ class LeitnerBinData(BaseModel):
     """Data for a single Leitner bin."""
     bin: int
     count: int
+    count_due: int = 0  # Count of lemmas where next_review_at is before current time
+    count_not_due: int = 0  # Count of lemmas where next_review_at is after current time
 
 
 class LeitnerDistributionResponse(BaseModel):

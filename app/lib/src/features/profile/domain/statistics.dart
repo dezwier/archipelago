@@ -61,16 +61,22 @@ class SummaryStats {
 class LeitnerBinData {
   final int bin;
   final int count;
+  final int countDue;
+  final int countNotDue;
 
   LeitnerBinData({
     required this.bin,
     required this.count,
+    this.countDue = 0,
+    this.countNotDue = 0,
   });
 
   factory LeitnerBinData.fromJson(Map<String, dynamic> json) {
     return LeitnerBinData(
       bin: json['bin'] as int,
       count: json['count'] as int,
+      countDue: json['count_due'] as int? ?? 0,
+      countNotDue: json['count_not_due'] as int? ?? 0,
     );
   }
 
@@ -78,6 +84,8 @@ class LeitnerBinData {
     return {
       'bin': bin,
       'count': count,
+      'count_due': countDue,
+      'count_not_due': countNotDue,
     };
   }
 }

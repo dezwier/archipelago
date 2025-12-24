@@ -578,6 +578,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               LeitnerDistributionCard(
                 distribution: _leitnerDistribution!,
                 languages: _languages,
+                userId: _currentUser!.id,
+                onRefresh: () => _loadStatistics(isRefresh: true),
               ),
           ],
         ],

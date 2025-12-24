@@ -6,7 +6,8 @@ User Lemma statistics endpoints.
 # pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, func
-from sqlalchemy import and_, cast, Date
+from sqlalchemy import and_, cast, Date, or_
+from sqlalchemy.sql.expression import case
 from sqlalchemy.orm import aliased
 from typing import Dict, List
 from datetime import date, datetime
@@ -203,13 +204,40 @@ async def get_leitner_distribution(
     
     # Query: Get Leitner bin distribution
     # Join: Concept -> Lemma -> UserLemma
+    # Use COALESCE to handle any NULL leitner_bin values (treat as 0)
+    # Split counts by review status (due vs not due)
     lemma_alias2 = aliased(Lemma)
     user_lemma_alias2 = aliased(UserLemma)
+    current_time = datetime.utcnow()
     
     distribution_query = (
         select(
-            user_lemma_alias2.leitner_bin,
-            func.count(user_lemma_alias2.id).label('count')
+            func.coalesce(user_lemma_alias2.leitner_bin, 0).label('leitner_bin'),
+            func.count(user_lemma_alias2.id).label('count'),
+            func.sum(
+                case(
+                    (
+                        and_(
+                            user_lemma_alias2.next_review_at.isnot(None),
+                            user_lemma_alias2.next_review_at <= current_time
+                        ),
+                        1
+                    ),
+                    else_=0
+                )
+            ).label('count_due'),
+            func.sum(
+                case(
+                    (
+                        or_(
+                            user_lemma_alias2.next_review_at.is_(None),
+                            user_lemma_alias2.next_review_at > current_time
+                        ),
+                        1
+                    ),
+                    else_=0
+                )
+            ).label('count_not_due')
         )
         .select_from(lemma_alias2)
         .join(
@@ -225,8 +253,8 @@ async def get_leitner_distribution(
             lemma_alias2.term.isnot(None),
             lemma_alias2.term != ""
         )
-        .group_by(user_lemma_alias2.leitner_bin)
-        .order_by(user_lemma_alias2.leitner_bin)
+        .group_by(func.coalesce(user_lemma_alias2.leitner_bin, 0))
+        .order_by(func.coalesce(user_lemma_alias2.leitner_bin, 0))
     )
     
     # Execute query
@@ -236,7 +264,9 @@ async def get_leitner_distribution(
     distribution = [
         LeitnerBinData(
             bin=row.leitner_bin,
-            count=row.count
+            count=row.count,
+            count_due=int(row.count_due or 0),
+            count_not_due=int(row.count_not_due or 0)
         )
         for row in results
     ]

@@ -286,5 +286,52 @@ class StatisticsService {
       search: search,
     );
   }
+
+  /// Recompute SRS for all user lemmas or a specific lemma.
+  /// 
+  /// Returns a map with:
+  /// - 'success': bool
+  /// - 'message': String
+  /// - 'updated_count': int (if successful)
+  static Future<Map<String, dynamic>> recomputeSRS({
+    required int userId,
+    int? lemmaId,
+  }) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/lessons/recompute-srs?user_id=$userId${lemmaId != null ? '&lemma_id=$lemmaId' : ''}');
+    
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'message': data['message'] as String? ?? 'Successfully recomputed SRS',
+          'updated_count': data['updated_count'] as int? ?? 0,
+        };
+      } else {
+        try {
+          final error = jsonDecode(response.body) as Map<String, dynamic>;
+          return {
+            'success': false,
+            'message': error['detail'] as String? ?? 'Failed to recompute SRS',
+          };
+        } catch (_) {
+          return {
+            'success': false,
+            'message': 'Failed to recompute SRS: ${response.statusCode}',
+          };
+        }
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error recomputing SRS: ${e.toString()}',
+      };
+    }
+  }
 }
 
