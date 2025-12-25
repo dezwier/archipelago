@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from app.models.models import Lemma, Concept, Language
@@ -90,6 +91,80 @@ def create_or_update_lemma_from_llm_data(
     if term:
         term = normalize_lemma_term(term)
     
+    # For concepts with topic_id, we can only have one lemma per language
+    # So we should UPDATE the existing lemma instead of deleting and inserting
+    if concept.topic_id is not None:
+        # Find existing lemma for this concept and language (regardless of term)
+        existing_lemma = session.exec(
+            select(Lemma).where(
+                Lemma.concept_id == concept_id,
+                Lemma.language_code == language_code
+            )
+        ).first()
+        
+        if existing_lemma:
+            # Update existing lemma with new data
+            existing_lemma.term = term
+            existing_lemma.ipa = llm_data.get('ipa')
+            existing_lemma.description = llm_data.get('description')
+            existing_lemma.gender = llm_data.get('gender')
+            existing_lemma.article = llm_data.get('article')
+            existing_lemma.plural_form = llm_data.get('plural_form')
+            existing_lemma.verb_type = llm_data.get('verb_type')
+            existing_lemma.auxiliary_verb = llm_data.get('auxiliary_verb')
+            existing_lemma.formality_register = llm_data.get('register')
+            existing_lemma.status = "active"
+            existing_lemma.source = "llm"
+            existing_lemma.updated_at = datetime.utcnow()
+            
+            try:
+                session.add(existing_lemma)
+                session.commit()
+                session.refresh(existing_lemma)
+                logger.info("Lemma updated for concept %d, language %s (topic_id: %d)", 
+                           concept_id, language_code, concept.topic_id)
+                return existing_lemma
+            except Exception as e:
+                session.rollback()
+                logger.error("Failed to update lemma: %s", str(e))
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to update lemma: {str(e)}"
+                ) from e
+        else:
+            # No existing lemma, create new one
+            lemma = Lemma(
+                concept_id=concept_id,
+                language_code=language_code,
+                term=term,
+                ipa=llm_data.get('ipa'),
+                description=llm_data.get('description'),
+                gender=llm_data.get('gender'),
+                article=llm_data.get('article'),
+                plural_form=llm_data.get('plural_form'),
+                verb_type=llm_data.get('verb_type'),
+                auxiliary_verb=llm_data.get('auxiliary_verb'),
+                formality_register=llm_data.get('register'),
+                status="active",
+                source="llm"
+            )
+            
+            try:
+                session.add(lemma)
+                session.commit()
+                session.refresh(lemma)
+                logger.info("Lemma created for concept %d, language %s (topic_id: %d)", 
+                           concept_id, language_code, concept.topic_id)
+                return lemma
+            except Exception as e:
+                session.rollback()
+                logger.error("Failed to create lemma: %s", str(e))
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to create lemma: {str(e)}"
+                ) from e
+    
+    # For concepts without topic_id, use the original logic (delete and insert)
     # Delete existing lemmas if replace_existing is True
     if replace_existing:
         if term:
@@ -141,10 +216,17 @@ def create_or_update_lemma_from_llm_data(
     except IntegrityError as e:
         session.rollback()
         logger.error("Database integrity error: %s", str(e))
-        if "uq_lemma_concept_language_term" in str(e) or "unique constraint" in str(e).lower():
+        error_str = str(e).lower()
+        if "uq_lemma_concept_language_term" in str(e) or "unique constraint" in error_str:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="A lemma with the same concept_id, language_code, and term already exists"
+            ) from e
+        if "only one lemma per language" in error_str or "check_lemma_uniqueness_for_topics" in error_str:
+            # This should not happen with our new logic, but handle it gracefully
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only one lemma per language is allowed for concepts with topic_id"
             ) from e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -153,6 +235,12 @@ def create_or_update_lemma_from_llm_data(
     except Exception as e:
         session.rollback()
         logger.error("Failed to save lemma: %s", str(e))
+        error_str = str(e).lower()
+        if "only one lemma per language" in error_str or "check_lemma_uniqueness_for_topics" in error_str:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only one lemma per language is allowed for concepts with topic_id"
+            ) from e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save lemma: {str(e)}"
