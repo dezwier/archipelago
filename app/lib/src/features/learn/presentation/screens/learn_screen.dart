@@ -12,7 +12,9 @@ import 'package:archipelago/src/features/profile/domain/statistics.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 
 class LearnScreen extends StatefulWidget {
-  const LearnScreen({super.key});
+  final VoidCallback? onRefreshProfile;
+  
+  const LearnScreen({super.key, this.onRefreshProfile});
 
   @override
   State<LearnScreen> createState() => _LearnScreenState();
@@ -81,6 +83,15 @@ class _LearnScreenState extends State<LearnScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  Future<void> _handleFinishLesson() async {
+    // Finish the lesson
+    await _controller.finishLesson();
+    // Refresh Leitner distribution after lesson completion to show updated bin counts
+    await _loadLeitnerDistribution();
+    // Refresh profile page statistics (summary and day chart) after lesson completion
+    widget.onRefreshProfile?.call();
   }
 
   Future<void> _loadTopics() async {
@@ -438,7 +449,7 @@ class _LearnScreenState extends State<LearnScreen> {
               learningLanguage: _controller.learningLanguage,
               onPrevious: _controller.previousCard,
               onNext: _controller.nextCard,
-              onFinish: _controller.finishLesson,
+              onFinish: _handleFinishLesson,
               onDismiss: _showDismissConfirmation,
               onExerciseStart: _controller.startExerciseTracking,
               onExerciseComplete: _controller.completeExerciseTracking,

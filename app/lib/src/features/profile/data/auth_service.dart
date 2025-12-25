@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:archipelago/src/constants/api_config.dart';
 import 'package:archipelago/src/features/profile/domain/user.dart';
@@ -205,6 +206,57 @@ class AuthService {
       return {
         'success': false,
         'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> uploadUserProfileImage(
+    int userId,
+    File imageFile,
+  ) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/auth/upload-profile-image?user_id=$userId');
+    
+    try {
+      final request = http.MultipartRequest('POST', url);
+      request.files.add(
+        await http.MultipartFile.fromPath('file', imageFile.path),
+      );
+      
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'user': User.fromJson(data['user'] as Map<String, dynamic>),
+          'message': data['message'] as String? ?? 'Profile image uploaded successfully',
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Failed to upload profile image',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error: ${e.toString()}';
+      
+      final errorStr = e.toString();
+      if (errorStr.contains('Connection refused') || 
+          errorStr.contains('Failed host lookup') ||
+          errorStr.contains('SocketException')) {
+        final baseUrl = ApiConfig.baseUrl;
+        errorMessage = 'Cannot connect to server at $baseUrl.\n\n'
+            'Please ensure:\n'
+            '• The API server is running\n'
+            '• You are using the correct API URL for your platform\n'
+            '• For physical devices, set hostIp in api_config.dart';
+      }
+      
+      return {
+        'success': false,
+        'message': errorMessage,
       };
     }
   }

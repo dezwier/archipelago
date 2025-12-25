@@ -784,20 +784,20 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                             return Padding(
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
-                                'B$binValue',
+                                '$binValue',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             );
                           }
                           return const SizedBox.shrink();
                         },
-                        reservedSize: 40,
+                        reservedSize: 35,
                       ),
                     ),
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 40,
+                        reservedSize: 30,
                         getTitlesWidget: (value, meta) {
                           if (value == meta.min || value == meta.max) {
                             return const SizedBox.shrink();
@@ -889,7 +889,7 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                         BarChartRodData(
                           toY: effectiveCountNotDue + effectiveCountDue,
                           fromY: 0,
-                          width: 20,
+                          width: 18,
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(4),
                           ),

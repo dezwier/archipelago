@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:archipelago/src/features/profile/data/auth_service.dart';
 import 'package:archipelago/src/features/profile/data/language_service.dart';
 import 'package:archipelago/src/features/profile/data/statistics_service.dart';
@@ -13,6 +15,7 @@ import 'package:archipelago/src/features/profile/presentation/widgets/exercises_
 import 'package:archipelago/src/features/profile/presentation/profile_filter_state.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/constants/api_config.dart';
 import 'register_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -56,6 +59,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Login form controllers
   final _loginUsernameController = TextEditingController();
   final _loginPasswordController = TextEditingController();
+
+  // Image picker
+  final ImagePicker _imagePicker = ImagePicker();
+  bool _isUploadingImage = false;
 
   @override
   void initState() {
@@ -201,7 +208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _currentUser = User.fromJson(userMap);
             _isInitializing = false;
             // Initialize all bins by default if empty
-            _filterState.initializeBinsIfEmpty(_currentUser!.leitnerMaxBins ?? 7);
+            _filterState.initializeBinsIfEmpty(_currentUser!.leitnerMaxBins);
           });
           widget.onLoginStateChanged?.call(true);
           // Load statistics when user is loaded
@@ -340,6 +347,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Get the full image URL from a relative path
+  String _getImageUrl(String imageUrl) {
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
+    } else {
+      // Otherwise, prepend the API base URL
+      final cleanUrl = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
+      return '${ApiConfig.baseUrl}/$cleanUrl';
+    }
+  }
+
+  /// Pick image from gallery and upload
+  Future<void> _pickProfileImage() async {
+    if (_currentUser == null || _isUploadingImage) return;
+
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (image == null) {
+        // User cancelled
+        return;
+      }
+
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      final result = await AuthService.uploadUserProfileImage(
+        _currentUser!.id,
+        File(image.path),
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        final updatedUser = result['user'] as User;
+        setState(() {
+          _currentUser = updatedUser;
+          _isUploadingImage = false;
+        });
+        await _saveUser(updatedUser);
+        _showSuccess(result['message'] as String? ?? 'Profile image uploaded successfully');
+      } else {
+        setState(() {
+          _isUploadingImage = false;
+        });
+        _showError(result['message'] as String? ?? 'Failed to upload profile image');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isUploadingImage = false;
+      });
+      _showError('Failed to pick image: ${e.toString()}');
+    }
+  }
+
   Future<void> logout() async {
     if (!mounted) return;
     
@@ -470,10 +537,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        Icons.person,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.primary,
+                      GestureDetector(
+                        onTap: _isUploadingImage ? null : _pickProfileImage,
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Theme.of(context).colorScheme.primaryContainer,
+                          ),
+                          child: _isUploadingImage
+                              ? Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                )
+                              : _currentUser!.imageUrl != null && _currentUser!.imageUrl!.isNotEmpty
+                                  ? ClipOval(
+                                      child: Image.network(
+                                        _getImageUrl(_currentUser!.imageUrl!),
+                                        width: 48,
+                                        height: 48,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Icon(
+                                            Icons.person,
+                                            size: 48,
+                                            color: Theme.of(context).colorScheme.primary,
+                                          );
+                                        },
+                                        loadingBuilder: (context, child, loadingProgress) {
+                                          if (loadingProgress == null) return child;
+                                          return Container(
+                                            width: 48,
+                                            height: 48,
+                                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                            child: Center(
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                value: loadingProgress.expectedTotalBytes != null
+                                                    ? loadingProgress.cumulativeBytesLoaded /
+                                                        loadingProgress.expectedTotalBytes!
+                                                    : null,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.person,
+                                      size: 48,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -485,9 +606,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               style: Theme.of(context).textTheme.headlineSmall,
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              '${_currentUser!.email} @${_currentUser!.username}',
-                              style: Theme.of(context).textTheme.bodyMedium,
+                            Row(
+                              children: [
+                                Text(
+                                  '@${_currentUser!.username}',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  LanguageEmoji.getEmoji(_currentUser!.langNative),
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -754,7 +884,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       // Get maxBins from user
-      final maxBins = _currentUser!.leitnerMaxBins ?? 7;
+      final maxBins = _currentUser!.leitnerMaxBins;
 
       // Load summary stats with current filter state
       final summaryResult = await StatisticsService.getLanguageSummaryStats(

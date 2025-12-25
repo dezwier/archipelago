@@ -365,3 +365,116 @@ def delete_concept_image_file(image_url: Optional[str]) -> bool:
     
     return False
 
+
+def process_user_profile_image(file_content: bytes) -> bytes:
+    """
+    Process an uploaded user profile image file: validate, apply EXIF correction, and resize to small format.
+    
+    Args:
+        file_content: Raw image file bytes
+        
+    Returns:
+        Processed image bytes (150x150 JPEG)
+        
+    Raises:
+        HTTPException: If image processing fails
+    """
+    try:
+        img = PILImage.open(io.BytesIO(file_content))
+        # Apply EXIF orientation correction to preserve original orientation
+        img = ImageOps.exif_transpose(img)
+        # Convert to RGB if necessary (handles RGBA, P, etc.)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid image file: {str(e)}"
+        )
+    
+    # Crop to square and resize to 150x150 (small format for profile avatars)
+    img = crop_to_square_and_resize(img, target_size=150)
+    
+    # Convert to JPEG bytes
+    output = io.BytesIO()
+    img.save(output, format="JPEG", quality=95)
+    return output.getvalue()
+
+
+def get_user_image_path(username: str) -> Path:
+    """
+    Get the file path for a user's profile image file.
+    
+    Args:
+        username: The username
+        
+    Returns:
+        Path to the image file
+    """
+    assets_dir = ensure_assets_directory(subdirectories=["users"])
+    return assets_dir / "users" / f"{username}.jpg"
+
+
+def save_user_image(username: str, image_bytes: bytes) -> Path:
+    """
+    Save image bytes to the assets/users directory for a user.
+    
+    Args:
+        username: The username
+        image_bytes: Image bytes to save
+        
+    Returns:
+        Path to the saved image file
+    """
+    image_path = get_user_image_path(username)
+    
+    # Explicitly remove existing file to ensure overwrite
+    if image_path.exists():
+        try:
+            image_path.unlink()
+            logger.info(f"Removed existing file {image_path} before overwriting")
+        except Exception as e:
+            logger.warning(f"Failed to remove existing file {image_path}: {str(e)}, will attempt to overwrite anyway")
+    
+    try:
+        with open(image_path, "wb") as f:
+            f.write(image_bytes)
+        logger.info(f"Saved user image to {image_path}")
+    except Exception as e:
+        logger.error(f"Failed to save user image to {image_path}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save image: {str(e)}"
+        )
+    
+    return image_path
+
+
+def delete_user_image_file(image_url: Optional[str]) -> bool:
+    """
+    Delete a user image file from the assets directory if it's a local asset.
+    
+    Args:
+        image_url: The image URL (e.g., "/assets/users/username.jpg")
+        
+    Returns:
+        True if file was deleted, False otherwise
+    """
+    if not image_url:
+        return False
+    
+    image_path = get_image_path_from_url(image_url)
+    if not image_path:
+        return False
+    
+    if image_path.exists():
+        try:
+            image_path.unlink()
+            logger.info(f"Deleted user image file: {image_path}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to delete user image file {image_path}: {str(e)}")
+            return False
+    
+    return False
+

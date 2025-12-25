@@ -6,6 +6,7 @@ class User {
   final String? langLearning;
   final String createdAt;
   final String? fullName;
+  final String? imageUrl;
   final int leitnerMaxBins;
   final String leitnerAlgorithm;
   final int leitnerIntervalStart;
@@ -18,6 +19,7 @@ class User {
     this.langLearning,
     required this.createdAt,
     this.fullName,
+    this.imageUrl,
     this.leitnerMaxBins = 7,
     this.leitnerAlgorithm = 'fibonacci',
     this.leitnerIntervalStart = 23,
@@ -32,6 +34,7 @@ class User {
       langLearning: json['lang_learning'] as String?,
       createdAt: json['created_at'] as String,
       fullName: json['full_name'] as String?,
+      imageUrl: json['image_url'] as String?,
       leitnerMaxBins: json['leitner_max_bins'] as int? ?? 7,
       leitnerAlgorithm: json['leitner_algorithm'] as String? ?? 'fibonacci',
       leitnerIntervalStart: json['leitner_interval_start'] as int? ?? 23,
@@ -47,6 +50,7 @@ class User {
       'lang_learning': langLearning,
       'created_at': createdAt,
       'full_name': fullName,
+      'image_url': imageUrl,
       'leitner_max_bins': leitnerMaxBins,
       'leitner_algorithm': leitnerAlgorithm,
       'leitner_interval_start': leitnerIntervalStart,

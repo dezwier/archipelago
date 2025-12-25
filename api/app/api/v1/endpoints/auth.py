@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlmodel import Session, select
 from app.core.database import get_session
 from app.models.models import User, Language
 from app.schemas.auth import LoginRequest, RegisterRequest, AuthResponse, UserResponse, UpdateUserLanguagesRequest, UpdateLeitnerConfigRequest
 from app.services.user_service import delete_user_data
+from app.services.image_service import process_user_profile_image, save_user_image, delete_user_image_file
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -253,6 +254,85 @@ async def update_leitner_config(
         ),
         message="Leitner configuration updated successfully"
     )
+
+
+@router.post("/upload-profile-image", response_model=AuthResponse)
+async def upload_profile_image(
+    user_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session)
+):
+    """
+    Upload a profile image for a user.
+    
+    This endpoint:
+    1. Accepts an image file upload
+    2. Processes the image to 150x150 square format
+    3. Saves the image as users/<username>.jpg
+    4. Updates the user's image_url field
+    5. Deletes the old image file if it exists and is different
+    
+    Args:
+        user_id: The user ID
+        file: The image file to upload
+        session: Database session
+        
+    Returns:
+        Updated user object with new image_url
+    """
+    # Find user
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    try:
+        # Read the file content
+        file_content = await file.read()
+        
+        # Process the uploaded image (150x150 square format)
+        image_bytes = process_user_profile_image(file_content)
+        
+        # Save image for user
+        image_path = save_user_image(user.username, image_bytes)
+        image_url = f"/assets/users/{user.username}.jpg"
+        
+        # Delete existing image file if it exists (different filename)
+        if user.image_url and user.image_url != image_url:
+            delete_user_image_file(user.image_url)
+        
+        # Update user with new image URL
+        user.image_url = image_url
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        
+        return AuthResponse(
+            user=UserResponse(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                lang_native=user.lang_native,
+                lang_learning=user.lang_learning,
+                created_at=user.created_at.isoformat(),
+                full_name=user.full_name,
+                image_url=user.image_url,
+                leitner_max_bins=user.leitner_max_bins,
+                leitner_algorithm=user.leitner_algorithm,
+                leitner_interval_factor=user.leitner_interval_factor,
+                leitner_interval_start=user.leitner_interval_start
+            ),
+            message="Profile image uploaded successfully"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload profile image: {str(e)}"
+        )
 
 
 @router.delete("/delete-user-data")

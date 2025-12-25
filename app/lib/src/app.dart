@@ -48,7 +48,11 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
           _refreshDictionaryTopicsCallback = callback;
         },
       ),
-      const LearnScreen(),
+      LearnScreen(
+        onRefreshProfile: () {
+          _refreshProfileCallback?.call();
+        },
+      ),
       ProfileScreen(
         key: const ValueKey('profile_screen'),
         onLogout: () {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/profile/presentation/widgets/leitner_distribution_card.dart';
+import 'package:archipelago/src/features/learn/presentation/widgets/leitner_distribution_card.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 
