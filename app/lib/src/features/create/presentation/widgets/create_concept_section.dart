@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'dart:io';
-import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/shared/domain/topic.dart';
 import 'package:archipelago/src/features/create/presentation/controllers/create_concept_controller.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
+import 'package:archipelago/src/features/shared/providers/auth_provider.dart';
+import 'package:archipelago/src/features/shared/providers/topics_provider.dart';
+import 'package:archipelago/src/features/shared/providers/languages_provider.dart';
 import 'image_selector_widget.dart';
 import 'create_selectors_widget.dart';
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
 
 class CreateConceptSection extends StatefulWidget {
-  final Function(Function())? onRefreshCallbackReady;
-  
   const CreateConceptSection({
     super.key,
-    this.onRefreshCallbackReady,
   });
 
   @override
@@ -31,15 +32,18 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
   @override
   void initState() {
     super.initState();
-    _controller = CreateConceptController();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    _controller = CreateConceptController(authProvider, topicsProvider, languagesProvider);
     
-    // Initialize controller
-    _controller.initialize();
-    
-    // Register refresh callback with parent
+    // Defer initialization to avoid calling notifyListeners() during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onRefreshCallbackReady?.call(_controller.loadTopics);
+      _controller.initialize();
     });
+    
+    // Listen to auth provider changes to refresh topics
+    authProvider.addListener(_onAuthChanged);
     
     // Prevent fields from requesting focus automatically
     _termFocusNode.canRequestFocus = false;
@@ -73,9 +77,16 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
       _controller.setDescription(_descriptionController.text);
     });
   }
+  
+  void _onAuthChanged() {
+    // Reload topics when auth state changes
+    _controller.loadTopics();
+  }
 
   @override
   void dispose() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    authProvider.removeListener(_onAuthChanged);
     _termController.dispose();
     _descriptionController.dispose();
     _termFocusNode.dispose();

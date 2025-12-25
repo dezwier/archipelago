@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/common/dictionary_item.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/states/dictionary_empty_state.dart';
@@ -9,35 +10,28 @@ import 'package:archipelago/src/features/dictionary/presentation/widgets/states/
 import 'package:archipelago/src/features/dictionary/presentation/widgets/drawers/generate_lemmas_drawer.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
-import 'package:archipelago/src/features/create/domain/topic.dart';
-import 'mixins/dictionary_screen_data.dart';
-import 'mixins/dictionary_screen_export.dart';
-import 'mixins/dictionary_screen_generate_lemma.dart';
-import 'mixins/dictionary_screen_generate_image.dart';
-import 'mixins/dictionary_screen_generate_audio.dart';
-import 'mixins/dictionary_screen_handlers.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/topic.dart';
+import 'package:archipelago/src/features/shared/providers/auth_provider.dart';
+import 'package:archipelago/src/features/shared/providers/topics_provider.dart';
+import 'package:archipelago/src/features/shared/providers/languages_provider.dart';
+import 'helpers/dictionary_screen_data_helper.dart';
+import 'helpers/dictionary_screen_export_helper.dart';
+import 'helpers/dictionary_screen_generate_lemma_helper.dart';
+import 'helpers/dictionary_screen_generate_image_helper.dart';
+import 'helpers/dictionary_screen_generate_audio_helper.dart';
+import 'helpers/dictionary_screen_handlers_helper.dart';
 
 class DictionaryScreen extends StatefulWidget {
-  final Function(Function())? onRefreshCallbackReady;
-  
   const DictionaryScreen({
     super.key,
-    this.onRefreshCallbackReady,
   });
 
   @override
   State<DictionaryScreen> createState() => _DictionaryScreenState();
 }
 
-class _DictionaryScreenState extends State<DictionaryScreen>
-    with
-        DictionaryScreenData,
-        DictionaryScreenExport,
-        DictionaryScreenGenerateLemma,
-        DictionaryScreenGenerateImage,
-        DictionaryScreenGenerateAudio,
-        DictionaryScreenHandlers {
+class _DictionaryScreenState extends State<DictionaryScreen> {
   late final DictionaryController _controller;
   late final CardGenerationState _cardGenerationState;
   late final LanguageVisibilityManager _languageVisibilityManager;
@@ -56,81 +50,106 @@ class _DictionaryScreenState extends State<DictionaryScreen>
   bool _isLoadingConcepts = false; // Loading state for the button
   bool _isLoadingExport = false; // Loading state for export
 
-  // Getters for mixins
-  @override
-  DictionaryController get controller => _controller;
-
-  @override
-  LanguageVisibilityManager get languageVisibilityManager => _languageVisibilityManager;
-
-  @override
-  CardGenerationState get cardGenerationState => _cardGenerationState;
-
-  @override
-  List<Language> get allLanguages => _allLanguages;
-
-  @override
-  List<Topic> get allTopics => _allTopics;
-
-  @override
-  bool get isLoadingTopics => _isLoadingTopics;
-
-  @override
-  bool get isLoadingConcepts => _isLoadingConcepts;
-
-  @override
-  bool get isLoadingExport => _isLoadingExport;
-
-  @override
-  bool get showDescription => _showDescription;
-
-  @override
-  bool get showExtraInfo => _showExtraInfo;
-
-  // Setters for mixins
-  @override
-  void setAllLanguages(List<Language> value) => _allLanguages = value;
-
-  @override
-  void setAllTopics(List<Topic> value) => _allTopics = value;
-
-  @override
-  void setIsLoadingTopics(bool value) => _isLoadingTopics = value;
-
-  @override
-  void setIsLoadingConcepts(bool value) => _isLoadingConcepts = value;
-
-  @override
-  void setIsLoadingExport(bool value) => _isLoadingExport = value;
-
-  @override
-  void setShowDescription(bool value) => _showDescription = value;
-
-  @override
-  void setShowExtraInfo(bool value) => _showExtraInfo = value;
-
-  @override
-  void onControllerChanged() => _onControllerChanged();
+  // Helper instances
+  late final DictionaryScreenDataHelper _dataHelper;
+  late final DictionaryScreenExportHelper _exportHelper;
+  late final DictionaryScreenGenerateLemmaHelper _generateLemmaHelper;
+  late final DictionaryScreenGenerateImageHelper _generateImageHelper;
+  late final DictionaryScreenGenerateAudioHelper _generateAudioHelper;
+  late final DictionaryScreenHandlersHelper _handlersHelper;
 
   @override
   void initState() {
     super.initState();
-    _controller = DictionaryController();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    _controller = DictionaryController(authProvider);
     _cardGenerationState = CardGenerationState();
     _languageVisibilityManager = LanguageVisibilityManager();
+    
+    // Initialize helper classes
+    _dataHelper = DictionaryScreenDataHelper(
+      controller: _controller,
+      languageVisibilityManager: _languageVisibilityManager,
+      topicsProvider: topicsProvider,
+      languagesProvider: languagesProvider,
+      setAllLanguages: (languages) => setState(() => _allLanguages = languages),
+      setAllTopics: (topics) => setState(() => _allTopics = topics),
+      setIsLoadingTopics: (value) => setState(() => _isLoadingTopics = value),
+      onControllerChanged: () => _onControllerChanged(),
+      setState: () => setState(() {}),
+    );
+    
+    _exportHelper = DictionaryScreenExportHelper(
+      controller: _controller,
+      languageVisibilityManager: _languageVisibilityManager,
+      getAllLanguages: () => _allLanguages,
+      getIsLoadingExport: () => _isLoadingExport,
+      setIsLoadingExport: (value) => setState(() => _isLoadingExport = value),
+      context: context,
+      mounted: () => mounted,
+      setState: () => setState(() {}),
+    );
+    
+    _generateLemmaHelper = DictionaryScreenGenerateLemmaHelper(
+      controller: _controller,
+      languageVisibilityManager: _languageVisibilityManager,
+      cardGenerationState: _cardGenerationState,
+      getIsLoadingConcepts: () => _isLoadingConcepts,
+      setIsLoadingConcepts: (value) => setState(() => _isLoadingConcepts = value),
+      context: context,
+      mounted: () => mounted,
+      setState: () => setState(() {}),
+      onCardGenerationComplete: _onCardGenerationComplete,
+    );
+    
+    _generateImageHelper = DictionaryScreenGenerateImageHelper(
+      controller: _controller,
+      cardGenerationState: _cardGenerationState,
+      getIsLoadingConcepts: () => _isLoadingConcepts,
+      setIsLoadingConcepts: (value) => setState(() => _isLoadingConcepts = value),
+      context: context,
+      mounted: () => mounted,
+      setState: () => setState(() {}),
+    );
+    
+    _generateAudioHelper = DictionaryScreenGenerateAudioHelper(
+      controller: _controller,
+      cardGenerationState: _cardGenerationState,
+      getIsLoadingConcepts: () => _isLoadingConcepts,
+      setIsLoadingConcepts: (value) => setState(() => _isLoadingConcepts = value),
+      context: context,
+      mounted: () => mounted,
+      setState: () => setState(() {}),
+    );
+    
+    _handlersHelper = DictionaryScreenHandlersHelper(
+      controller: _controller,
+      languageVisibilityManager: _languageVisibilityManager,
+      getAllLanguages: () => _allLanguages,
+      getAllTopics: () => _allTopics,
+      getIsLoadingTopics: () => _isLoadingTopics,
+      showDescription: _showDescription,
+      showExtraInfo: _showExtraInfo,
+      setShowDescription: (value) => setState(() => _showDescription = value),
+      setShowExtraInfo: (value) => setState(() => _showExtraInfo = value),
+      context: context,
+      mounted: () => mounted,
+      setState: () => setState(() {}),
+    );
+    
     _controller.initialize();
     _scrollController.addListener(_onScroll);
-    loadLanguages();
-    loadTopics();
     
-    // Register refresh callback with parent
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onRefreshCallbackReady?.call(() {
-        // Reload topics and refresh dictionary (which will reload concept count if user changed)
-        loadTopics();
-        _controller.refresh();
-      });
-    });
+    // Load initial data from providers
+    _dataHelper.loadLanguages();
+    _dataHelper.loadTopics();
+    
+    // Listen to provider changes
+    authProvider.addListener(_onAuthChanged);
+    topicsProvider.addListener(_onTopicsChanged);
+    languagesProvider.addListener(_onLanguagesChanged);
     
     // Listen to controller changes to update language visibility when user loads
     _controller.addListener(_onControllerChanged);
@@ -164,12 +183,34 @@ class _DictionaryScreenState extends State<DictionaryScreen>
   }
 
   void _onControllerChanged() {
-    handleControllerChanged();
+    _dataHelper.handleControllerChanged(_allLanguages);
+  }
+  
+  void _onAuthChanged() {
+    // Reload topics and refresh dictionary when auth state changes
+    _dataHelper.loadTopics();
+    _controller.refresh();
+  }
+  
+  void _onTopicsChanged() {
+    // Update topics when provider changes
+    _dataHelper.loadTopics();
+  }
+  
+  void _onLanguagesChanged() {
+    // Update languages when provider changes
+    _dataHelper.loadLanguages();
   }
   
 
   @override
   void dispose() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    authProvider.removeListener(_onAuthChanged);
+    topicsProvider.removeListener(_onTopicsChanged);
+    languagesProvider.removeListener(_onLanguagesChanged);
     _controller.removeListener(_onControllerChanged);
     _cardGenerationState.dispose();
     _scrollController.dispose();
@@ -184,13 +225,10 @@ class _DictionaryScreenState extends State<DictionaryScreen>
     _controller.refresh();
     _cardGenerationState.clearCurrentConcept();
   }
-
-  @override
-  void onCardGenerationComplete() => _onCardGenerationComplete();
   
-  // Override to provide access to image and audio handlers
+  // Open generate lemmas drawer
   void openGenerateLemmasDrawer(BuildContext context) {
-    final visibleLanguages = languageVisibilityManager.getVisibleLanguageCodes();
+    final visibleLanguages = _languageVisibilityManager.getVisibleLanguageCodes();
     
     if (visibleLanguages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -204,12 +242,24 @@ class _DictionaryScreenState extends State<DictionaryScreen>
     
     showGenerateLemmasDrawer(
       context: context,
-      cardGenerationState: cardGenerationState,
-      onConfirmGenerate: () => handleGenerateLemmas(context),
-      onConfirmGenerateImages: () => handleGenerateImages(context),
-      onConfirmGenerateAudio: () => handleGenerateAudio(context),
+      cardGenerationState: _cardGenerationState,
+      onConfirmGenerate: () => _generateLemmaHelper.handleGenerateLemmas(),
+      onConfirmGenerateImages: () => _generateImageHelper.handleGenerateImages(),
+      onConfirmGenerateAudio: () => _generateAudioHelper.handleGenerateAudio(),
       visibleLanguageCodes: visibleLanguages,
     );
+  }
+  
+  void showFilterMenu(BuildContext context) {
+    _handlersHelper.showFilterMenu();
+  }
+  
+  void showFilteringMenu(BuildContext context) {
+    _handlersHelper.showFilteringMenu();
+  }
+  
+  void showExportDrawer(BuildContext context) {
+    _exportHelper.showExportDrawer();
   }
 
   void _onScroll() {
@@ -285,7 +335,7 @@ class _DictionaryScreenState extends State<DictionaryScreen>
                           showDescription: _showDescription,
                           showExtraInfo: _showExtraInfo,
                           allItems: _controller.filteredItems,
-                          onTap: () => handleItemTap(item),
+                          onTap: () => _handlersHelper.handleItemTap(item),
                         );
                       },
                       childCount: _controller.filteredItems.length,

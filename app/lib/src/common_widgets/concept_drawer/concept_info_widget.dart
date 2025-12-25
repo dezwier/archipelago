@@ -71,7 +71,7 @@ class ConceptInfoWidget extends StatelessWidget {
             ),
             const SizedBox(height: 6),
           ],
-          if (item.topicName != null) ...[
+          if (item.topicName != null && item.topicName!.isNotEmpty) ...[
             Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
@@ -93,7 +93,7 @@ class ConceptInfoWidget extends StatelessWidget {
             ),
             const SizedBox(height: 6),
           ],
-          if (item.topicDescription != null) ...[
+          if (item.topicDescription != null && item.topicDescription!.isNotEmpty) ...[
             Text(
               item.topicDescription!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'package:archipelago/src/features/shared/domain/user.dart';
 import 'package:archipelago/src/common_widgets/filter_interface.dart';
+import 'package:archipelago/src/features/shared/domain/base_filter_state.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/features/learn/data/learn_service.dart';
 import 'package:archipelago/src/features/learn/data/lesson_service.dart';
@@ -13,9 +12,10 @@ import 'package:archipelago/src/features/learn/services/exercise_generator_servi
 import 'package:archipelago/src/features/learn/config/new_cards_exercise_config.dart';
 import 'package:archipelago/src/features/learn/config/learned_cards_exercise_config.dart';
 import 'package:archipelago/src/constants/api_config.dart';
+import 'package:archipelago/src/features/shared/providers/auth_provider.dart';
 
-class LearnController extends ChangeNotifier implements FilterState {
-  User? _currentUser;
+class LearnController extends ChangeNotifier with BaseFilterStateMixin implements FilterState {
+  final AuthProvider _authProvider;
   List<Map<String, dynamic>> _concepts = []; // List of concepts, each with learning_lemma and native_lemma
   List<Exercise> _exercises = []; // List of exercises generated from concepts
   bool _isLoading = true;
@@ -61,8 +61,42 @@ class LearnController extends ChangeNotifier implements FilterState {
   Set<String> _selectedLearningStatus = {'new', 'due', 'learned'}; // All enabled by default
   List<int> _availableBins = []; // Available bins from Leitner distribution
   
+  LearnController(this._authProvider) {
+    // Listen to auth provider changes
+    _authProvider.addListener(_onAuthChanged);
+  }
+  
+  void _onAuthChanged() {
+    // Update user-dependent state when auth changes
+    _updateUserDependentState();
+    notifyListeners();
+  }
+  
+  void _updateUserDependentState() {
+    final user = _authProvider.currentUser;
+    if (user != null && user.langLearning != null && user.langLearning!.isNotEmpty) {
+      _learningLanguage = user.langLearning;
+      _nativeLanguage = user.langNative;
+      
+      // Initialize all bins by default if empty
+      if (_selectedLeitnerBins.isEmpty) {
+        final maxBins = user.leitnerMaxBins ?? 7;
+        _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
+      }
+    } else {
+      _learningLanguage = null;
+      _nativeLanguage = null;
+    }
+  }
+  
+  @override
+  void dispose() {
+    _authProvider.removeListener(_onAuthChanged);
+    super.dispose();
+  }
+  
   // Getters
-  User? get currentUser => _currentUser;
+  User? get currentUser => _authProvider.currentUser;
   List<Map<String, dynamic>> get concepts => _concepts; // List of concepts with both lemmas
   List<Exercise> get exercises => _exercises; // List of exercises
   bool get isLoading => _isLoading;
@@ -135,9 +169,10 @@ class LearnController extends ChangeNotifier implements FilterState {
   
   /// Initialize the controller and load user
   Future<void> initialize() async {
-    await _loadCurrentUser();
-    if (_currentUser != null && _currentUser!.langLearning != null && _currentUser!.langLearning!.isNotEmpty) {
-      _learningLanguage = _currentUser!.langLearning;
+    _updateUserDependentState();
+    // Use _learningLanguage which is set by _updateUserDependentState()
+    // This ensures we're using the correct value even if user data loads asynchronously
+    if (_authProvider.currentUser != null && _learningLanguage != null && _learningLanguage!.isNotEmpty) {
       await loadNewCards();
     } else {
       _isLoading = false;
@@ -146,31 +181,19 @@ class LearnController extends ChangeNotifier implements FilterState {
     }
   }
   
-  /// Load current user from SharedPreferences
-  Future<void> _loadCurrentUser() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('current_user');
-      if (userJson != null) {
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        _currentUser = User.fromJson(userMap);
-        
-        // Initialize all bins by default if empty
-        if (_selectedLeitnerBins.isEmpty) {
-          final maxBins = _currentUser!.leitnerMaxBins ?? 7;
-          _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
-        }
-        
-        notifyListeners();
-      }
-    } catch (e) {
-      // Ignore errors
-    }
-  }
-  
-  /// Refresh user data from SharedPreferences (public method)
+  /// Refresh user data (called when auth state changes)
   Future<void> refreshUser() async {
-    await _loadCurrentUser();
+    _updateUserDependentState();
+    // If we now have a learning language but were showing an error, try to load cards
+    if (_authProvider.currentUser != null && _learningLanguage != null && _learningLanguage!.isNotEmpty) {
+      if (_errorMessage == 'Please set your learning language in Profile settings') {
+        _errorMessage = null;
+        _isLoading = true;
+        notifyListeners();
+        await loadNewCards();
+      }
+    }
+    notifyListeners();
   }
   
   /// Batch update filters (without reloading cards - cards are only loaded when Generate Workout is pressed)
@@ -263,90 +286,28 @@ class LearnController extends ChangeNotifier implements FilterState {
     return _selectedTopicIds.toList();
   }
   
-  /// Get effective levels to pass to API
-  List<String>? getEffectiveLevels() {
-    if (_selectedLevels.isEmpty || _selectedLevels.length == 6) {
-      return null; // All levels selected
-    }
-    return _selectedLevels.toList();
-  }
+  // getEffectiveLevels and getEffectivePartOfSpeech are now provided by BaseFilterStateMixin
   
-  /// Get effective part of speech to pass to API
-  List<String>? getEffectivePartOfSpeech() {
-    final allPOS = FilterConstants.partOfSpeechValues.toSet();
-    if (_selectedPartOfSpeech.isEmpty || 
-        (_selectedPartOfSpeech.length == allPOS.length && 
-         _selectedPartOfSpeech.containsAll(allPOS))) {
-      return null; // All POS selected
-    }
-    return _selectedPartOfSpeech.toList();
-  }
-  
-  /// Get effective has_images filter (1, 0, or null)
-  int? getEffectiveHasImages() {
-    if (_hasImages && _hasNoImages) return null; // Include all
-    if (_hasImages && !_hasNoImages) return 1; // Only with images
-    if (!_hasImages && _hasNoImages) return 0; // Only without images
-    return null; // Both false means include all
-  }
-  
-  /// Get effective has_audio filter (1, 0, or null)
-  int? getEffectiveHasAudio() {
-    if (_hasAudio && _hasNoAudio) return null; // Include all
-    if (_hasAudio && !_hasNoAudio) return 1; // Only with audio
-    if (!_hasAudio && _hasNoAudio) return 0; // Only without audio
-    return null; // Both false means include all
-  }
-  
-  /// Get effective is_complete filter (1, 0, or null)
-  int? getEffectiveIsComplete() {
-    if (_isComplete && _isIncomplete) return null; // Include all
-    if (_isComplete && !_isIncomplete) return 1; // Only complete
-    if (!_isComplete && _isIncomplete) return 0; // Only incomplete
-    return null; // Both false means include all
-  }
+  // getEffectiveHasImages, getEffectiveHasAudio, getEffectiveIsComplete are now provided by BaseFilterStateMixin
 
   /// Set available bins from Leitner distribution
   void setAvailableBins(List<int> bins) {
     _availableBins = bins;
     // If selected bins is empty, initialize with all bins (1 to maxBins)
     if (_selectedLeitnerBins.isEmpty) {
-      final maxBins = _currentUser?.leitnerMaxBins ?? 7;
+      final maxBins = _authProvider.currentUser?.leitnerMaxBins ?? 7;
       _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
     }
   }
 
   /// Get effective leitner_bins filter (comma-separated string, or null if all bins selected)
-  /// Optimization: Returns null if all bins (1 to maxBins) are selected to skip backend joins
-  String? getEffectiveLeitnerBins() {
-    if (_selectedLeitnerBins.isEmpty) return null; // All bins selected (empty set means all)
-    
-    // Get maxBins from user, default to 7
-    final maxBins = _currentUser?.leitnerMaxBins ?? 7;
-    final allBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
-    
-    // If all bins (1 to maxBins) are selected, return null (no filtering)
-    if (_selectedLeitnerBins.length == allBins.length && 
-        _selectedLeitnerBins.containsAll(allBins)) {
-      return null; // All bins selected
-    }
-    
-    final sortedBins = _selectedLeitnerBins.toList()..sort();
-    return sortedBins.join(',');
+  /// Convenience method that gets maxBins from auth provider
+  String? getEffectiveLeitnerBinsForUser() {
+    final maxBins = _authProvider.currentUser?.leitnerMaxBins ?? 7;
+    return getEffectiveLeitnerBins(maxBins);
   }
 
-  /// Get effective learning_status filter (comma-separated string, or null if all statuses selected)
-  /// Optimization: Returns null if all statuses are selected to skip backend joins
-  String? getEffectiveLearningStatus() {
-    final allStatuses = {'new', 'due', 'learned'};
-    if (_selectedLearningStatus.isEmpty) return null; // All statuses selected (empty set means all)
-    if (_selectedLearningStatus.length == allStatuses.length &&
-        _selectedLearningStatus.containsAll(allStatuses)) {
-      return null; // All statuses selected
-    }
-    final sortedStatuses = _selectedLearningStatus.toList()..sort();
-    return sortedStatuses.join(',');
-  }
+  // getEffectiveLearningStatus is now provided by BaseFilterStateMixin
   
   /// Load new cards based on current filters
   Future<void> loadNewCards({
@@ -357,7 +318,7 @@ class LearnController extends ChangeNotifier implements FilterState {
     final mode = cardMode ?? _cardMode;
     final includeNewCards = mode == 'new';
     final includeLearnedCards = mode == 'learned';
-    if (_currentUser == null || _learningLanguage == null) {
+    if (_authProvider.currentUser == null || _learningLanguage == null) {
       _isLoading = false;
       _isRefreshing = false;
       _errorMessage = 'Please set your learning language in Profile settings';
@@ -381,9 +342,9 @@ class LearnController extends ChangeNotifier implements FilterState {
       // - Filtering to concepts with/without user_lemma based on parameters
       // - Randomly selecting max_n concepts
       final result = await LearnService.getNewCards(
-        userId: _currentUser!.id,
+        userId: _authProvider.currentUser!.id,
         language: _learningLanguage!,
-        nativeLanguage: _currentUser!.langNative,
+        nativeLanguage: _authProvider.currentUser!.langNative,
         maxN: _cardsToLearn,
         includeLemmas: _includeLemmas,
         includePhrases: _includePhrases,
@@ -396,7 +357,7 @@ class LearnController extends ChangeNotifier implements FilterState {
         isComplete: getEffectiveIsComplete(),
         includeWithUserLemma: includeLearnedCards,
         includeWithoutUserLemma: includeNewCards,
-        leitnerBins: getEffectiveLeitnerBins(),
+        leitnerBins: getEffectiveLeitnerBinsForUser(),
         learningStatus: getEffectiveLearningStatus(),
       );
       
@@ -463,9 +424,10 @@ class LearnController extends ChangeNotifier implements FilterState {
     int? cardsToLearn,
     String? cardMode,
   }) async {
-    await _loadCurrentUser();
-    if (_currentUser != null && _currentUser!.langLearning != null && _currentUser!.langLearning!.isNotEmpty) {
-      _learningLanguage = _currentUser!.langLearning;
+    _updateUserDependentState();
+    notifyListeners();
+    if (_authProvider.currentUser != null && _authProvider.currentUser!.langLearning != null && _authProvider.currentUser!.langLearning!.isNotEmpty) {
+      _learningLanguage = _authProvider.currentUser!.langLearning;
     }
     // Use generateWorkout to refresh with provided settings or current settings (same as Generate Lesson button)
     await generateWorkout(
@@ -512,13 +474,13 @@ class LearnController extends ChangeNotifier implements FilterState {
     notifyListeners();
     
     // Sync to backend if user is logged in and we have exercises
-    if (_currentUser != null && _exercisePerformances.isNotEmpty) {
+    if (_authProvider.currentUser != null && _exercisePerformances.isNotEmpty) {
       try {
         // Determine lesson kind from cardMode
         final kind = _cardMode; // 'new' or 'learned'
         
         final result = await LessonService.completeLesson(
-          userId: _currentUser!.id,
+          userId: _authProvider.currentUser!.id,
           kind: kind,
           performances: _exercisePerformances,
         );

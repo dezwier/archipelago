@@ -1,35 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:archipelago/src/features/profile/data/auth_service.dart';
-import 'package:archipelago/src/features/profile/data/language_service.dart';
 import 'package:archipelago/src/features/profile/data/statistics_service.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart';
-import 'package:archipelago/src/features/create/domain/topic.dart';
-import 'package:archipelago/src/features/profile/domain/user.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/topic.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
+import 'package:archipelago/src/features/shared/providers/topics_provider.dart';
+import 'package:archipelago/src/features/shared/providers/languages_provider.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
 import 'package:archipelago/src/features/profile/presentation/widgets/exercises_daily_chart_card.dart';
 import 'package:archipelago/src/features/profile/presentation/profile_filter_state.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 import 'package:archipelago/src/constants/api_config.dart';
+import 'package:archipelago/src/features/shared/providers/auth_provider.dart';
 import 'register_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  final VoidCallback? onLogout;
-  final Function(Future<void> Function())? onLogoutCallbackReady;
-  final Function(bool)? onLoginStateChanged;
-  final Function(Function())? onRefreshCallbackReady;
-  
   const ProfileScreen({
-    super.key, 
-    this.onLogout, 
-    this.onLogoutCallbackReady,
-    this.onLoginStateChanged,
-    this.onRefreshCallbackReady,
+    super.key,
   });
 
   @override
@@ -38,8 +27,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = false;
-  bool _isInitializing = true; // Track if we're still loading saved user
-  User? _currentUser;
   List<Language> _languages = [];
 
   // Statistics state
@@ -67,62 +54,81 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // Load saved user data
-    _loadSavedUser();
-    // Load languages
-    _loadLanguages();
-    // Load topics
-    _loadTopics();
-    // Register logout callback with parent
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onLogoutCallbackReady?.call(logout);
-      widget.onRefreshCallbackReady?.call(() {
-        _loadSavedUser(force: true);
-        _loadTopics();
-        _loadStatistics();
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    
+    // Load languages and topics from providers
+    _loadLanguages(languagesProvider);
+    _loadTopics(topicsProvider);
+    
+    // Listen to provider changes
+    topicsProvider.addListener(_onTopicsChanged);
+    languagesProvider.addListener(_onLanguagesChanged);
+    
+    // Listen to auth provider changes
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    authProvider.addListener(_onAuthChanged);
+    
+    // Load statistics if user is already logged in
+    if (authProvider.isLoggedIn) {
+      _loadStatistics();
+    }
+  }
+  
+  void _onAuthChanged() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    if (authProvider.isLoggedIn) {
+      _loadTopics(topicsProvider);
+      _loadStatistics();
+    } else {
+      // Clear statistics when logged out
+      setState(() {
+        _summaryStats = null;
+        _leitnerDistribution = null;
+        _practiceDaily = null;
       });
-    });
+    }
+  }
+  
+  void _onTopicsChanged() {
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    _loadTopics(topicsProvider);
+  }
+  
+  void _onLanguagesChanged() {
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    _loadLanguages(languagesProvider);
+  }
+  
+  @override
+  void dispose() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    authProvider.removeListener(_onAuthChanged);
+    topicsProvider.removeListener(_onTopicsChanged);
+    languagesProvider.removeListener(_onLanguagesChanged);
+    _loginUsernameController.dispose();
+    _loginPasswordController.dispose();
+    super.dispose();
   }
 
-  Future<void> _loadTopics() async {
+  void _loadTopics(TopicsProvider topicsProvider) {
     setState(() {
-      _isLoadingTopics = true;
+      _isLoadingTopics = topicsProvider.isLoading;
+      _topics = topicsProvider.topics;
+      // Set all topics as selected by default if nothing is selected
+      if (_topics.isNotEmpty && _filterState.selectedTopicIds.isEmpty) {
+        final topicIds = _topics.map((t) => t.id).toSet();
+        _filterState.updateFilters(topicIds: topicIds);
+        // Reload statistics after initializing topics
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        if (authProvider.currentUser != null) {
+          _loadStatistics();
+        }
+      }
     });
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('current_user');
-      int? userId;
-      if (userJson != null) {
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        final user = User.fromJson(userMap);
-        userId = user.id;
-      }
-
-      final topics = await TopicService.getTopics(userId: userId);
-
-      if (mounted) {
-        setState(() {
-          _topics = topics;
-          _isLoadingTopics = false;
-          // Set all topics as selected by default if nothing is selected
-          if (topics.isNotEmpty && _filterState.selectedTopicIds.isEmpty) {
-            final topicIds = topics.map((t) => t.id).toSet();
-            _filterState.updateFilters(topicIds: topicIds);
-            // Reload statistics after initializing topics
-            if (_currentUser != null) {
-              _loadStatistics();
-            }
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingTopics = false;
-        });
-      }
-    }
   }
 
   /// Extract available bins from Leitner distribution
@@ -137,12 +143,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showFilterSheet() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     showFilterSheet(
       context: context,
       filterState: _filterState,
       availableBins: _getAvailableBins(),
-      userId: _currentUser?.id,
-      maxBins: _currentUser?.leitnerMaxBins ?? 7,
+      userId: authProvider.currentUser?.id,
+      maxBins: authProvider.currentUser?.leitnerMaxBins ?? 7,
       onApplyFilters: ({
         Set<int>? topicIds,
         bool? showLemmasWithoutTopic,
@@ -184,71 +191,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _loadLanguages() async {
-    final languages = await LanguageService.getLanguages();
+  void _loadLanguages(LanguagesProvider languagesProvider) {
     setState(() {
-      _languages = languages;
+      _languages = languagesProvider.languages;
     });
   }
 
 
-  Future<void> _loadSavedUser({bool force = false}) async {
-    // Don't reload if user is already loaded (unless forced)
-    if (_currentUser != null && !_isInitializing && !force) {
-      return;
-    }
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('current_user');
-      if (userJson != null) {
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        if (mounted) {
-          setState(() {
-            _currentUser = User.fromJson(userMap);
-            _isInitializing = false;
-            // Initialize all bins by default if empty
-            _filterState.initializeBinsIfEmpty(_currentUser!.leitnerMaxBins);
-          });
-          widget.onLoginStateChanged?.call(true);
-          // Load statistics when user is loaded
-          _loadStatistics();
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isInitializing = false;
-          });
-          widget.onLoginStateChanged?.call(false);
-        }
-      }
-    } catch (e) {
-      // If loading fails, just continue without user
-      if (mounted) {
-        setState(() {
-          _isInitializing = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _saveUser(User user) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('current_user', jsonEncode(user.toJson()));
-    } catch (e) {
-      // If saving fails, continue anyway
-    }
-  }
-
-  Future<void> _clearSavedUser() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('current_user');
-    } catch (e) {
-      // If clearing fails, continue anyway
-    }
-  }
 
   Future<void> _handleLogin() async {
     final username = _loginUsernameController.text.trim();
@@ -263,23 +212,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _isLoading = true;
     });
 
-    final result = await AuthService.login(username, password);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final result = await authProvider.login(username, password);
 
     setState(() {
       _isLoading = false;
     });
 
     if (result['success'] == true) {
-      final user = result['user'] as User;
-      setState(() {
-        _currentUser = user;
-      });
-      await _saveUser(user);
-      widget.onLoginStateChanged?.call(true);
-      // Load topics and statistics after successful login
-      _loadTopics();
-      _loadStatistics();
       _showSuccess(result['message'] as String);
+      // Load topics and statistics after successful login
+      final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+      _loadTopics(topicsProvider);
+      _loadStatistics();
     } else {
       _showError(result['message'] as String);
     }
@@ -294,15 +239,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, animation, secondaryAnimation) {
         return RegisterScreen(
-          onRegisterSuccess: (user) async {
-            setState(() {
-              _currentUser = user;
-            });
-            await _saveUser(user);
-            widget.onLoginStateChanged?.call(true);
-            // Load topics and statistics after successful registration
-            _loadTopics();
-            _loadStatistics();
+          onRegisterSuccess: () {
+            // User is already saved by AuthProvider
+            // Topics and statistics will be loaded via _onAuthChanged
           },
         );
       },
@@ -360,7 +299,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// Pick image from gallery and upload
   Future<void> _pickProfileImage() async {
-    if (_currentUser == null || _isUploadingImage) return;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.currentUser == null || _isUploadingImage) return;
 
     try {
       final XFile? image = await _imagePicker.pickImage(
@@ -377,20 +317,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isUploadingImage = true;
       });
 
-      final result = await AuthService.uploadUserProfileImage(
-        _currentUser!.id,
-        File(image.path),
-      );
+      final result = await authProvider.uploadProfileImage(File(image.path));
 
       if (!mounted) return;
 
       if (result['success'] == true) {
-        final updatedUser = result['user'] as User;
         setState(() {
-          _currentUser = updatedUser;
           _isUploadingImage = false;
         });
-        await _saveUser(updatedUser);
         _showSuccess(result['message'] as String? ?? 'Profile image uploaded successfully');
       } else {
         setState(() {
@@ -410,17 +344,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> logout() async {
     if (!mounted) return;
     
-    setState(() {
-      _currentUser = null;
-      _loginUsernameController.clear();
-      _loginPasswordController.clear();
-    });
-    await _clearSavedUser();
-    widget.onLoginStateChanged?.call(false);
-    
-    if (mounted) {
-      widget.onLogout?.call();
-    }
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    _loginUsernameController.clear();
+    _loginPasswordController.clear();
+    await authProvider.logout();
   }
 
   void _fillTestLoginData(int userNumber) {
@@ -446,63 +373,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _loginUsernameController.dispose();
-    _loginPasswordController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    // Show loading while checking for saved user
-    if (_isInitializing) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        // Show loading while initializing
+        if (authProvider.isInitializing) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
 
-    // If user is logged in, show profile
-    if (_currentUser != null) {
-      return _buildProfileView();
-    }
+        // If user is logged in, show profile
+        if (authProvider.isLoggedIn) {
+          return _buildProfileView(authProvider);
+        }
 
-    // Otherwise show login/register
-    return _buildAuthView();
+        // Otherwise show login/register
+        return _buildAuthView();
+      },
+    );
   }
 
   Future<void> _refreshProfile() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     // Refresh user data from API if logged in
-    if (_currentUser != null) {
+    if (authProvider.currentUser != null) {
       try {
         // Use update-languages endpoint to get fresh user data (it returns full user object)
-        final result = await AuthService.updateUserLanguages(
-          _currentUser!.id,
+        await authProvider.updateUserLanguages(
           null, // Don't change native language
           null, // Don't change learning language
         );
-        if (result['success'] == true) {
-          final updatedUser = result['user'] as User;
-          setState(() {
-            _currentUser = updatedUser;
-          });
-          await _saveUser(updatedUser);
-        }
       } catch (e) {
-        // If refresh fails, just reload from cache
-        await _loadSavedUser(force: true);
+        // If refresh fails, just continue
       }
-    } else {
-      await _loadSavedUser(force: true);
     }
     
-    await Future.wait([
-      _loadTopics(),
-      _loadStatistics(isRefresh: true),
-    ]);
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    _loadTopics(topicsProvider);
+    await _loadStatistics(isRefresh: true);
   }
 
-  Widget _buildProfileView() {
+  Widget _buildProfileView(AuthProvider authProvider) {
+    final currentUser = authProvider.currentUser;
+    if (currentUser == null) return _buildAuthView();
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _refreshProfile,
@@ -556,10 +472,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   ),
                                 )
-                              : _currentUser!.imageUrl != null && _currentUser!.imageUrl!.isNotEmpty
+                              : currentUser.imageUrl != null && currentUser.imageUrl!.isNotEmpty
                                   ? ClipOval(
                                       child: Image.network(
-                                        _getImageUrl(_currentUser!.imageUrl!),
+                                        _getImageUrl(currentUser.imageUrl!),
                                         width: 48,
                                         height: 48,
                                         fit: BoxFit.cover,
@@ -602,19 +518,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _currentUser!.fullName ?? _currentUser!.username,
+                              currentUser.fullName ?? currentUser.username,
                               style: Theme.of(context).textTheme.headlineSmall,
                             ),
                             const SizedBox(height: 4),
                             Row(
                               children: [
                                 Text(
-                                  '@${_currentUser!.username}',
+                                  '@${currentUser.username}',
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  LanguageEmoji.getEmoji(_currentUser!.langNative),
+                                  LanguageEmoji.getEmoji(currentUser.langNative),
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                               ],
@@ -665,7 +581,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
           // Statistics cards
-          if (_isLoadingStats && !_isRefreshingStats && _practiceDaily == null && (_leitnerDistribution == null || _currentUser?.langLearning == null))
+          if (_isLoadingStats && !_isRefreshingStats && _practiceDaily == null && (_leitnerDistribution == null || currentUser?.langLearning == null))
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16.0),
               decoration: BoxDecoration(
@@ -690,7 +606,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             )
-          else if (_statsError != null && !_isRefreshingStats && _practiceDaily == null && (_leitnerDistribution == null || _currentUser?.langLearning == null))
+          else if (_statsError != null && !_isRefreshingStats && _practiceDaily == null && (_leitnerDistribution == null || currentUser?.langLearning == null))
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16.0),
               decoration: BoxDecoration(
@@ -871,7 +787,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 
   Future<void> _loadStatistics({bool isRefresh = false}) async {
-    if (_currentUser == null) return;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUser = authProvider.currentUser;
+    if (currentUser == null) return;
 
     setState(() {
       if (isRefresh) {
@@ -884,11 +802,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       // Get maxBins from user
-      final maxBins = _currentUser!.leitnerMaxBins;
+      final maxBins = currentUser.leitnerMaxBins;
 
       // Load summary stats with current filter state
       final summaryResult = await StatisticsService.getLanguageSummaryStats(
-        userId: _currentUser!.id,
+        userId: currentUser.id,
         includeLemmas: _filterState.includeLemmas,
         includePhrases: _filterState.includePhrases,
         topicIds: _filterState.topicIdsParam,
@@ -904,10 +822,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       // Load Leitner distribution for learning language
       LeitnerDistribution? leitnerDist;
-      if (_currentUser!.langLearning != null && _currentUser!.langLearning!.isNotEmpty) {
+      if (currentUser.langLearning != null && currentUser.langLearning!.isNotEmpty) {
         final leitnerResult = await StatisticsService.getLeitnerDistribution(
-          userId: _currentUser!.id,
-          languageCode: _currentUser!.langLearning!,
+          userId: currentUser.id,
+          languageCode: currentUser.langLearning!,
           includeLemmas: _filterState.includeLemmas,
           includePhrases: _filterState.includePhrases,
           topicIds: _filterState.topicIdsParam,
@@ -928,7 +846,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       // Load practice daily data
       final practiceDailyResult = await StatisticsService.getPracticeDaily(
-        userId: _currentUser!.id,
+        userId: currentUser.id,
         metricType: _practiceMetricType,
         includeLemmas: _filterState.includeLemmas,
         includePhrases: _filterState.includePhrases,
@@ -973,12 +891,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadPracticeDaily() async {
-    if (_currentUser == null) return;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUser = authProvider.currentUser;
+    if (currentUser == null) return;
 
     try {
       // Load only practice daily data
       final practiceDailyResult = await StatisticsService.getPracticeDaily(
-        userId: _currentUser!.id,
+        userId: currentUser.id,
         metricType: _practiceMetricType,
         includeLemmas: _filterState.includeLemmas,
         includePhrases: _filterState.includePhrases,

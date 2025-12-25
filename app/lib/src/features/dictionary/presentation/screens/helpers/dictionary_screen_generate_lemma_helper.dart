@@ -8,16 +8,31 @@ import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_ite
 import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
 import 'package:archipelago/src/features/create/data/card_generation_background_service.dart';
 
-/// Mixin for generate lemmas functionality in DictionaryScreen
-mixin DictionaryScreenGenerateLemma<T extends StatefulWidget> on State<T> {
-  DictionaryController get controller;
-  LanguageVisibilityManager get languageVisibilityManager;
-  CardGenerationState get cardGenerationState;
-  bool get isLoadingConcepts;
-  void setIsLoadingConcepts(bool value);
-  void onCardGenerationComplete();
+/// Helper class for generate lemmas functionality in DictionaryScreen
+class DictionaryScreenGenerateLemmaHelper {
+  final DictionaryController controller;
+  final LanguageVisibilityManager languageVisibilityManager;
+  final CardGenerationState cardGenerationState;
+  final bool Function() getIsLoadingConcepts;
+  final Function(bool) setIsLoadingConcepts;
+  final BuildContext context;
+  final bool Function() mounted;
+  final VoidCallback setState;
+  final VoidCallback onCardGenerationComplete;
 
-  Future<void> handleGenerateLemmas(BuildContext context) async {
+  DictionaryScreenGenerateLemmaHelper({
+    required this.controller,
+    required this.languageVisibilityManager,
+    required this.cardGenerationState,
+    required this.getIsLoadingConcepts,
+    required this.setIsLoadingConcepts,
+    required this.context,
+    required this.mounted,
+    required this.setState,
+    required this.onCardGenerationComplete,
+  });
+
+  Future<void> handleGenerateLemmas() async {
     // Get visible languages - use controller's visible language codes to ensure consistency
     final visibleLanguages = controller.visibleLanguageCodes;
     
@@ -32,9 +47,8 @@ mixin DictionaryScreenGenerateLemma<T extends StatefulWidget> on State<T> {
     }
     
     // Set loading state
-    setState(() {
-      setIsLoadingConcepts(true);
-    });
+    setState();
+    setIsLoadingConcepts(true);
     
     try {
       // Get all concepts from DictionaryResponse with current filters applied
@@ -107,10 +121,9 @@ mixin DictionaryScreenGenerateLemma<T extends StatefulWidget> on State<T> {
           // Error occurred, break the loop
           final errorMsg = result['message'] as String? ?? 'Failed to load concepts for generation';
           print('🔴 [Generate] Error on page $currentPage: $errorMsg');
-          setState(() {
-            setIsLoadingConcepts(false);
-          });
-          if (mounted) {
+          setState();
+          setIsLoadingConcepts(false);
+          if (mounted()) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(errorMsg),
@@ -173,10 +186,9 @@ mixin DictionaryScreenGenerateLemma<T extends StatefulWidget> on State<T> {
       print('🔵 [Generate] Found ${conceptIds.length} concepts with missing languages');
       
       if (conceptIds.isEmpty) {
-        setState(() {
-          setIsLoadingConcepts(false);
-        });
-        if (mounted) {
+        setState();
+        setIsLoadingConcepts(false);
+        if (mounted()) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('No concepts found that need cards for the visible languages'),
@@ -188,9 +200,8 @@ mixin DictionaryScreenGenerateLemma<T extends StatefulWidget> on State<T> {
       }
       
       // Set initial progress state
-      setState(() {
-        setIsLoadingConcepts(false);
-      });
+      setState();
+      setIsLoadingConcepts(false);
       
       cardGenerationState.startGeneration(
         totalConcepts: conceptIds.length,
@@ -219,10 +230,9 @@ mixin DictionaryScreenGenerateLemma<T extends StatefulWidget> on State<T> {
       // Start polling for progress updates
       cardGenerationState.startProgressPolling(onCardGenerationComplete);
     } catch (e) {
-      setState(() {
-        setIsLoadingConcepts(false);
-      });
-      if (mounted) {
+      setState();
+      setIsLoadingConcepts(false);
+      if (mounted()) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),

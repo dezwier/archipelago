@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/shared/domain/topic.dart';
 import 'filter_interface.dart';
 
 /// Constants for filter options
@@ -803,7 +803,7 @@ class _FilterSheetState extends State<FilterSheet> {
     return GestureDetector(
       onTap: isDisabled ? null : onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
           color: isDisabled
               ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)

@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:archipelago/src/features/learn/presentation/controllers/learn_controller.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/lesson_start_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/common/exercise_carousel_widget.dart';
 import 'package:archipelago/src/features/learn/presentation/widgets/lesson_report_card_widget.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart';
-import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/shared/domain/topic.dart';
 import 'package:archipelago/src/features/profile/data/statistics_service.dart';
-import 'package:archipelago/src/features/profile/data/language_service.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
+import 'package:archipelago/src/features/shared/providers/auth_provider.dart';
+import 'package:archipelago/src/features/shared/providers/topics_provider.dart';
+import 'package:archipelago/src/features/shared/providers/languages_provider.dart';
 
 class LearnScreen extends StatefulWidget {
-  final VoidCallback? onRefreshProfile;
-  
-  const LearnScreen({super.key, this.onRefreshProfile});
+  const LearnScreen({super.key});
 
   @override
   State<LearnScreen> createState() => _LearnScreenState();
@@ -34,19 +34,37 @@ class _LearnScreenState extends State<LearnScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = LearnController();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    _controller = LearnController(authProvider);
     _controller.addListener(_onControllerChanged);
     
-    // Initialize controller and load topics after user is loaded
-    _controller.initialize().then((_) {
-      _loadTopics();
-      _loadLanguages();
-      _loadLeitnerDistribution();
-    });
+    // Load topics and languages from providers
+    _loadTopics(topicsProvider);
+    _loadLanguages(languagesProvider);
+    
+    // Listen to provider changes
+    topicsProvider.addListener(_onTopicsChanged);
+    languagesProvider.addListener(_onLanguagesChanged);
+    
+    // Wait for auth provider to finish initializing, then initialize controller
+    if (authProvider.isInitializing) {
+      // Wait for initialization to complete
+      authProvider.addListener(_onAuthInitialized);
+    } else {
+      _initializeController();
+    }
   }
 
   @override
   void dispose() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    authProvider.removeListener(_onAuthInitialized);
+    topicsProvider.removeListener(_onTopicsChanged);
+    languagesProvider.removeListener(_onLanguagesChanged);
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     super.dispose();
@@ -56,6 +74,20 @@ class _LearnScreenState extends State<LearnScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _onAuthInitialized() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isInitializing) {
+      authProvider.removeListener(_onAuthInitialized);
+      _initializeController();
+    }
+  }
+
+  void _initializeController() {
+    _controller.initialize().then((_) {
+      _loadLeitnerDistribution();
+    });
   }
 
   Future<void> _handleRefresh() async {
@@ -88,41 +120,39 @@ class _LearnScreenState extends State<LearnScreen> {
   Future<void> _handleFinishLesson() async {
     // Finish the lesson
     await _controller.finishLesson();
-    // Refresh Leitner distribution after lesson completion to show updated bin counts
-    await _loadLeitnerDistribution();
-    // Refresh profile page statistics (summary and day chart) after lesson completion
-    widget.onRefreshProfile?.call();
+      // Refresh Leitner distribution after lesson completion to show updated bin counts
+      await _loadLeitnerDistribution();
   }
 
-  Future<void> _loadTopics() async {
+  void _loadTopics(TopicsProvider topicsProvider) {
     setState(() {
-      _isLoadingTopics = true;
+      _isLoadingTopics = topicsProvider.isLoading;
+      _topics = topicsProvider.topics;
     });
-
-    final userId = _controller.currentUser?.id;
-    final topics = await TopicService.getTopics(userId: userId);
-
-    if (mounted) {
-      setState(() {
-        _topics = topics;
-        _isLoadingTopics = false;
-      });
-      
-      // Initialize all topics as selected by default if no topics are currently selected
-      if (_controller.selectedTopicIds.isEmpty && topics.isNotEmpty) {
-        final allTopicIds = topics.map((t) => t.id).toSet();
-        _controller.batchUpdateFilters(topicIds: allTopicIds);
-      }
+    
+    // Initialize all topics as selected by default if no topics are currently selected
+    if (_controller.selectedTopicIds.isEmpty && _topics.isNotEmpty) {
+      final allTopicIds = _topics.map((t) => t.id).toSet();
+      _controller.batchUpdateFilters(topicIds: allTopicIds);
     }
   }
 
-  Future<void> _loadLanguages() async {
-    final languages = await LanguageService.getLanguages();
+  void _loadLanguages(LanguagesProvider languagesProvider) {
     if (mounted) {
       setState(() {
-        _languages = languages;
+        _languages = languagesProvider.languages;
       });
     }
+  }
+  
+  void _onTopicsChanged() {
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    _loadTopics(topicsProvider);
+  }
+  
+  void _onLanguagesChanged() {
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    _loadLanguages(languagesProvider);
   }
 
   Future<void> _loadLeitnerDistribution() async {
@@ -157,7 +187,7 @@ class _LearnScreenState extends State<LearnScreen> {
         hasImages: _controller.getEffectiveHasImages(),
         hasAudio: _controller.getEffectiveHasAudio(),
         isComplete: _controller.getEffectiveIsComplete(),
-        leitnerBins: _controller.getEffectiveLeitnerBins(),
+        leitnerBins: _controller.getEffectiveLeitnerBinsForUser(),
         learningStatus: _controller.getEffectiveLearningStatus(),
       );
 
@@ -212,7 +242,8 @@ class _LearnScreenState extends State<LearnScreen> {
   void _showFilterSheet() {
     // Reload topics if they're empty (in case they weren't loaded yet)
     if (_topics.isEmpty && !_isLoadingTopics) {
-      _loadTopics();
+      final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+      _loadTopics(topicsProvider);
     }
     
     showFilterSheet(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
 import 'package:intl/intl.dart';
 
 /// Widget displaying practice data per language per day as an area line chart.

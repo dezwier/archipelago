@@ -1,13 +1,12 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:archipelago/src/features/create/domain/topic.dart';
-import 'package:archipelago/src/features/create/data/topic_service.dart' show TopicService;
+import 'package:archipelago/src/features/shared/domain/topic.dart';
 import 'package:archipelago/src/features/create/data/flashcard_service.dart';
-import 'package:archipelago/src/features/profile/domain/user.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
-import 'package:archipelago/src/features/profile/data/language_service.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/user.dart';
+import 'package:archipelago/src/features/shared/providers/auth_provider.dart';
+import 'package:archipelago/src/features/shared/providers/topics_provider.dart';
+import 'package:archipelago/src/features/shared/providers/languages_provider.dart';
 
 /// Result of concept creation operation
 class CreateConceptResult {
@@ -29,6 +28,10 @@ class CreateConceptResult {
 }
 
 class CreateConceptController extends ChangeNotifier {
+  final AuthProvider _authProvider;
+  final TopicsProvider _topicsProvider;
+  final LanguagesProvider _languagesProvider;
+  
   // Form state
   String _term = '';
   String _description = '';
@@ -38,19 +41,68 @@ class CreateConceptController extends ChangeNotifier {
 
   // Loading states
   bool _isCreatingConcept = false;
-  bool _isLoadingTopics = false;
-  bool _isLoadingLanguages = false;
 
   // Status messages
   String? _statusMessage;
   Map<String, bool> _languageStatus = {}; // Track which languages have completed
 
   // Data
-  List<Topic> _topics = [];
-  List<Language> _languages = [];
-  int? _userId;
-  User? _currentUser;
   bool _hasSetDefaultLanguages = false;
+  
+  CreateConceptController(
+    this._authProvider,
+    this._topicsProvider,
+    this._languagesProvider,
+  ) {
+    // Listen to auth provider changes
+    _authProvider.addListener(_onAuthChanged);
+    // Listen to providers to update local state
+    _topicsProvider.addListener(_onTopicsChanged);
+    _languagesProvider.addListener(_onLanguagesChanged);
+    // Load initial data
+    _updateTopics();
+    _updateLanguages();
+  }
+  
+  void _onAuthChanged() {
+    // Update default languages when auth changes
+    _setDefaultLanguages();
+    notifyListeners();
+  }
+  
+  void _onTopicsChanged() {
+    _updateTopics();
+  }
+  
+  void _onLanguagesChanged() {
+    _updateLanguages();
+  }
+  
+  void _updateTopics() {
+    final topics = _topicsProvider.topics;
+    // Clear selected topic if it's no longer in the available topics (e.g., private topic after logout)
+    if (_selectedTopic != null && !topics.any((t) => t.id == _selectedTopic!.id)) {
+      _selectedTopic = null;
+    }
+    // Set the most recent topic as default (first in list since sorted by created_at desc)
+    if (topics.isNotEmpty && _selectedTopic == null) {
+      _selectedTopic = topics.first;
+    }
+    notifyListeners();
+  }
+  
+  void _updateLanguages() {
+    _setDefaultLanguages();
+    notifyListeners();
+  }
+  
+  @override
+  void dispose() {
+    _authProvider.removeListener(_onAuthChanged);
+    _topicsProvider.removeListener(_onTopicsChanged);
+    _languagesProvider.removeListener(_onLanguagesChanged);
+    super.dispose();
+  }
 
   // Getters
   String get term => _term;
@@ -59,14 +111,14 @@ class CreateConceptController extends ChangeNotifier {
   List<String> get selectedLanguages => _selectedLanguages;
   File? get selectedImage => _selectedImage;
   bool get isCreatingConcept => _isCreatingConcept;
-  bool get isLoadingTopics => _isLoadingTopics;
-  bool get isLoadingLanguages => _isLoadingLanguages;
+  bool get isLoadingTopics => _topicsProvider.isLoading;
+  bool get isLoadingLanguages => _languagesProvider.isLoading;
   String? get statusMessage => _statusMessage;
+  List<Topic> get topics => _topicsProvider.topics;
+  List<Language> get languages => _languagesProvider.languages;
   Map<String, bool> get languageStatus => _languageStatus;
-  List<Topic> get topics => _topics;
-  List<Language> get languages => _languages;
-  int? get userId => _userId;
-  User? get currentUser => _currentUser;
+  int? get userId => _authProvider.currentUser?.id;
+  User? get currentUser => _authProvider.currentUser;
 
   // Setters
   void setTerm(String value) {
@@ -104,94 +156,41 @@ class CreateConceptController extends ChangeNotifier {
     }
   }
 
-  /// Load user ID from SharedPreferences
-  Future<void> loadUserId() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('current_user');
-      if (userJson != null) {
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        final user = User.fromJson(userMap);
-        _userId = user.id;
-        _currentUser = user;
-        notifyListeners();
-        // Set default languages after loading user
-        _setDefaultLanguages();
-      } else {
-        // User logged out
-        _userId = null;
-        _currentUser = null;
-        notifyListeners();
-      }
-    } catch (e) {
-      // If loading user fails, clear user state
-      _userId = null;
-      _currentUser = null;
-      notifyListeners();
-    }
-  }
 
-  /// Load topics from TopicService
+  /// Refresh topics from provider
   Future<void> loadTopics() async {
-    _isLoadingTopics = true;
-    notifyListeners();
-
-    // Reload user ID in case login state changed
-    await loadUserId();
-
-    final topics = await TopicService.getTopics(userId: _userId);
-
-    // Clear selected topic if it's no longer in the available topics (e.g., private topic after logout)
-    if (_selectedTopic != null && !topics.any((t) => t.id == _selectedTopic!.id)) {
-      _selectedTopic = null;
-    }
-    // Set the most recent topic as default (first in list since sorted by created_at desc)
-    if (topics.isNotEmpty && _selectedTopic == null) {
-      _selectedTopic = topics.first;
-    }
-
-    _topics = topics;
-    _isLoadingTopics = false;
-    notifyListeners();
+    await _topicsProvider.refresh();
   }
 
-  /// Load languages from LanguageService
+  /// Refresh languages from provider
   Future<void> loadLanguages() async {
-    _isLoadingLanguages = true;
-    notifyListeners();
-
-    final languages = await LanguageService.getLanguages();
-
-    _languages = languages;
-    _isLoadingLanguages = false;
-    notifyListeners();
-
-    // Set default languages after loading
-    _setDefaultLanguages();
+    await _languagesProvider.refresh();
   }
 
   /// Set default languages based on user's native and learning languages
   void _setDefaultLanguages() {
+    final currentUser = _authProvider.currentUser;
+    final languages = _languagesProvider.languages;
     // Only set defaults once, and only if we have both user and languages loaded
-    if (_hasSetDefaultLanguages || _currentUser == null || _languages.isEmpty) {
+    if (_hasSetDefaultLanguages || currentUser == null || languages.isEmpty) {
       return;
     }
 
     final defaultLanguages = <String>[];
 
     // Add native language if it exists in available languages
-    if (_currentUser!.langNative.isNotEmpty) {
-      final nativeLangExists = _languages.any((lang) => lang.code == _currentUser!.langNative);
+    if (currentUser.langNative.isNotEmpty) {
+      final nativeLangExists = languages.any((lang) => lang.code == currentUser.langNative);
       if (nativeLangExists) {
-        defaultLanguages.add(_currentUser!.langNative);
+        defaultLanguages.add(currentUser.langNative);
       }
     }
 
     // Add learning language if it exists in available languages
-    if (_currentUser!.langLearning != null && _currentUser!.langLearning!.isNotEmpty) {
-      final learningLangExists = _languages.any((lang) => lang.code == _currentUser!.langLearning);
+    if (currentUser.langLearning != null && currentUser.langLearning!.isNotEmpty) {
+      final learningLangExists = languages.any((lang) => lang.code == currentUser.langLearning);
       if (learningLangExists) {
-        defaultLanguages.add(_currentUser!.langLearning!);
+        defaultLanguages.add(currentUser.langLearning!);
       }
     }
 
@@ -206,7 +205,8 @@ class CreateConceptController extends ChangeNotifier {
   /// Returns CreateConceptResult with success status and any relevant data
   Future<CreateConceptResult> createConcept() async {
     // Check if user is logged in
-    if (_userId == null) {
+    final userId = _authProvider.currentUser?.id;
+    if (userId == null) {
       return CreateConceptResult(
         success: false,
         message: 'You must be logged in to create concepts',
@@ -232,7 +232,7 @@ class CreateConceptController extends ChangeNotifier {
       term: term,
       description: _description.trim().isNotEmpty ? _description.trim() : null,
       topicId: _selectedTopic?.id,
-      userId: _userId,
+      userId: userId,
     );
 
     if (createResult['success'] != true) {
@@ -366,9 +366,8 @@ class CreateConceptController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Initialize the controller - load user, topics, and languages
+  /// Initialize the controller - load topics and languages
   Future<void> initialize() async {
-    await loadUserId();
     await Future.wait([
       loadTopics(),
       loadLanguages(),

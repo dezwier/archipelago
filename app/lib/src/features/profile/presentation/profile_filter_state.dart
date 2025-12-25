@@ -1,7 +1,8 @@
 import 'package:archipelago/src/common_widgets/filter_interface.dart';
+import 'package:archipelago/src/features/shared/domain/base_filter_state.dart';
 
 /// Filter state for profile statistics.
-class ProfileFilterState implements FilterState {
+class ProfileFilterState with BaseFilterStateMixin implements FilterState {
   Set<int> _selectedTopicIds = {};
   bool _showLemmasWithoutTopic = true;
   Set<String> _selectedLevels = {'A1', 'A2', 'B1', 'B2', 'C1', 'C2'};
@@ -96,30 +97,18 @@ class ProfileFilterState implements FilterState {
     if (learningStatus != null) _selectedLearningStatus = learningStatus;
   }
 
-  // Convert to API parameters
-  int? get hasImagesParam => _hasImages && !_hasNoImages ? 1 : (!_hasImages && _hasNoImages ? 0 : null);
-  int? get hasAudioParam => _hasAudio && !_hasNoAudio ? 1 : (!_hasAudio && _hasNoAudio ? 0 : null);
-  int? get isCompleteParam => _isComplete && !_isIncomplete ? 1 : (!_isComplete && _isIncomplete ? 0 : null);
+  // Convert to API parameters (using mixin methods)
+  int? get hasImagesParam => getEffectiveHasImages();
+  int? get hasAudioParam => getEffectiveHasAudio();
+  int? get isCompleteParam => getEffectiveIsComplete();
   List<int>? get topicIdsParam => _selectedTopicIds.isEmpty ? null : _selectedTopicIds.toList();
-  List<String>? get levelsParam => _selectedLevels.length == 6 ? null : _selectedLevels.toList();
-  List<String>? get partOfSpeechParam => _selectedPartOfSpeech.length == 10 ? null : _selectedPartOfSpeech.toList();
+  List<String>? get levelsParam => getEffectiveLevels();
+  List<String>? get partOfSpeechParam => getEffectivePartOfSpeech();
 
   /// Get effective leitner_bins filter (comma-separated string, or null if all bins selected)
-  /// Optimization: Returns null if all bins (1 to maxBins) are selected to skip backend joins
+  /// Uses the mixin method
   String? getLeitnerBinsParam(int maxBins) {
-    if (_selectedLeitnerBins.isEmpty) return null; // All bins selected (empty set means all)
-    
-    // Generate all bins from 1 to maxBins
-    final allBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
-    
-    // If all bins (1 to maxBins) are selected, return null (no filtering)
-    if (_selectedLeitnerBins.length == allBins.length && 
-        _selectedLeitnerBins.containsAll(allBins)) {
-      return null; // All bins selected
-    }
-    
-    final sortedBins = _selectedLeitnerBins.toList()..sort();
-    return sortedBins.join(',');
+    return getEffectiveLeitnerBins(maxBins);
   }
   
   /// Initialize all bins (1 to maxBins) if empty
@@ -130,16 +119,9 @@ class ProfileFilterState implements FilterState {
   }
 
   /// Get effective learning_status filter (comma-separated string, or null if all statuses selected)
-  /// Optimization: Returns null if all statuses are selected to skip backend joins
+  /// Uses the mixin method
   String? getLearningStatusParam() {
-    final allStatuses = {'new', 'due', 'learned'};
-    if (_selectedLearningStatus.isEmpty) return null; // All statuses selected (empty set means all)
-    if (_selectedLearningStatus.length == allStatuses.length &&
-        _selectedLearningStatus.containsAll(allStatuses)) {
-      return null; // All statuses selected
-    }
-    final sortedStatuses = _selectedLearningStatus.toList()..sort();
-    return sortedStatuses.join(',');
+    return getEffectiveLearningStatus();
   }
 }
 

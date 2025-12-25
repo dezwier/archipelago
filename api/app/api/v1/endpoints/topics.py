@@ -71,6 +71,20 @@ async def create_topic(
     return TopicResponse.model_validate(topic)
 
 
+@router.get("/{topic_id}", response_model=TopicResponse)
+async def get_topic(
+    topic_id: int,
+    session: Session = Depends(get_session)
+):
+    """Get a topic by ID."""
+    topic = session.get(Topic, topic_id)
+    if not topic:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+    
+    return TopicResponse.model_validate(topic)
+
+
 @router.put("/{topic_id}", response_model=TopicResponse)
 async def update_topic(
     topic_id: int,

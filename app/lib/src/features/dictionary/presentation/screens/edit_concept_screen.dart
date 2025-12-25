@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/edit_concept_controller.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
+import 'package:archipelago/src/features/shared/providers/topics_provider.dart';
 
 class EditConceptScreen extends StatefulWidget {
   final PairedDictionaryItem item;
@@ -20,7 +22,8 @@ class _EditConceptScreenState extends State<EditConceptScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = EditConceptController(item: widget.item);
+    final topicsProvider = Provider.of<TopicsProvider>(context, listen: false);
+    _controller = EditConceptController(item: widget.item, topicsProvider: topicsProvider);
     _controller.addListener(_onControllerChanged);
   }
 

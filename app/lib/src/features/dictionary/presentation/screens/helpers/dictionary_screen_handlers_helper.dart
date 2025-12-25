@@ -7,24 +7,47 @@ import 'package:archipelago/src/features/dictionary/presentation/widgets/sheets/
 import 'package:archipelago/src/features/dictionary/presentation/screens/edit_concept_screen.dart';
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_delete.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
-import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/topic.dart';
 import 'package:archipelago/src/features/profile/data/statistics_service.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
 
-/// Mixin for event handlers in DictionaryScreen
-mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {
-  DictionaryController get controller;
-  LanguageVisibilityManager get languageVisibilityManager;
-  List<Language> get allLanguages;
-  List<Topic> get allTopics;
-  bool get isLoadingTopics;
-  bool get showDescription;
-  bool get showExtraInfo;
-  void setShowDescription(bool value);
-  void setShowExtraInfo(bool value);
+/// Helper class for event handlers in DictionaryScreen
+class DictionaryScreenHandlersHelper {
+  final DictionaryController controller;
+  final LanguageVisibilityManager languageVisibilityManager;
+  List<Language> get allLanguages => _getAllLanguages();
+  List<Topic> get allTopics => _getAllTopics();
+  bool get isLoadingTopics => _getIsLoadingTopics();
+  final List<Language> Function() _getAllLanguages;
+  final List<Topic> Function() _getAllTopics;
+  final bool Function() _getIsLoadingTopics;
+  final bool showDescription;
+  final bool showExtraInfo;
+  final Function(bool) setShowDescription;
+  final Function(bool) setShowExtraInfo;
+  final BuildContext context;
+  final bool Function() mounted;
+  final VoidCallback setState;
 
-  Future<void> showFilteringMenu(BuildContext context) async {
+  DictionaryScreenHandlersHelper({
+    required this.controller,
+    required this.languageVisibilityManager,
+    required List<Language> Function() getAllLanguages,
+    required List<Topic> Function() getAllTopics,
+    required bool Function() getIsLoadingTopics,
+    required this.showDescription,
+    required this.showExtraInfo,
+    required this.setShowDescription,
+    required this.setShowExtraInfo,
+    required this.context,
+    required this.mounted,
+    required this.setState,
+  }) : _getAllLanguages = getAllLanguages,
+       _getAllTopics = getAllTopics,
+       _getIsLoadingTopics = getIsLoadingTopics;
+
+  Future<void> showFilteringMenu() async {
     // Load Leitner distribution if user and learning language are available
     List<int> availableBins = [];
     if (controller.currentUser?.id != null && 
@@ -108,7 +131,7 @@ mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {
     );
   }
 
-  void showFilterMenu(BuildContext context) {
+  void showFilterMenu() {
     // Get the first visible language for alphabetical sorting
     final firstVisibleLanguage = languageVisibilityManager.languagesToShow.isNotEmpty 
         ? languageVisibilityManager.languagesToShow.first 
@@ -122,23 +145,20 @@ mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {
       controller: controller,
       firstVisibleLanguage: firstVisibleLanguage,
       onLanguageVisibilityToggled: (languageCode) {
-        setState(() {
-          languageVisibilityManager.toggleLanguageVisibility(languageCode);
-          // Update language filter for search (concepts are no longer filtered by visibility)
-          controller.setLanguageCodes(languageVisibilityManager.getVisibleLanguageCodes());
-          // Update visible languages - this will refresh dictionary and counts
-          controller.setVisibleLanguageCodes(languageVisibilityManager.getVisibleLanguageCodes());
-        });
+        setState();
+        languageVisibilityManager.toggleLanguageVisibility(languageCode);
+        // Update language filter for search (concepts are no longer filtered by visibility)
+        controller.setLanguageCodes(languageVisibilityManager.getVisibleLanguageCodes());
+        // Update visible languages - this will refresh dictionary and counts
+        controller.setVisibleLanguageCodes(languageVisibilityManager.getVisibleLanguageCodes());
       },
       onShowDescriptionChanged: (value) {
-        setState(() {
-          setShowDescription(value);
-        });
+        setState();
+        setShowDescription(value);
       },
       onShowExtraInfoChanged: (value) {
-        setState(() {
-          setShowExtraInfo(value);
-        });
+        setState();
+        setShowExtraInfo(value);
       },
     );
   }
@@ -151,7 +171,7 @@ mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {
       ),
     );
 
-    if (result == true && mounted) {
+    if (result == true && mounted()) {
       // Refresh the dictionary list to show updated concept
       await controller.refresh();
       
@@ -164,7 +184,7 @@ mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {
       );
       
       // Close current drawer and reopen with updated item
-      if (mounted) {
+      if (mounted()) {
         Navigator.of(context).pop(); // Close current drawer
         handleItemTap(updatedItem); // Reopen with updated item
       }
@@ -177,10 +197,10 @@ mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {
       builder: (context) => const DeleteDictionaryDialog(),
     );
 
-    if (confirmed == true && mounted) {
+    if (confirmed == true && mounted()) {
       final success = await controller.deleteItem(item);
 
-      if (mounted) {
+      if (mounted()) {
         // Close the detail drawer if deletion was successful
         if (success) {
           Navigator.of(context).pop();
@@ -210,11 +230,12 @@ mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {
       languagesToShow: languageVisibilityManager.languagesToShow,
       onEdit: () => handleEdit(item),
       onDelete: () => handleDelete(item),
-      onItemUpdated: () => handleItemUpdated(context, item),
+      onItemUpdated: () => handleItemUpdated(item),
+      userId: controller.currentUser?.id,
     );
   }
 
-  Future<void> handleItemUpdated(BuildContext context, PairedDictionaryItem item) async {
+  Future<void> handleItemUpdated(PairedDictionaryItem item) async {
     // Refresh the dictionary list to get updated item
     await controller.refresh();
     

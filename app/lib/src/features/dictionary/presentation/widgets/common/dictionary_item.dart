@@ -70,11 +70,16 @@ class DictionaryItemWidget extends StatelessWidget {
     // Show placeholders for missing cards
     final widgets = <Widget>[];
     
-    for (int i = 0; i < languagesToShow.length; i++) {
-      final languageCode = languagesToShow[i];
+    // If languagesToShow is empty, fall back to showing all languages from the item's cards
+    final languagesToDisplay = languagesToShow.isNotEmpty 
+        ? languagesToShow 
+        : item.cards.map((c) => c.languageCode).toList();
+    
+    for (int i = 0; i < languagesToDisplay.length; i++) {
+      final languageCode = languagesToDisplay[i];
       
-      // Skip if language is not visible
-      if (languageVisibility[languageCode] != true) {
+      // Skip if language is not visible (only check if languageVisibility is not empty)
+      if (languageVisibility.isNotEmpty && languageVisibility[languageCode] != true) {
         continue;
       }
       

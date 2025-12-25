@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:archipelago/src/constants/api_config.dart';
-import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/shared/domain/topic.dart';
 
 class TopicService {
   /// Get topics for a user, sorted by created_at descending (most recent first).

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archipelago/src/constants/api_config.dart';
-import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'package:archipelago/src/features/shared/domain/user.dart';
 import 'package:archipelago/src/features/create/data/network_utils.dart';
 
 class ConceptService {

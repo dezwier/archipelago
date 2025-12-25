@@ -4,21 +4,34 @@ import 'package:archipelago/src/features/dictionary/presentation/controllers/dic
 import 'package:archipelago/src/features/dictionary/presentation/controllers/card_generation_state.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
-import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
-import 'package:archipelago/src/features/dictionary/data/lemma_audio_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:archipelago/src/constants/api_config.dart';
 
-/// Mixin for generate audio functionality in DictionaryScreen
-mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
-  DictionaryController get controller;
-  CardGenerationState get cardGenerationState;
-  bool get isLoadingConcepts;
-  void setIsLoadingConcepts(bool value);
+/// Helper class for generate images functionality in DictionaryScreen
+class DictionaryScreenGenerateImageHelper {
+  final DictionaryController controller;
+  final CardGenerationState cardGenerationState;
+  final bool Function() getIsLoadingConcepts;
+  final Function(bool) setIsLoadingConcepts;
+  final BuildContext context;
+  final bool Function() mounted;
+  final VoidCallback setState;
 
-  Future<void> handleGenerateAudio(BuildContext context) async {
+  DictionaryScreenGenerateImageHelper({
+    required this.controller,
+    required this.cardGenerationState,
+    required this.getIsLoadingConcepts,
+    required this.setIsLoadingConcepts,
+    required this.context,
+    required this.mounted,
+    required this.setState,
+  });
+
+  Future<void> handleGenerateImages() async {
     // Set loading state
-    setState(() {
-      setIsLoadingConcepts(true);
-    });
+    setState();
+    setIsLoadingConcepts(true);
     
     try {
       // Get all concepts from DictionaryResponse with current filters applied
@@ -27,16 +40,16 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
       int currentPage = 1;
       bool hasMorePages = true;
       
-      // Get visible languages - use controller's visible language codes to ensure consistency
-      final visibleLanguages = controller.visibleLanguageCodes;
-      
       // Get effective filters (same logic as controller)
       final effectiveLevels = controller.getEffectiveLevels();
       final effectivePOS = controller.getEffectivePartOfSpeech();
       final effectiveTopicIds = controller.getEffectiveTopicIds();
       
-      print('🔊 [Generate Audio] Starting to fetch all pages with filters...');
-      print('🔊 [Generate Audio] Using same parameters as controller:');
+      // Get visible languages - use controller's visible language codes to ensure consistency
+      final visibleLanguages = controller.visibleLanguageCodes;
+      
+      print('🟢 [Generate Images] Starting to fetch all pages with filters...');
+      print('🟢 [Generate Images] Using same parameters as controller:');
       print('  - userId: ${controller.currentUser?.id}');
       print('  - visibleLanguageCodes: $visibleLanguages');
       print('  - includeLemmas: ${controller.includeLemmas}');
@@ -51,7 +64,7 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
       print('  - isComplete: ${controller.getEffectiveIsComplete()}');
       
       while (hasMorePages) {
-        print('🔊 [Generate Audio] Fetching page $currentPage...');
+        print('🟢 [Generate Images] Fetching page $currentPage...');
         final result = await DictionaryService.getDictionary(
           userId: controller.currentUser?.id,
           page: currentPage,
@@ -72,11 +85,11 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
           isComplete: controller.getEffectiveIsComplete(),
         );
         
-        print('🔊 [Generate Audio] Page $currentPage result - success: ${result['success']}, items: ${(result['items'] as List?)?.length ?? 0}');
+        print('🟢 [Generate Images] Page $currentPage result - success: ${result['success']}, items: ${(result['items'] as List?)?.length ?? 0}');
         
         if (result['success'] == true) {
           final List<dynamic> itemsData = result['items'] as List<dynamic>;
-          print('🔊 [Generate Audio] Page $currentPage has ${itemsData.length} items');
+          print('🟢 [Generate Images] Page $currentPage has ${itemsData.length} items');
           
           // Convert to PairedDictionaryItem
           final items = itemsData
@@ -89,15 +102,14 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
           hasMorePages = result['has_next'] as bool? ?? false;
           currentPage++;
           
-          print('🔊 [Generate Audio] Has more pages: $hasMorePages');
+          print('🟢 [Generate Images] Has more pages: $hasMorePages');
         } else {
           // Error occurred, break the loop
-          final errorMsg = result['message'] as String? ?? 'Failed to load concepts for audio generation';
-          print('🔴 [Generate Audio] Error on page $currentPage: $errorMsg');
-          setState(() {
-            setIsLoadingConcepts(false);
-          });
-          if (mounted) {
+          final errorMsg = result['message'] as String? ?? 'Failed to load concepts for image generation';
+          print('🔴 [Generate Images] Error on page $currentPage: $errorMsg');
+          setState();
+          setIsLoadingConcepts(false);
+          if (mounted()) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(errorMsg),
@@ -109,32 +121,23 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
         }
       }
       
-      print('🔊 [Generate Audio] Finished fetching. Total items: ${allFilteredItems.length}');
+      print('🟢 [Generate Images] Finished fetching. Total items: ${allFilteredItems.length}');
       
-      // Collect all lemmas (cards) that don't have audio
-      final lemmasWithoutAudio = <DictionaryCard>[];
-      final lemmaToConceptTerm = <DictionaryCard, String>{};
+      // Filter to only concepts without images
+      final conceptsWithoutImages = allFilteredItems.where((item) {
+        final hasImage = item.firstImageUrl != null && item.firstImageUrl!.isNotEmpty;
+        return !hasImage;
+      }).toList();
       
-      for (final item in allFilteredItems) {
-        for (final card in item.cards) {
-          // Check if card has no audio (audioPath is null or empty)
-          if (card.audioPath == null || card.audioPath!.isEmpty) {
-            lemmasWithoutAudio.add(card);
-            lemmaToConceptTerm[card] = item.conceptTerm ?? 'Unknown';
-          }
-        }
-      }
+      print('🟢 [Generate Images] Found ${conceptsWithoutImages.length} concepts without images');
       
-      print('🔊 [Generate Audio] Found ${lemmasWithoutAudio.length} lemmas without audio');
-      
-      if (lemmasWithoutAudio.isEmpty) {
-        setState(() {
-          setIsLoadingConcepts(false);
-        });
-        if (mounted) {
+      if (conceptsWithoutImages.isEmpty) {
+        setState();
+        setIsLoadingConcepts(false);
+        if (mounted()) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('No lemmas found without audio'),
+              content: Text('No concepts found without images'),
               backgroundColor: Colors.blue,
             ),
           );
@@ -143,126 +146,148 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
       }
       
       // Set loading state to false before starting generation
-      setState(() {
-        setIsLoadingConcepts(false);
-      });
+      setState();
+      setIsLoadingConcepts(false);
       
-      // Prepare data for progress tracking
-      final conceptIds = lemmasWithoutAudio.map((card) => card.conceptId).toList();
+      // Prepare concept data for progress tracking
+      final conceptIds = conceptsWithoutImages.map((item) => item.conceptId).toList();
       final conceptTerms = <int, String>{};
-      for (final card in lemmasWithoutAudio) {
-        conceptTerms[card.conceptId] = lemmaToConceptTerm[card] ?? 'Unknown';
+      for (final item in conceptsWithoutImages) {
+        conceptTerms[item.conceptId] = item.conceptTerm ?? 'Unknown';
       }
       
       // Start generation state
       cardGenerationState.startGeneration(
-        totalConcepts: lemmasWithoutAudio.length,
+        totalConcepts: conceptsWithoutImages.length,
         conceptIds: conceptIds,
         conceptTerms: conceptTerms,
-        conceptMissingLanguages: {}, // Not needed for audio
-        type: GenerationType.audio,
+        conceptMissingLanguages: {}, // Not needed for images
+        type: GenerationType.images,
       );
       
-      // Generate audio for each lemma in a loop
+      // Generate images for each concept in a loop
       int successCount = 0;
       int errorCount = 0;
       final List<String> errors = [];
       
-      for (int i = 0; i < lemmasWithoutAudio.length; i++) {
+      for (int i = 0; i < conceptsWithoutImages.length; i++) {
         // Check if cancelled
         if (cardGenerationState.isCancelled) {
-          print('🟡 [Generate Audio] Generation cancelled');
+          print('🟡 [Generate Images] Generation cancelled');
           break;
         }
         
-        final card = lemmasWithoutAudio[i];
-        final term = card.translation;
-        final conceptTerm = lemmaToConceptTerm[card] ?? 'Unknown';
+        final item = conceptsWithoutImages[i];
+        final term = item.conceptTerm ?? item.sourceCard?.translation ?? '';
         
         // Update progress
-        cardGenerationState.updateAudioGenerationProgress(
+        cardGenerationState.updateImageGenerationProgress(
           currentIndex: i,
-          currentTerm: '$conceptTerm - $term',
-          audioCreated: successCount,
+          currentTerm: term,
+          imagesCreated: successCount,
           errors: errors,
         );
         
         if (term.isEmpty) {
-          print('🟡 [Generate Audio] Skipping lemma ${card.id} - no term available');
+          print('🟡 [Generate Images] Skipping concept ${item.conceptId} - no term available');
           errorCount++;
-          errors.add('Lemma ${card.id}: No term available');
+          errors.add('Concept ${item.conceptId}: No term available');
           continue;
         }
         
-        print('🔊 [Generate Audio] Generating audio ${i + 1}/${lemmasWithoutAudio.length} for lemma ${card.id} ($term)');
+        print('🟢 [Generate Images] Generating image ${i + 1}/${conceptsWithoutImages.length} for concept ${item.conceptId} ($term)');
         
         try {
-          final result = await LemmaAudioService.generateAudio(
-            lemmaId: card.id,
-            term: term,
-            description: card.description,
-            languageCode: card.languageCode,
+          final url = Uri.parse('${ApiConfig.apiBaseUrl}/concept-image/generate');
+          
+          final requestBody = <String, dynamic>{
+            'concept_id': item.conceptId,
+            'term': term,
+          };
+          
+          if (item.conceptDescription != null && item.conceptDescription!.isNotEmpty) {
+            requestBody['description'] = item.conceptDescription;
+          }
+          
+          if (item.topicId != null) {
+            requestBody['topic_id'] = item.topicId;
+          }
+          
+          if (item.topicDescription != null && item.topicDescription!.isNotEmpty) {
+            requestBody['topic_description'] = item.topicDescription;
+          }
+          
+          final response = await http.post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(requestBody),
           );
           
-          if (result['success'] == true) {
+          if (response.statusCode == 200) {
             successCount++;
-            print('✅ [Generate Audio] Successfully generated audio for lemma ${card.id}');
+            print('✅ [Generate Images] Successfully generated image for concept ${item.conceptId}');
             
             // Update progress with success
-            cardGenerationState.updateAudioGenerationProgress(
+            cardGenerationState.updateImageGenerationProgress(
               currentIndex: i + 1,
-              currentTerm: i + 1 < lemmasWithoutAudio.length 
-                  ? '${lemmaToConceptTerm[lemmasWithoutAudio[i + 1]] ?? "Unknown"} - ${lemmasWithoutAudio[i + 1].translation}'
+              currentTerm: i + 1 < conceptsWithoutImages.length 
+                  ? (conceptsWithoutImages[i + 1].conceptTerm ?? 'Unknown')
                   : null,
-              audioCreated: successCount,
+              imagesCreated: successCount,
               errors: errors,
             );
           } else {
             errorCount++;
-            final errorMessage = result['message'] as String? ?? 'Failed to generate audio';
-            errors.add('Lemma ${card.id} ($term): $errorMessage');
-            print('❌ [Generate Audio] Failed to generate audio for lemma ${card.id}: $errorMessage');
+            String errorMessage = 'Failed to generate image';
+            try {
+              final error = jsonDecode(response.body) as Map<String, dynamic>;
+              errorMessage = error['detail'] as String? ?? errorMessage;
+            } catch (_) {
+              errorMessage = 'Failed to generate image: ${response.statusCode}';
+            }
+            errors.add('Concept ${item.conceptId} ($term): $errorMessage');
+            print('❌ [Generate Images] Failed to generate image for concept ${item.conceptId}: $errorMessage');
             
             // Update progress with error
-            cardGenerationState.updateAudioGenerationProgress(
+            cardGenerationState.updateImageGenerationProgress(
               currentIndex: i + 1,
-              currentTerm: i + 1 < lemmasWithoutAudio.length 
-                  ? '${lemmaToConceptTerm[lemmasWithoutAudio[i + 1]] ?? "Unknown"} - ${lemmasWithoutAudio[i + 1].translation}'
+              currentTerm: i + 1 < conceptsWithoutImages.length 
+                  ? (conceptsWithoutImages[i + 1].conceptTerm ?? 'Unknown')
                   : null,
-              audioCreated: successCount,
+              imagesCreated: successCount,
               errors: errors,
             );
           }
         } catch (e) {
           errorCount++;
           final errorMsg = 'Error: ${e.toString()}';
-          errors.add('Lemma ${card.id} ($term): $errorMsg');
-          print('❌ [Generate Audio] Exception generating audio for lemma ${card.id}: $e');
+          errors.add('Concept ${item.conceptId} ($term): $errorMsg');
+          print('❌ [Generate Images] Exception generating image for concept ${item.conceptId}: $e');
           
           // Update progress with error
-          cardGenerationState.updateAudioGenerationProgress(
+          cardGenerationState.updateImageGenerationProgress(
             currentIndex: i + 1,
-            currentTerm: i + 1 < lemmasWithoutAudio.length 
-                ? '${lemmaToConceptTerm[lemmasWithoutAudio[i + 1]] ?? "Unknown"} - ${lemmasWithoutAudio[i + 1].translation}'
+            currentTerm: i + 1 < conceptsWithoutImages.length 
+                ? (conceptsWithoutImages[i + 1].conceptTerm ?? 'Unknown')
                 : null,
-            audioCreated: successCount,
+            imagesCreated: successCount,
             errors: errors,
           );
         }
       }
       
       // Mark generation as complete
-      cardGenerationState.updateAudioGenerationProgress(
-        currentIndex: lemmasWithoutAudio.length,
+      cardGenerationState.updateImageGenerationProgress(
+        currentIndex: conceptsWithoutImages.length,
         currentTerm: null,
-        audioCreated: successCount,
+        imagesCreated: successCount,
         errors: errors,
         isComplete: true,
       );
       
       // Show completion message
-      if (mounted) {
-        final message = 'Generated audio: $successCount success, $errorCount errors';
+      if (mounted()) {
+        final message = 'Generated images: $successCount success, $errorCount errors';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
@@ -276,7 +301,7 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
-                          title: const Text('Audio Generation Errors'),
+                          title: const Text('Image Generation Errors'),
                           content: SingleChildScrollView(
                             child: Text(errors.join('\n')),
                           ),
@@ -295,12 +320,11 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
         );
       }
       
-      print('🔊 [Generate Audio] Completed: $successCount success, $errorCount errors');
+      print('🟢 [Generate Images] Completed: $successCount success, $errorCount errors');
     } catch (e) {
-      setState(() {
-        setIsLoadingConcepts(false);
-      });
-      if (mounted) {
+      setState();
+      setIsLoadingConcepts(false);
+      if (mounted()) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),

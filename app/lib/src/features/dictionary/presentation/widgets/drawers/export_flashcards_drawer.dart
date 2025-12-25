@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
 import 'package:archipelago/src/common_widgets/language_selection_widget.dart';
 import 'package:archipelago/src/features/dictionary/data/flashcard_export_service.dart';
 

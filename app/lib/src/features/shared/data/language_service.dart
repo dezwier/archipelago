@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:archipelago/src/constants/api_config.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
 
 class LanguageService {
   static Future<List<Language>> getLanguages() async {

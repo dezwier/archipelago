@@ -1,20 +1,20 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'package:archipelago/src/features/shared/domain/user.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
 import 'package:archipelago/src/common_widgets/filter_interface.dart';
 import 'package:archipelago/src/common_widgets/filter_sheet.dart';
+import 'package:archipelago/src/features/shared/providers/auth_provider.dart';
+import 'package:archipelago/src/features/shared/domain/base_filter_state.dart';
 
 enum SortOption {
   alphabetical,
   timeCreatedRecentFirst,
   random,
 }
-class DictionaryController extends ChangeNotifier implements FilterState {
-  User? _currentUser;
+class DictionaryController extends ChangeNotifier with BaseFilterStateMixin implements FilterState {
+  final AuthProvider _authProvider;
   List<PairedDictionaryItem> _pairedItems = [];
   bool _isLoading = true;
   bool _isRefreshing = false;
@@ -78,8 +78,45 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   // Concept counts - fetched separately and not affected by search
   int? _totalConceptCount; // Total count of all concepts (doesn't change during search)
   
+  DictionaryController(this._authProvider) {
+    // Listen to auth provider changes
+    _authProvider.addListener(_onAuthChanged);
+  }
+  
+  void _onAuthChanged() {
+    // Update user-dependent state when auth changes
+    _updateUserDependentState();
+    notifyListeners();
+  }
+  
+  void _updateUserDependentState() {
+    final user = _authProvider.currentUser;
+    if (user != null) {
+      _sourceLanguageCode = user.langNative;
+      _targetLanguageCode = user.langLearning;
+      
+      // Initialize all bins by default if empty
+      if (_selectedLeitnerBins.isEmpty) {
+        final maxBins = user.leitnerMaxBins ?? 7;
+        _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
+      }
+    } else {
+      // When logged out, default to English
+      _sourceLanguageCode = 'en';
+      _targetLanguageCode = null;
+    }
+  }
+  
+  @override
+  void dispose() {
+    _authProvider.removeListener(_onAuthChanged);
+    _descriptionPollingTimer?.cancel();
+    _searchDebounceTimer?.cancel();
+    super.dispose();
+  }
+  
   // Getters
-  User? get currentUser => _currentUser;
+  User? get currentUser => _authProvider.currentUser;
   List<PairedDictionaryItem> get pairedItems => _pairedItems;
   bool get isLoading => _isLoading;
   bool get isRefreshing => _isRefreshing;
@@ -135,7 +172,10 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   
   // Set language filter (used for limiting search only, not for filtering concepts)
   void setLanguageCodes(List<String> languageCodes) {
-    if (_languageCodes != languageCodes) {
+    // Compare by value, not by reference, to avoid infinite loops
+    final currentSet = _languageCodes.toSet();
+    final newSet = languageCodes.toSet();
+    if (currentSet != newSet) {
       _languageCodes = languageCodes;
       // Only reload if there's a search query, otherwise just update the filter for future searches
       if (_searchQuery.trim().isNotEmpty) {
@@ -146,7 +186,10 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   
   // Set visible languages
   void setVisibleLanguageCodes(List<String> visibleLanguageCodes) {
-    if (_visibleLanguageCodes != visibleLanguageCodes) {
+    // Compare by value, not by reference, to avoid infinite loops
+    final currentSet = _visibleLanguageCodes.toSet();
+    final newSet = visibleLanguageCodes.toSet();
+    if (currentSet != newSet) {
       _visibleLanguageCodes = visibleLanguageCodes;
       // Always reload dictionary when visible languages change
       // This updates the cards shown
@@ -274,41 +317,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     }
   }
   
-  // Get effective has_images value to pass to API
-  // Returns: 1 = include only concepts with images, 0 = include only concepts without images, null = include all
-  int? getEffectiveHasImages() {
-    if (_hasImages && !_hasNoImages) {
-      return 1; // Only "Has Images" selected -> include only concepts with images
-    } else if (!_hasImages && _hasNoImages) {
-      return 0; // Only "Has no Images" selected -> include only concepts without images
-    }
-    // Both selected or neither selected -> include all
-    return null;
-  }
-  
-  // Get effective has_audio value to pass to API
-  // Returns: 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
-  int? getEffectiveHasAudio() {
-    if (_hasAudio && !_hasNoAudio) {
-      return 1; // Only "Has Audio" selected -> include only concepts with audio
-    } else if (!_hasAudio && _hasNoAudio) {
-      return 0; // Only "Has no Audio" selected -> include only concepts without audio
-    }
-    // Both selected or neither selected -> include all
-    return null;
-  }
-  
-  // Get effective is_complete value to pass to API
-  // Returns: 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
-  int? getEffectiveIsComplete() {
-    if (_isComplete && !_isIncomplete) {
-      return 1; // Only "Is Complete" selected -> include only complete concepts
-    } else if (!_isComplete && _isIncomplete) {
-      return 0; // Only "Is Incomplete" selected -> include only incomplete concepts
-    }
-    // Both selected or neither selected -> include all
-    return null;
-  }
+  // getEffectiveHasImages, getEffectiveHasAudio, getEffectiveIsComplete are now provided by BaseFilterStateMixin
   
   // Batch update multiple filters at once (used when filter drawer closes)
   // This prevents multiple API calls when multiple filters change simultaneously
@@ -419,39 +428,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     return _selectedTopicIds.toList();
   }
   
-  // Get effective levels to pass to API
-  // Returns null if all levels are selected (no filter needed)
-  List<String>? getEffectiveLevels() {
-    const allLevels = {'A1', 'A2', 'B1', 'B2', 'C1', 'C2'};
-    // If all levels are selected, return null (show all)
-    if (_selectedLevels.length == allLevels.length && 
-        _selectedLevels.containsAll(allLevels)) {
-      return null;
-    }
-    // If no levels selected, return null (show all)
-    if (_selectedLevels.isEmpty) {
-      return null;
-    }
-    // Otherwise return the selected levels
-    return _selectedLevels.toList();
-  }
-  
-  // Get effective part of speech values to pass to API
-  // Returns null if all POS are selected (no filter needed)
-  List<String>? getEffectivePartOfSpeech() {
-    final allPOS = FilterConstants.partOfSpeechValues.toSet();
-    // If all POS are selected, return null (show all)
-    if (_selectedPartOfSpeech.length == allPOS.length && 
-        _selectedPartOfSpeech.containsAll(allPOS)) {
-      return null;
-    }
-    // If no POS selected, return null (show all)
-    if (_selectedPartOfSpeech.isEmpty) {
-      return null;
-    }
-    // Otherwise return the selected POS
-    return _selectedPartOfSpeech.toList();
-  }
+  // getEffectiveLevels and getEffectivePartOfSpeech are now provided by BaseFilterStateMixin
 
   List<int> _availableBins = []; // Available bins from Leitner distribution
 
@@ -460,42 +437,19 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     _availableBins = bins;
     // If selected bins is empty, initialize with all bins (1 to maxBins)
     if (_selectedLeitnerBins.isEmpty) {
-      final maxBins = _currentUser?.leitnerMaxBins ?? 7;
+      final maxBins = _authProvider.currentUser?.leitnerMaxBins ?? 7;
       _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
     }
   }
 
   /// Get effective leitner_bins filter (comma-separated string, or null if all bins selected)
-  /// Optimization: Returns null if all bins (1 to maxBins) are selected to skip backend joins
-  String? getEffectiveLeitnerBins() {
-    if (_selectedLeitnerBins.isEmpty) return null; // All bins selected (empty set means all)
-    
-    // Get maxBins from user, default to 7
-    final maxBins = _currentUser?.leitnerMaxBins ?? 7;
-    final allBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
-    
-    // If all bins (1 to maxBins) are selected, return null (no filtering)
-    if (_selectedLeitnerBins.length == allBins.length && 
-        _selectedLeitnerBins.containsAll(allBins)) {
-      return null; // All bins selected
-    }
-    
-    final sortedBins = _selectedLeitnerBins.toList()..sort();
-    return sortedBins.join(',');
+  /// Convenience method that gets maxBins from auth provider
+  String? getEffectiveLeitnerBinsForUser() {
+    final maxBins = _authProvider.currentUser?.leitnerMaxBins ?? 7;
+    return getEffectiveLeitnerBins(maxBins);
   }
 
-  /// Get effective learning_status filter (comma-separated string, or null if all statuses selected)
-  /// Optimization: Returns null if all statuses are selected to skip backend joins
-  String? getEffectiveLearningStatus() {
-    final allStatuses = {'new', 'due', 'learned'};
-    if (_selectedLearningStatus.isEmpty) return null; // All statuses selected (empty set means all)
-    if (_selectedLearningStatus.length == allStatuses.length &&
-        _selectedLearningStatus.containsAll(allStatuses)) {
-      return null; // All statuses selected
-    }
-    final sortedStatuses = _selectedLearningStatus.toList()..sort();
-    return sortedStatuses.join(',');
-  }
+  // getEffectiveLearningStatus is now provided by BaseFilterStateMixin
   
   // Filtered items - when searching, items are already filtered by API
   List<PairedDictionaryItem> get filteredItems {
@@ -580,37 +534,19 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     }
 
     try {
-      // Load user data
-      final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('current_user');
-      final previousUserId = _currentUser?.id;
-      
-      if (userJson != null) {
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        _currentUser = User.fromJson(userMap);
-        _sourceLanguageCode = _currentUser!.langNative;
-        _targetLanguageCode = _currentUser!.langLearning;
-        
-        // Initialize all bins by default if empty
-        if (_selectedLeitnerBins.isEmpty) {
-          final maxBins = _currentUser!.leitnerMaxBins ?? 7;
-          _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
-        }
-      } else {
-        // When logged out, default to English
-        _currentUser = null;
-        _sourceLanguageCode = 'en';
-        _targetLanguageCode = null;
-      }
+      // Get user from auth provider
+      final previousUserId = _authProvider.currentUser?.id;
+      _updateUserDependentState();
       
       // Reload concept count if user state changed (login/logout)
-      if (previousUserId != _currentUser?.id) {
+      final currentUserId = _authProvider.currentUser?.id;
+      if (previousUserId != currentUserId) {
         _loadConceptCountTotal();
       }
 
       // Load dictionary - pass visible languages to get cards for those languages only
       final result = await DictionaryService.getDictionary(
-        userId: _currentUser?.id,
+        userId: _authProvider.currentUser?.id,
         page: 1,
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
@@ -625,7 +561,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
         hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
         hasAudio: getEffectiveHasAudio(), // Pass has_audio filter (1, 0, or null)
         isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
-        leitnerBins: getEffectiveLeitnerBins(), // Pass leitner_bins filter
+        leitnerBins: getEffectiveLeitnerBinsForUser(), // Pass leitner_bins filter
         learningStatus: getEffectiveLearningStatus(), // Pass learning_status filter
       );
 
@@ -676,7 +612,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     try {
       final nextPage = _currentPage + 1;
       final result = await DictionaryService.getDictionary(
-        userId: _currentUser?.id,
+        userId: _authProvider.currentUser?.id,
         page: nextPage,
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
@@ -691,7 +627,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
         hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
         hasAudio: getEffectiveHasAudio(), // Pass has_audio filter (1, 0, or null)
         isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
-        leitnerBins: getEffectiveLeitnerBins(), // Pass leitner_bins filter
+        leitnerBins: getEffectiveLeitnerBinsForUser(), // Pass leitner_bins filter
         learningStatus: getEffectiveLearningStatus(), // Pass learning_status filter
       );
 
@@ -757,7 +693,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   /// Load total concept count (doesn't change during search)
   Future<void> _loadConceptCountTotal() async {
     try {
-      final result = await DictionaryService.getConceptCountTotal(userId: _currentUser?.id);
+      final result = await DictionaryService.getConceptCountTotal(userId: _authProvider.currentUser?.id);
       if (result['success'] == true) {
         _totalConceptCount = result['count'] as int;
         notifyListeners();
@@ -771,7 +707,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
 
   /// Start generating descriptions for cards that don't have them
   Future<bool> startGenerateDescriptions() async {
-    if (_isGeneratingDescriptions || _currentUser == null) {
+    if (_isGeneratingDescriptions || _authProvider.currentUser == null) {
       return false;
     }
 
@@ -782,7 +718,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
 
     try {
       final result = await DictionaryService.startGenerateDescriptions(
-        userId: _currentUser!.id,
+        userId: _authProvider.currentUser!.id,
       );
 
       if (result['success'] == true) {
@@ -887,7 +823,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     
     try {
       final result = await DictionaryService.getDictionary(
-        userId: _currentUser?.id,
+        userId: _authProvider.currentUser?.id,
         page: 1,
         pageSize: _pageSize,
         sortBy: _getSortByParameter(),
@@ -902,7 +838,7 @@ class DictionaryController extends ChangeNotifier implements FilterState {
         hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
         hasAudio: getEffectiveHasAudio(), // Pass has_audio filter (1, 0, or null)
         isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
-        leitnerBins: getEffectiveLeitnerBins(), // Pass leitner_bins filter
+        leitnerBins: getEffectiveLeitnerBinsForUser(), // Pass leitner_bins filter
         learningStatus: getEffectiveLearningStatus(), // Pass learning_status filter
       );
       
@@ -929,11 +865,5 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     notifyListeners();
   }
 
-  @override
-  void dispose() {
-    _descriptionPollingTimer?.cancel();
-    _searchDebounceTimer?.cancel();
-    super.dispose();
-  }
 }
 

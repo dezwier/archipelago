@@ -4,22 +4,36 @@ import 'package:archipelago/src/features/dictionary/presentation/controllers/dic
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/drawers/export_flashcards_drawer.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
 
-/// Mixin for export functionality in DictionaryScreen
-mixin DictionaryScreenExport<T extends StatefulWidget> on State<T> {
-  DictionaryController get controller;
-  LanguageVisibilityManager get languageVisibilityManager;
-  List<Language> get allLanguages;
-  bool get isLoadingExport;
-  void setIsLoadingExport(bool value);
+/// Helper class for export functionality in DictionaryScreen
+class DictionaryScreenExportHelper {
+  final DictionaryController controller;
+  final LanguageVisibilityManager languageVisibilityManager;
+  List<Language> get allLanguages => _getAllLanguages();
+  final List<Language> Function() _getAllLanguages;
+  final bool Function() getIsLoadingExport;
+  final Function(bool) setIsLoadingExport;
+  final BuildContext context;
+  final bool Function() mounted;
+  final VoidCallback setState;
 
-  Future<void> showExportDrawer(BuildContext context) async {
-    if (isLoadingExport) return; // Prevent multiple simultaneous exports
+  DictionaryScreenExportHelper({
+    required this.controller,
+    required this.languageVisibilityManager,
+    required List<Language> Function() getAllLanguages,
+    required this.getIsLoadingExport,
+    required this.setIsLoadingExport,
+    required this.context,
+    required this.mounted,
+    required this.setState,
+  }) : _getAllLanguages = getAllLanguages;
+
+  Future<void> showExportDrawer() async {
+    if (getIsLoadingExport()) return; // Prevent multiple simultaneous exports
     
-    setState(() {
-      setIsLoadingExport(true);
-    });
+    setState();
+    setIsLoadingExport(true);
     
     try {
       final visibleLanguageCodes = languageVisibilityManager.getVisibleLanguageCodes();
@@ -151,10 +165,9 @@ mixin DictionaryScreenExport<T extends StatefulWidget> on State<T> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          setIsLoadingExport(false);
-        });
+      if (mounted()) {
+        setState();
+        setIsLoadingExport(false);
         print('🔵 [Export] Loading state reset');
       }
     }

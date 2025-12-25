@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:archipelago/src/features/profile/domain/statistics.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 import 'package:archipelago/src/features/profile/data/statistics_service.dart';
 import 'package:archipelago/src/features/profile/data/auth_service.dart';
-import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'package:archipelago/src/features/shared/domain/user.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 

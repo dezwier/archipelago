@@ -216,6 +216,14 @@ class DictionaryQueryService {
   static Future<Map<String, dynamic>> getTopicDataOnly(int? topicId) async {
     try {
       final topicData = await _fetchTopicData(topicId);
+      // If topicData is null, treat it as a failure
+      if (topicData == null) {
+        return {
+          'success': false,
+          'data': null,
+          'message': 'Topic not found or failed to fetch',
+        };
+      }
       return {
         'success': true,
         'data': topicData,

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'features/create/presentation/screens/create_screen.dart';
 import 'features/learn/presentation/screens/learn_screen.dart';
 import 'features/dictionary/presentation/screens/dictionary_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
-import 'features/profile/domain/user.dart';
-import 'features/profile/domain/language.dart';
-import 'features/profile/data/language_service.dart';
-import 'features/profile/data/auth_service.dart';
+import 'features/shared/providers/auth_provider.dart';
+import 'features/shared/providers/languages_provider.dart';
 import 'common_widgets/top_app_bar.dart';
 import 'common_widgets/language_button.dart';
 
@@ -21,133 +19,32 @@ class ArchipelagoApp extends StatefulWidget {
 
 class _ArchipelagoAppState extends State<ArchipelagoApp> {
   int _currentIndex = 0;
-  Future<void> Function()? _logoutCallback;
-  Function()? _refreshProfileCallback;
-  Function()? _refreshTopicsCallback;
-  Function()? _refreshDictionaryTopicsCallback;
   late final List<Widget> _screens;
   bool _isDarkMode = false;
-  bool _isLoggedIn = false;
-  User? _currentUser;
-  List<Language> _languages = [];
-  bool _isLoadingLanguages = false;
   bool _isDeletingData = false;
 
   @override
   void initState() {
     super.initState();
-    // Cache screens so they persist across rebuilds
+    // Cache screens so they persist across rebuilds - no callbacks needed
     _screens = [
-      GenerateFlashcardsScreen(
-        onRefreshCallbackReady: (callback) {
-          _refreshTopicsCallback = callback;
-        },
-      ),
-      DictionaryScreen(
-        onRefreshCallbackReady: (callback) {
-          _refreshDictionaryTopicsCallback = callback;
-        },
-      ),
-      LearnScreen(
-        onRefreshProfile: () {
-          _refreshProfileCallback?.call();
-        },
-      ),
-      ProfileScreen(
-        key: const ValueKey('profile_screen'),
-        onLogout: () {
-          // Logout callback is handled by _handleLogout
-        },
-        onLogoutCallbackReady: (callback) {
-          _logoutCallback = callback;
-        },
-        onLoginStateChanged: (isLoggedIn) {
-          setState(() {
-            _isLoggedIn = isLoggedIn;
-          });
-          if (isLoggedIn) {
-            _loadCurrentUser();
-            // Reload topic islands and dictionary filter buttons after login
-            _refreshTopicsCallback?.call();
-            _refreshDictionaryTopicsCallback?.call();
-          } else {
-            setState(() {
-              _currentUser = null;
-            });
-            // Reload topics when logged out (to remove private topics)
-            _refreshTopicsCallback?.call();
-            _refreshDictionaryTopicsCallback?.call();
-          }
-        },
-        onRefreshCallbackReady: (callback) {
-          _refreshProfileCallback = callback;
-        },
-      ),
+      const GenerateFlashcardsScreen(),
+      const DictionaryScreen(),
+      const LearnScreen(),
+      const ProfileScreen(key: ValueKey('profile_screen')),
     ];
     _loadThemePreference();
-    _checkLoginState();
-    _loadLanguages();
   }
 
-  Future<void> _loadLanguages() async {
-    setState(() {
-      _isLoadingLanguages = true;
-    });
-    final languages = await LanguageService.getLanguages();
-    setState(() {
-      _languages = languages;
-      _isLoadingLanguages = false;
-    });
-  }
+  Future<void> _updateUserLanguage(String type, String? languageCode, AuthProvider authProvider) async {
+    if (authProvider.currentUser == null) return;
 
-  Future<void> _loadCurrentUser() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('current_user');
-      if (userJson != null) {
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        setState(() {
-          _currentUser = User.fromJson(userMap);
-        });
-      }
-    } catch (e) {
-      // Ignore errors
-    }
-  }
-
-
-  Future<void> _updateUserLanguage(String type, String? languageCode) async {
-    if (_currentUser == null) return;
-
-    setState(() {
-      _isLoadingLanguages = true;
-    });
-
-    final result = await AuthService.updateUserLanguages(
-      _currentUser!.id,
+    final result = await authProvider.updateUserLanguages(
       type == 'native' ? languageCode : null,
       type == 'learning' ? languageCode : null,
     );
 
-    setState(() {
-      _isLoadingLanguages = false;
-    });
-
-    if (result['success'] == true) {
-      final updatedUser = result['user'] as User;
-      setState(() {
-        _currentUser = updatedUser;
-      });
-      // Save updated user to SharedPreferences
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('current_user', jsonEncode(updatedUser.toJson()));
-      } catch (e) {
-        // Ignore errors
-      }
-      // Notify ProfileScreen to refresh
-      _refreshProfileCallback?.call();
-    } else {
+    if (result['success'] != true) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -156,24 +53,6 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
           ),
         );
       }
-    }
-  }
-
-  Future<void> _checkLoginState() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('current_user');
-      setState(() {
-        _isLoggedIn = userJson != null;
-      });
-      if (_isLoggedIn) {
-        await _loadCurrentUser();
-      }
-    } catch (e) {
-      // If checking fails, assume not logged in
-      setState(() {
-        _isLoggedIn = false;
-      });
     }
   }
 
@@ -192,7 +71,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
     await prefs.setBool('dark_mode', value);
   }
 
-  Future<void> _handleLogout() async {
+  Future<void> _handleLogout(AuthProvider authProvider) async {
     // Close drawer first to avoid context issues
     if (mounted) {
       try {
@@ -205,20 +84,11 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
     }
     
     // Then perform logout async operation
-    if (_logoutCallback != null && mounted) {
-      try {
-        await _logoutCallback!();
-        setState(() {
-          _isLoggedIn = false;
-        });
-      } catch (e) {
-        // Ignore errors during logout
-      }
-    }
+    await authProvider.logout();
   }
 
-  Future<void> _handleDeleteUserDataWithContext(BuildContext buttonContext) async {
-    if (_currentUser == null || !mounted) {
+  Future<void> _handleDeleteUserDataWithContext(BuildContext buttonContext, AuthProvider authProvider) async {
+    if (authProvider.currentUser == null || !mounted) {
       return;
     }
 
@@ -240,7 +110,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
     });
 
     try {
-      final result = await AuthService.deleteUserData(_currentUser!.id);
+      final result = await authProvider.deleteUserData();
 
       if (mounted) {
         if (result['success'] == true) {
@@ -250,8 +120,6 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
               backgroundColor: Colors.green,
             ),
           );
-          // Refresh profile data
-          _refreshProfileCallback?.call();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -297,8 +165,8 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
         useMaterial3: true,
       ),
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: Builder(
-        builder: (context) {
+      home: Consumer<AuthProvider>(
+        builder: (context, authProvider, _) {
           // Fixed colors for top bars - same in light and dark theme
           const topBarColor = Color(0xFF1E3A5F);
           const topBarTextColor = Colors.white;
@@ -307,11 +175,13 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
           // Determine title based on current screen
           final List<String> screenTitles = ['Create', 'Dictionary', 'Learn', 'Profile'];
           final currentTitle = screenTitles[_currentIndex];
+          final isLoggedIn = authProvider.isLoggedIn;
+          final currentUser = authProvider.currentUser;
           
           return Scaffold(
             appBar: TopAppBar(title: currentTitle),
             drawer: Drawer(
-              key: ValueKey('drawer_$_isLoggedIn'),
+              key: ValueKey('drawer_$isLoggedIn'),
               width: MediaQuery.of(context).size.width * 0.7,
               backgroundColor: Colors.transparent,
               child: Column(
@@ -371,136 +241,143 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                         children: [
                           const SizedBox(height: 22),
                           // Language settings - only show when logged in
-                          if (_isLoggedIn && _currentUser != null) ...[
-                            const SizedBox(height: 8),
-                            // Native Language
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Native Language',
-                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  // Language buttons grid - 2 per row
-                                  Column(
-                                    children: [
-                                      for (int i = 0; i < _languages.length; i += 2)
-                                        Padding(
-                                          padding: EdgeInsets.only(bottom: i + 2 < _languages.length ? 2 : 0),
-                                          child: Row(
+                          if (isLoggedIn && currentUser != null)
+                            Consumer<LanguagesProvider>(
+                              builder: (context, languagesProvider, _) {
+                                final languages = languagesProvider.languages;
+                                final isLoadingLanguages = languagesProvider.isLoading;
+                                return Column(
+                                  children: [
+                                    const SizedBox(height: 8),
+                                    // Native Language
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
                                             children: [
-                                              Expanded(
-                                                child: LanguageButton(
-                                                  language: _languages[i],
-                                                  isSelected: _languages[i].code == _currentUser!.langNative,
-                                                  onPressed: _isLoadingLanguages
-                                                      ? null
-                                                      : () {
-                                                          if (_languages[i].code != _currentUser!.langNative) {
-                                                            _updateUserLanguage('native', _languages[i].code);
-                                                          }
-                                                        },
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Native Language',
+                                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                  fontWeight: FontWeight.w600,
                                                 ),
                                               ),
-                                              if (i + 1 < _languages.length) ...[
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: LanguageButton(
-                                                    language: _languages[i + 1],
-                                                    isSelected: _languages[i + 1].code == _currentUser!.langNative,
-                                                    onPressed: _isLoadingLanguages
-                                                        ? null
-                                                        : () {
-                                                            if (_languages[i + 1].code != _currentUser!.langNative) {
-                                                              _updateUserLanguage('native', _languages[i + 1].code);
-                                                            }
-                                                          },
-                                                  ),
-                                                ),
-                                              ] else
-                                                const Spacer(),
                                             ],
                                           ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            // Learning Language
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Learning Language',
-                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  // Language buttons grid - 2 per row
-                                  Column(
-                                    children: [
-                                      for (int i = 0; i < _languages.length; i += 2)
-                                        Padding(
-                                          padding: EdgeInsets.only(bottom: i + 2 < _languages.length ? 2 : 0),
-                                          child: Row(
+                                          const SizedBox(height: 12),
+                                          // Language buttons grid - 2 per row
+                                          Column(
                                             children: [
-                                              Expanded(
-                                                child: LanguageButton(
-                                                  language: _languages[i],
-                                                  isSelected: _languages[i].code == _currentUser!.langLearning,
-                                                  onPressed: _isLoadingLanguages
-                                                      ? null
-                                                      : () {
-                                                          _updateUserLanguage('learning', _languages[i].code);
-                                                        },
+                                              for (int i = 0; i < languages.length; i += 2)
+                                                Padding(
+                                                  padding: EdgeInsets.only(bottom: i + 2 < languages.length ? 2 : 0),
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: LanguageButton(
+                                                          language: languages[i],
+                                                          isSelected: languages[i].code == currentUser.langNative,
+                                                          onPressed: isLoadingLanguages
+                                                              ? null
+                                                              : () {
+                                                                  if (languages[i].code != currentUser.langNative) {
+                                                                    _updateUserLanguage('native', languages[i].code, authProvider);
+                                                                  }
+                                                                },
+                                                        ),
+                                                      ),
+                                                      if (i + 1 < languages.length) ...[
+                                                        const SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: LanguageButton(
+                                                            language: languages[i + 1],
+                                                            isSelected: languages[i + 1].code == currentUser.langNative,
+                                                            onPressed: isLoadingLanguages
+                                                                ? null
+                                                                : () {
+                                                                    if (languages[i + 1].code != currentUser.langNative) {
+                                                                      _updateUserLanguage('native', languages[i + 1].code, authProvider);
+                                                                    }
+                                                                  },
+                                                          ),
+                                                        ),
+                                                      ] else
+                                                        const Spacer(),
+                                                    ],
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    // Learning Language
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Learning Language',
+                                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                  fontWeight: FontWeight.w600,
                                                 ),
                                               ),
-                                              if (i + 1 < _languages.length) ...[
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: LanguageButton(
-                                                    language: _languages[i + 1],
-                                                    isSelected: _languages[i + 1].code == _currentUser!.langLearning,
-                                                    onPressed: _isLoadingLanguages
-                                                        ? null
-                                                        : () {
-                                                            _updateUserLanguage('learning', _languages[i + 1].code);
-                                                          },
-                                                  ),
-                                                ),
-                                              ] else
-                                                const Spacer(),
                                             ],
                                           ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                                          const SizedBox(height: 12),
+                                          // Language buttons grid - 2 per row
+                                          Column(
+                                            children: [
+                                              for (int i = 0; i < languages.length; i += 2)
+                                                Padding(
+                                                  padding: EdgeInsets.only(bottom: i + 2 < languages.length ? 2 : 0),
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: LanguageButton(
+                                                          language: languages[i],
+                                                          isSelected: languages[i].code == currentUser.langLearning,
+                                                          onPressed: isLoadingLanguages
+                                                              ? null
+                                                              : () {
+                                                                  _updateUserLanguage('learning', languages[i].code, authProvider);
+                                                                },
+                                                        ),
+                                                      ),
+                                                      if (i + 1 < languages.length) ...[
+                                                        const SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: LanguageButton(
+                                                            language: languages[i + 1],
+                                                            isSelected: languages[i + 1].code == currentUser.langLearning,
+                                                            onPressed: isLoadingLanguages
+                                                                ? null
+                                                                : () {
+                                                                    _updateUserLanguage('learning', languages[i + 1].code, authProvider);
+                                                                  },
+                                                          ),
+                                                        ),
+                                                      ] else
+                                                        const Spacer(),
+                                                    ],
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
-                            const SizedBox(height: 28),
-                            const Divider(height: 1),
-                          ],
                           const SizedBox(height: 12),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -523,7 +400,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                           ),
                           const SizedBox(height: 12),
                           // Logout button - only show when logged in
-                          if (_isLoggedIn) ...[
+                          if (isLoggedIn) ...[
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 16.0),
                               child: Row(
@@ -542,7 +419,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                                       color: Theme.of(context).colorScheme.onSurface,
                                     ),
                                     onPressed: () {
-                                      _handleLogout();
+                                      _handleLogout(authProvider);
                                     },
                                   ),
                                 ],
@@ -561,7 +438,7 @@ class _ArchipelagoAppState extends State<ArchipelagoApp> {
                                           ? null
                                           : () {
                                               print('DEBUG: Button tapped');
-                                              _handleDeleteUserDataWithContext(buttonContext);
+                                              _handleDeleteUserDataWithContext(buttonContext, authProvider);
                                             },
                                       icon: _isDeletingData
                                           ? SizedBox(

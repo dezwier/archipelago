@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/create/domain/topic.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/topic.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
 import 'package:archipelago/src/common_widgets/language_selection_widget.dart';
 import 'drawers/topic_drawer.dart';
 

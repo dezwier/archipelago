@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 
 class LanguageButton extends StatelessWidget {

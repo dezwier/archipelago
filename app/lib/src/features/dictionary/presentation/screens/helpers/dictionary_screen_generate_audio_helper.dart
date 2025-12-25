@@ -7,18 +7,30 @@ import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_ite
 import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
 import 'package:archipelago/src/features/dictionary/data/lemma_audio_service.dart';
 
-/// Mixin for generate audio functionality in DictionaryScreen
-mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
-  DictionaryController get controller;
-  CardGenerationState get cardGenerationState;
-  bool get isLoadingConcepts;
-  void setIsLoadingConcepts(bool value);
+/// Helper class for generate audio functionality in DictionaryScreen
+class DictionaryScreenGenerateAudioHelper {
+  final DictionaryController controller;
+  final CardGenerationState cardGenerationState;
+  final bool Function() getIsLoadingConcepts;
+  final Function(bool) setIsLoadingConcepts;
+  final BuildContext context;
+  final bool Function() mounted;
+  final VoidCallback setState;
 
-  Future<void> handleGenerateAudio(BuildContext context) async {
+  DictionaryScreenGenerateAudioHelper({
+    required this.controller,
+    required this.cardGenerationState,
+    required this.getIsLoadingConcepts,
+    required this.setIsLoadingConcepts,
+    required this.context,
+    required this.mounted,
+    required this.setState,
+  });
+
+  Future<void> handleGenerateAudio() async {
     // Set loading state
-    setState(() {
-      setIsLoadingConcepts(true);
-    });
+    setState();
+    setIsLoadingConcepts(true);
     
     try {
       // Get all concepts from DictionaryResponse with current filters applied
@@ -94,10 +106,9 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
           // Error occurred, break the loop
           final errorMsg = result['message'] as String? ?? 'Failed to load concepts for audio generation';
           print('🔴 [Generate Audio] Error on page $currentPage: $errorMsg');
-          setState(() {
-            setIsLoadingConcepts(false);
-          });
-          if (mounted) {
+          setState();
+          setIsLoadingConcepts(false);
+          if (mounted()) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(errorMsg),
@@ -128,10 +139,9 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
       print('🔊 [Generate Audio] Found ${lemmasWithoutAudio.length} lemmas without audio');
       
       if (lemmasWithoutAudio.isEmpty) {
-        setState(() {
-          setIsLoadingConcepts(false);
-        });
-        if (mounted) {
+        setState();
+        setIsLoadingConcepts(false);
+        if (mounted()) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('No lemmas found without audio'),
@@ -143,9 +153,8 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
       }
       
       // Set loading state to false before starting generation
-      setState(() {
-        setIsLoadingConcepts(false);
-      });
+      setState();
+      setIsLoadingConcepts(false);
       
       // Prepare data for progress tracking
       final conceptIds = lemmasWithoutAudio.map((card) => card.conceptId).toList();
@@ -261,7 +270,7 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
       );
       
       // Show completion message
-      if (mounted) {
+      if (mounted()) {
         final message = 'Generated audio: $successCount success, $errorCount errors';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -297,10 +306,9 @@ mixin DictionaryScreenGenerateAudio<T extends StatefulWidget> on State<T> {
       
       print('🔊 [Generate Audio] Completed: $successCount success, $errorCount errors');
     } catch (e) {
-      setState(() {
-        setIsLoadingConcepts(false);
-      });
-      if (mounted) {
+      setState();
+      setIsLoadingConcepts(false);
+      if (mounted()) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),

@@ -1,4 +1,4 @@
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
 
 class LanguageVisibilityManager {
   Map<String, bool> _languageVisibility = {};
@@ -20,14 +20,20 @@ class LanguageVisibilityManager {
     String? sourceCode,
     String? targetCode,
   ) {
-    if (_languagesToShow.isNotEmpty) {
-      return; // Already initialized
-    }
-
+    // Always re-initialize to ensure correct state (handles hot restart)
+    // Initialize all languages to false, then enable native and learning languages
     _languageVisibility = {
       for (var lang in allLanguages) 
-        lang.code: (lang.code == sourceCode || lang.code == targetCode)
+        lang.code: false
     };
+    
+    // Enable native and learning languages
+    if (sourceCode != null) {
+      _languageVisibility[sourceCode] = true;
+    }
+    if (targetCode != null) {
+      _languageVisibility[targetCode] = true;
+    }
     
     _languagesToShow = [];
     if (sourceCode != null) {
@@ -39,7 +45,8 @@ class LanguageVisibilityManager {
   }
 
   void toggleLanguageVisibility(String languageCode) {
-    final wasVisible = _languageVisibility[languageCode] ?? true;
+    // Get current state - default to false if not in map
+    final wasVisible = _languageVisibility[languageCode] ?? false;
     final willBeVisible = !wasVisible;
     
     // Prevent disabling if this is the last visible language
@@ -48,6 +55,11 @@ class LanguageVisibilityManager {
       if (visibleCount <= 1) {
         return; // Don't proceed with the change
       }
+    }
+    
+    // Ensure the language is in the map
+    if (!_languageVisibility.containsKey(languageCode)) {
+      _languageVisibility[languageCode] = false;
     }
     
     _languageVisibility[languageCode] = willBeVisible;

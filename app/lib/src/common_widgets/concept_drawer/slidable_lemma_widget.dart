@@ -110,75 +110,60 @@ class SlidableLemmaWidget extends StatelessWidget {
                   bottomLeft: Radius.circular(12),
                 ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
+              padding: const EdgeInsets.all(12),
+              child: Stack(
                 children: [
-                  // User lemma info section
-                  if (hasUserData) ...[
-                    _buildInfoRow(
-                      context,
-                      'Bin',
-                      card.leitnerBin?.toString() ?? '0',
-                      Icons.inventory_2,
-                    ),
-                    const SizedBox(height: 8),
-                    _buildInfoRow(
-                      context,
-                      'Last review',
-                      _formatRelativeDate(card.lastReviewTime),
-                      Icons.history,
-                    ),
-                    const SizedBox(height: 8),
-                    _buildInfoRow(
-                      context,
-                      'Next review',
-                      _formatFutureDate(card.nextReviewAt),
-                      Icons.schedule,
-                    ),
-                    const SizedBox(height: 12),
-                  ] else ...[
-                    Text(
-                      'No user data',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // User lemma info section
+                      _buildInfoRow(
+                        context,
+                        card.leitnerBin?.toString() ?? (hasUserData ? '0' : 'NA'),
+                        Icons.inventory_2,
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  // Regenerate button
+                      const SizedBox(height: 6),
+                      _buildInfoRow(
+                        context,
+                        hasUserData ? _formatRelativeDate(card.lastReviewTime) : 'NA',
+                        Icons.history,
+                      ),
+                      const SizedBox(height: 6),
+                      _buildInfoRow(
+                        context,
+                        hasUserData ? _formatFutureDate(card.nextReviewAt) : 'NA',
+                        Icons.schedule,
+                      ),
+                    ],
+                  ),
+                  // Regenerate button in upper right
                   if (onRegenerate != null)
-                    SizedBox(
-                      width: double.infinity,
+                    Positioned(
+                      top: 0,
+                      right: 0,
                       child: isRetrieving
-                          ? Center(
-                              child: SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Theme.of(context).colorScheme.primary,
-                                  ),
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                                 ),
                               ),
                             )
-                          : FilledButton.icon(
+                          : IconButton(
                               onPressed: onRegenerate,
-                              icon: const Icon(Icons.auto_awesome, size: 16),
-                              label: const Text('Regenerate'),
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                minimumSize: const Size(0, 32),
+                              icon: const Icon(Icons.auto_awesome, size: 18),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                foregroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                padding: const EdgeInsets.all(8),
+                                minimumSize: const Size(32, 32),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
+                              tooltip: 'Regenerate',
                             ),
                     ),
                 ],
@@ -200,11 +185,11 @@ class SlidableLemmaWidget extends StatelessWidget {
 
   Widget _buildInfoRow(
     BuildContext context,
-    String label,
     String value,
     IconData icon,
   ) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           icon,
@@ -215,29 +200,15 @@ class SlidableLemmaWidget extends StatelessWidget {
               .withValues(alpha: 0.6),
         ),
         const SizedBox(width: 6),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 10,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.5),
-                    ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-              ),
-            ],
+        Flexible(
+          child: Text(
+            value,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w300,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
 
@@ -61,7 +61,8 @@ class _VisibilityOptionsSheetState extends State<VisibilityOptionsSheet> {
   }
 
   void _toggleLanguage(String languageCode) {
-    final current = _localVisibility[languageCode] ?? true;
+    // Get current state - default to false if not in map
+    final current = _localVisibility[languageCode] ?? false;
     final next = !current;
 
     // Prevent disabling the last visible language
@@ -74,6 +75,10 @@ class _VisibilityOptionsSheetState extends State<VisibilityOptionsSheet> {
     }
 
     setState(() {
+      // Ensure the language is in the map
+      if (!_localVisibility.containsKey(languageCode)) {
+        _localVisibility[languageCode] = false;
+      }
       _localVisibility[languageCode] = next;
     });
     widget.onLanguageVisibilityToggled(languageCode);
@@ -361,7 +366,7 @@ class _VisibilityOptionsSheetState extends State<VisibilityOptionsSheet> {
                           .map((language) => _LanguageChip(
                                 language: language,
                                 isVisible:
-                                    _localVisibility[language.code] ?? true,
+                                    _localVisibility[language.code] ?? false,
                                 onTap: () => _toggleLanguage(language.code),
                               ))
                           .toList(),

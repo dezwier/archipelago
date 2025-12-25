@@ -165,18 +165,28 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
             if (!mounted) return;
             
             if (topicResult['success'] == true) {
+              final topicData = topicResult['data'] as Map<String, dynamic>?;
               setState(() {
-                _topicData = topicResult['data'] as Map<String, dynamic>?;
+                _topicData = topicData;
                 _isLoadingTopic = false;
               });
+              
+              // Update item with topic data
+              _tryBuildItem();
             } else {
               setState(() {
                 _isLoadingTopic = false;
+                // Topic data failed to load, but still try to build item (topic fields will be null)
+                _tryBuildItem();
               });
             }
-            
-            // Update item with topic data
-            _tryBuildItem();
+          }).catchError((e) {
+            if (!mounted) return;
+            setState(() {
+              _isLoadingTopic = false;
+              // Topic data failed to load, but still try to build item (topic fields will be null)
+              _tryBuildItem();
+            });
           });
         } else {
           setState(() {
@@ -245,10 +255,25 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
       String? topicIcon;
       final topicId = _conceptData!['topic_id'] as int?;
       
+      // Try to get topic info from fetched topic data first
       if (_topicData != null) {
-        topicName = _topicData!['name'] as String?;
-        topicDescription = _topicData!['description'] as String?;
-        topicIcon = _topicData!['icon'] as String?;
+        final name = _topicData!['name'] as String?;
+        final description = _topicData!['description'] as String?;
+        final icon = _topicData!['icon'] as String?;
+        // Only set if not null and not empty
+        topicName = (name != null && name.isNotEmpty) ? name : null;
+        topicDescription = (description != null && description.isNotEmpty) ? description : null;
+        topicIcon = (icon != null && icon.isNotEmpty) ? icon : null;
+      } 
+      // Fallback: check if concept data already includes topic info (for backward compatibility)
+      else if (_conceptData!.containsKey('topic_name')) {
+        final name = _conceptData!['topic_name'] as String?;
+        final description = _conceptData!['topic_description'] as String?;
+        final icon = _conceptData!['topic_icon'] as String?;
+        // Only set if not null and not empty
+        topicName = (name != null && name.isNotEmpty) ? name : null;
+        topicDescription = (description != null && description.isNotEmpty) ? description : null;
+        topicIcon = (icon != null && icon.isNotEmpty) ? icon : null;
       }
 
       // Construct PairedDictionaryItem format
@@ -271,8 +296,10 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
       if (mounted) {
         setState(() {
           _item = PairedDictionaryItem.fromJson(itemData);
-          // Only mark as fully loaded when we have both concept and lemmas
-          if (_lemmasData != null && !_isLoadingTopic) {
+          // Only mark as fully loaded when we have both concept and lemmas, and topic is loaded (if it exists)
+          final hasTopicId = _conceptData!['topic_id'] != null;
+          final topicLoaded = !hasTopicId || !_isLoadingTopic;
+          if (_lemmasData != null && topicLoaded) {
             _isLoading = false;
           }
         });
@@ -532,11 +559,16 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
     // Show placeholders for missing cards
     final widgets = <Widget>[];
 
-    for (int i = 0; i < languagesToShow.length; i++) {
-      final languageCode = languagesToShow[i];
+    // If languagesToShow is empty, fall back to showing all languages from the item's cards
+    final languagesToDisplay = languagesToShow.isNotEmpty 
+        ? languagesToShow 
+        : _item!.cards.map((c) => c.languageCode).toList();
 
-      // Skip if language is not visible
-      if (languageVisibility[languageCode] != true) {
+    for (int i = 0; i < languagesToDisplay.length; i++) {
+      final languageCode = languagesToDisplay[i];
+
+      // Skip if language is not visible (only check if languageVisibility is not empty)
+      if (languageVisibility.isNotEmpty && languageVisibility[languageCode] != true) {
         continue;
       }
 

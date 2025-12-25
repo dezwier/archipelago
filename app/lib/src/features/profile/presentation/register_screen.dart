@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:archipelago/src/features/profile/data/auth_service.dart';
-import 'package:archipelago/src/features/profile/data/language_service.dart';
-import 'package:archipelago/src/features/profile/domain/user.dart';
-import 'package:archipelago/src/features/profile/domain/language.dart';
+import 'package:provider/provider.dart';
+import 'package:archipelago/src/features/shared/domain/language.dart';
+import 'package:archipelago/src/features/shared/providers/auth_provider.dart';
+import 'package:archipelago/src/features/shared/providers/languages_provider.dart';
 import 'package:archipelago/src/common_widgets/language_button.dart';
 
 class RegisterScreen extends StatefulWidget {
-  final Function(User) onRegisterSuccess;
+  final VoidCallback? onRegisterSuccess;
 
   const RegisterScreen({
     super.key,
-    required this.onRegisterSuccess,
+    this.onRegisterSuccess,
   });
 
   @override
@@ -30,18 +30,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void initState() {
     super.initState();
-    _loadLanguages();
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    _loadLanguages(languagesProvider);
+    languagesProvider.addListener(_onLanguagesChanged);
+  }
+  
+  void _onLanguagesChanged() {
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    _loadLanguages(languagesProvider);
   }
 
-  Future<void> _loadLanguages() async {
-    final languages = await LanguageService.getLanguages();
+  void _loadLanguages(LanguagesProvider languagesProvider) {
+    final languages = languagesProvider.languages;
     setState(() {
       _languages = languages;
-      if (languages.isNotEmpty) {
+      if (languages.isNotEmpty && _selectedLanguage == null) {
         _selectedLanguage = languages.first;
       }
     });
   }
+  
 
   Future<void> _handleRegister() async {
     final username = _registerUsernameController.text.trim();
@@ -69,7 +77,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _isLoading = true;
     });
 
-    final result = await AuthService.register(
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final result = await authProvider.register(
       username,
       email,
       password,
@@ -82,8 +91,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     if (result['success'] == true) {
-      final user = result['user'] as User;
-      widget.onRegisterSuccess(user);
+      widget.onRegisterSuccess?.call();
       Navigator.of(context).pop();
       _showSuccess(result['message'] as String);
     } else {
@@ -167,6 +175,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
+    final languagesProvider = Provider.of<LanguagesProvider>(context, listen: false);
+    languagesProvider.removeListener(_onLanguagesChanged);
     _registerUsernameController.dispose();
     _registerEmailController.dispose();
     _registerPasswordController.dispose();
