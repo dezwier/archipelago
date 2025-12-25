@@ -134,13 +134,17 @@ class _LearnScreenState extends State<LearnScreen> {
   }
 
   void _loadTopics(TopicsProvider topicsProvider) {
+    final wasEmpty = _controller.selectedTopicIds.isEmpty;
+    
     setState(() {
       _isLoadingTopics = topicsProvider.isLoading;
       _topics = topicsProvider.topics;
     });
     
     // Initialize all topics as selected by default if no topics are currently selected
-    if (_controller.selectedTopicIds.isEmpty && _topics.isNotEmpty) {
+    // This ensures all topics are ON by default
+    // Check after setState to ensure we have the latest topics
+    if (_topics.isNotEmpty && wasEmpty) {
       final allTopicIds = _topics.map((t) => t.id).toSet();
       _controller.batchUpdateFilters(topicIds: allTopicIds);
     }

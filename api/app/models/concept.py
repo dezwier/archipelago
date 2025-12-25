@@ -2,9 +2,13 @@
 Concept model.
 """
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
 from app.models.enums import CEFRLevel
+
+if TYPE_CHECKING:
+    from app.models.concept_topic import ConceptTopic
+    from app.models.lemma import Lemma
 
 
 class Concept(SQLModel, table=True):
@@ -12,7 +16,6 @@ class Concept(SQLModel, table=True):
     __tablename__ = "concept"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    topic_id: Optional[int] = Field(default=None, foreign_key="topic.id")
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")  # User who created the concept (null for script-created concepts)
     term: str  # Former internal_name - English translation for the concept (mandatory)
     description: Optional[str] = None
@@ -26,6 +29,6 @@ class Concept(SQLModel, table=True):
     updated_at: Optional[datetime] = None
     
     # Relationships
-    topic: Optional["Topic"] = Relationship(back_populates="concepts")
+    concept_topics: List["ConceptTopic"] = Relationship(back_populates="concept")
     lemmas: List["Lemma"] = Relationship(back_populates="concept")
 

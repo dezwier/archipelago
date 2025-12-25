@@ -11,7 +11,8 @@ from sqlalchemy import func, or_
 from datetime import datetime, timezone
 import logging
 from app.core.database import get_session
-from app.models.models import Concept, Lemma
+from app.models.models import Concept, Lemma, Topic
+from app.models.concept_topic import ConceptTopic
 from app.schemas.concept import (
     ConceptResponse, ConceptCountResponse, CreateConceptOnlyRequest,
     GetConceptsWithMissingLanguagesRequest, ConceptsWithMissingLanguagesResponse,
@@ -30,6 +31,24 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/concepts", tags=["concepts"])
+
+
+def populate_concept_topic_ids(concept: Concept, session: Session) -> List[int]:
+    """Helper function to get topic_ids for a concept from ConceptTopic table."""
+    concept_topics = session.exec(
+        select(ConceptTopic).where(ConceptTopic.concept_id == concept.id)
+    ).all()
+    return [ct.topic_id for ct in concept_topics]
+
+
+def create_concept_response(concept: Concept, session: Session) -> ConceptResponse:
+    """Helper function to create ConceptResponse with populated topic_ids."""
+    topic_ids = populate_concept_topic_ids(concept, session)
+    concept_dict = ConceptResponse.model_validate(concept).model_dump()
+    concept_dict['topic_ids'] = topic_ids
+    # Note: topics list is not included in ConceptResponse, only topic_ids
+    # The frontend will need to fetch topic details separately if needed
+    return ConceptResponse(**concept_dict)
 
 
 @router.get("", response_model=List[ConceptResponse])
@@ -52,7 +71,7 @@ async def get_concepts(
         select(Concept).offset(skip).limit(limit).order_by(Concept.created_at.desc())  # type: ignore[attr-defined]
     ).all()
     
-    return [ConceptResponse.model_validate(concept) for concept in concepts]
+    return [create_concept_response(concept, session) for concept in concepts]
 
 
 @router.post("/generate-only", response_model=ConceptResponse, status_code=status.HTTP_201_CREATED)
@@ -94,7 +113,6 @@ async def create_concept_only(
     concept = Concept(
         term=term_stripped,
         description=request.description.strip() if request.description else None,
-        topic_id=request.topic_id,
         user_id=request.user_id,
         is_phrase=is_phrase,
         created_at=datetime.now(timezone.utc)
@@ -104,6 +122,13 @@ async def create_concept_only(
         session.add(concept)
         session.commit()
         session.refresh(concept)
+        
+        # Create ConceptTopic entries if topic_ids provided
+        if request.topic_ids:
+            for topic_id in request.topic_ids:
+                concept_topic = ConceptTopic(concept_id=concept.id, topic_id=topic_id)
+                session.add(concept_topic)
+            session.commit()
     except IntegrityError as e:
         session.rollback()
         raise HTTPException(
@@ -111,7 +136,7 @@ async def create_concept_only(
             detail="Failed to create concept: constraint violation"
         ) from e
     
-    return ConceptResponse.model_validate(concept)
+    return create_concept_response(concept, session)
 
 
 @router.get("/by-term", response_model=List[ConceptResponse])
@@ -148,7 +173,7 @@ async def get_concepts_by_term(
         ).order_by(Concept.created_at.desc())  # type: ignore[attr-defined]
     ).all()
     
-    return [ConceptResponse.model_validate(concept) for concept in concepts]
+    return [create_concept_response(concept, session) for concept in concepts]
 
 @router.get("/{concept_id}", response_model=ConceptResponse)
 async def get_concept(
@@ -171,7 +196,7 @@ async def get_concept(
             detail="Concept not found"
         )
     
-    return ConceptResponse.model_validate(concept)
+    return create_concept_response(concept, session)
 
 
 @router.put("/{concept_id}", response_model=ConceptResponse)
@@ -217,8 +242,20 @@ async def update_concept(
         concept.part_of_speech = normalize_part_of_speech(request.part_of_speech)
         concept.updated_at = datetime.now(timezone.utc)
     
-    if request.topic_id is not None:
-        concept.topic_id = request.topic_id
+    # Handle topic_ids update
+    if request.topic_ids is not None:
+        # Delete existing ConceptTopic entries for this concept
+        existing_concept_topics = session.exec(
+            select(ConceptTopic).where(ConceptTopic.concept_id == concept_id)
+        ).all()
+        for ct in existing_concept_topics:
+            session.delete(ct)
+        
+        # Create new ConceptTopic entries
+        if request.topic_ids:
+            for topic_id in request.topic_ids:
+                concept_topic = ConceptTopic(concept_id=concept.id, topic_id=topic_id)
+                session.add(concept_topic)
         concept.updated_at = datetime.now(timezone.utc)
     
     try:
@@ -232,7 +269,7 @@ async def update_concept(
             detail="Failed to update concept: constraint violation"
         ) from e
     
-    return ConceptResponse.model_validate(concept)
+    return create_concept_response(concept, session)
 
 
 @router.delete("/{concept_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -456,12 +493,7 @@ async def get_concepts_with_missing_languages(
         
         # Only include concepts that are missing at least one language or have incomplete lemmas
         if missing_languages:
-            # Convert concept to dict and ensure level is serialized as string
-            concept_dict = ConceptResponse.model_validate(concept).model_dump()
-            # Ensure level is a string value (CEFRLevel enum value)
-            if concept.level is not None:
-                concept_dict['level'] = concept.level.value
-            concept_response = ConceptResponse(**concept_dict)
+            concept_response = create_concept_response(concept, session)
             
             result_concepts.append(ConceptWithMissingLanguages(
                 concept=concept_response,

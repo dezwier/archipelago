@@ -77,7 +77,15 @@ class _FilterSheetState extends State<FilterSheet> {
   void initState() {
     super.initState();
     // Initialize pending changes with current filter state
-    _pendingTopicIds = Set<int>.from(widget.filterState.selectedTopicIds);
+    // Initialize topics - if empty, select all available topics by default
+    final allTopicIds = widget.topics.map((t) => t.id).toSet();
+    if (widget.filterState.selectedTopicIds.isEmpty && widget.topics.isNotEmpty) {
+      // If no topics selected, select all
+      _pendingTopicIds = allTopicIds;
+    } else {
+      // Use current selection (preserve user's filter choice)
+      _pendingTopicIds = Set<int>.from(widget.filterState.selectedTopicIds);
+    }
     _pendingShowLemmasWithoutTopic = widget.filterState.showLemmasWithoutTopic;
     _pendingLevels = Set<String>.from(widget.filterState.selectedLevels);
     _pendingPartOfSpeech = Set<String>.from(widget.filterState.selectedPartOfSpeech);
@@ -221,7 +229,7 @@ class _FilterSheetState extends State<FilterSheet> {
         final currentIncludePhrases = _pendingIncludePhrases ?? widget.filterState.includePhrases;
         final allSelected = currentIncludeLemmas && currentIncludePhrases;
         return Padding(
-          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          padding: const EdgeInsets.only(top: 12.0, bottom: 12.0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -283,7 +291,7 @@ class _FilterSheetState extends State<FilterSheet> {
             currentHasAudio && currentHasNoAudio && 
             currentIsComplete && currentIsIncomplete;
         return Padding(
-          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          padding: const EdgeInsets.only(top: 12.0, bottom: 12.0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -375,7 +383,7 @@ class _FilterSheetState extends State<FilterSheet> {
   Widget _buildTopicsFilter() {
     if (widget.isLoadingTopics) {
       return Padding(
-        padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+        padding: const EdgeInsets.only(top: 12.0, bottom: 12.0),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -392,7 +400,7 @@ class _FilterSheetState extends State<FilterSheet> {
       );
     } else if (widget.topics.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+        padding: const EdgeInsets.only(top: 12.0, bottom: 12.0),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -421,7 +429,7 @@ class _FilterSheetState extends State<FilterSheet> {
               currentTopicIds.length == allTopicIds.length &&
               currentTopicIds.containsAll(allTopicIds);
           return Padding(
-            padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+            padding: const EdgeInsets.only(top: 12.0, bottom: 12.0),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -481,7 +489,7 @@ class _FilterSheetState extends State<FilterSheet> {
         final allSelected = currentLevels.length == allLevels.length &&
             currentLevels.containsAll(allLevels);
         return Padding(
-          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          padding: const EdgeInsets.only(top: 12.0, bottom: 12.0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -540,7 +548,7 @@ class _FilterSheetState extends State<FilterSheet> {
         final allSelected = currentPartOfSpeech.length == allPOS.length &&
             currentPartOfSpeech.containsAll(allPOS);
         return Padding(
-          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          padding: const EdgeInsets.only(top: 12.0, bottom: 12.0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -608,7 +616,7 @@ class _FilterSheetState extends State<FilterSheet> {
             currentBins.containsAll(allBinsSet);
         
         return Padding(
-          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          padding: const EdgeInsets.only(top: 12.0, bottom: 12.0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -672,7 +680,7 @@ class _FilterSheetState extends State<FilterSheet> {
         final allSelected = currentStatus.length == allStatuses.length &&
             currentStatus.containsAll(allStatuses);
         return Padding(
-          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          padding: const EdgeInsets.only(top: 12.0, bottom: 12.0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -808,7 +816,7 @@ class _FilterSheetState extends State<FilterSheet> {
     return GestureDetector(
       onTap: isDisabled ? null : onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: isDisabled
               ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)

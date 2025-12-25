@@ -10,6 +10,7 @@ import 'package:archipelago/src/features/shared/providers/languages_provider.dar
 import 'image_selector_widget.dart';
 import 'create_selectors_widget.dart';
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
+import 'drawers/topic_drawer.dart';
 
 class CreateConceptSection extends StatefulWidget {
   const CreateConceptSection({
@@ -81,6 +82,42 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
   void _onAuthChanged() {
     // Reload topics when auth state changes
     _controller.loadTopics();
+  }
+  
+  void _openTopicDrawer(BuildContext context) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Topic Selection',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return TopicDrawer(
+          topics: _controller.topics,
+          initialSelectedTopics: _controller.selectedTopics,
+          userId: _controller.userId,
+          onTopicsChanged: (List<Topic> selectedTopics) {
+            // Update controller with all selected topics
+            _controller.setSelectedTopics(selectedTopics);
+          },
+          onTopicCreated: () async {
+            await _controller.loadTopics();
+          },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1.0, 0.0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeInOut,
+          )),
+          child: child,
+        );
+      },
+    );
   }
 
   @override
@@ -174,7 +211,7 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Image selector with selectors on the right
+                  // Image selector with topic tags and selectors on the right
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -190,30 +227,96 @@ class _CreateConceptSectionState extends State<CreateConceptSection> {
                           description: _controller.description.isNotEmpty 
                               ? _controller.description 
                               : null,
-                          topicDescription: _controller.selectedTopic?.description,
+                          topicDescription: _controller.selectedTopics.isNotEmpty
+                              ? _controller.selectedTopics.first.description
+                              : null,
                         ),
                       ),
                       const SizedBox(width: 16),
-                      // Selectors on the right
+                      // Topic tags and selectors on the right
                       Expanded(
                         flex: 1,
-                        child: CreateSelectorsWidget(
-                          topics: _controller.topics,
-                          isLoadingTopics: _controller.isLoadingTopics,
-                          selectedTopic: _controller.selectedTopic,
-                          userId: _controller.userId,
-                          onTopicSelected: (Topic? topic) {
-                            _controller.setSelectedTopic(topic);
-                          },
-                          onTopicCreated: () async {
-                            await _controller.loadTopics();
-                          },
-                          languages: _controller.languages,
-                          isLoadingLanguages: _controller.isLoadingLanguages,
-                          selectedLanguages: _controller.selectedLanguages,
-                          onLanguageSelectionChanged: (List<String> selected) {
-                            _controller.setSelectedLanguages(selected);
-                          },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Label
+                            Text(
+                              'Topic Island',
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            // Selected topics as icon-only tags with plus icon
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                ..._controller.selectedTopics.map((topic) {
+                                  return Container(
+                                    width: 24,
+                                    height: 24,
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        topic.icon != null && topic.icon!.isNotEmpty
+                                            ? topic.icon!
+                                            : '📁',
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                                // Plus icon to add more topics (always shown, same size)
+                                InkWell(
+                                  onTap: () => _openTopicDrawer(context),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      Icons.add,
+                                      size: 14,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Language selector only (topic selector removed)
+                            CreateSelectorsWidget(
+                              topics: _controller.topics,
+                              isLoadingTopics: _controller.isLoadingTopics,
+                              selectedTopics: _controller.selectedTopics,
+                              userId: _controller.userId,
+                              onTopicSelected: (Topic? topic) {
+                                _controller.setSelectedTopic(topic);
+                              },
+                              onTopicCreated: () async {
+                                await _controller.loadTopics();
+                              },
+                              languages: _controller.languages,
+                              isLoadingLanguages: _controller.isLoadingLanguages,
+                              selectedLanguages: _controller.selectedLanguages,
+                              onLanguageSelectionChanged: (List<String> selected) {
+                                _controller.setSelectedLanguages(selected);
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ],

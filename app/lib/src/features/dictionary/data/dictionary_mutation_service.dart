@@ -116,7 +116,8 @@ class DictionaryMutationService {
     required int conceptId,
     String? term,
     String? description,
-    int? topicId,
+    int? topicId, // Deprecated, use topicIds instead
+    List<int>? topicIds,
   }) async {
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/concepts/$conceptId');
     
@@ -130,9 +131,12 @@ class DictionaryMutationService {
       if (description != null) {
         body['description'] = description;
       }
-      // Send topic_id if provided (null means don't change, explicit null would clear it)
-      if (topicId != null) {
-        body['topic_id'] = topicId;
+      // Send topic_ids if provided (preferred over topicId)
+      if (topicIds != null) {
+        body['topic_ids'] = topicIds;
+      } else if (topicId != null) {
+        // Backward compatibility: if topicId is provided, use it as a single-item list
+        body['topic_ids'] = [topicId];
       }
 
       final response = await http.put(

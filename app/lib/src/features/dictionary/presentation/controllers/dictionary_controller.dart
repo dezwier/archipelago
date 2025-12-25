@@ -424,7 +424,7 @@ class DictionaryController extends ChangeNotifier with BaseFilterStateMixin impl
         _allAvailableTopicIds!.containsAll(_selectedTopicIds)) {
       return null;
     }
-    // Otherwise return the selected topic IDs
+    // Otherwise return the selected topic IDs (this is a filter - only show these topics)
     return _selectedTopicIds.toList();
   }
   

@@ -133,6 +133,17 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                   ),
                   IconButton(
                     icon: Icon(
+                      Icons.refresh,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                    onPressed: widget.onRefresh,
+                    tooltip: 'Refresh chart data',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  IconButton(
+                    icon: Icon(
                       Icons.info_outline,
                       size: 18,
                       color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
@@ -230,6 +241,18 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                           fontWeight: FontWeight.bold,
                         ),
                   ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.refresh,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                  onPressed: widget.onRefresh,
+                  tooltip: 'Refresh chart data',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  visualDensity: VisualDensity.compact,
                 ),
                 IconButton(
                   icon: Icon(

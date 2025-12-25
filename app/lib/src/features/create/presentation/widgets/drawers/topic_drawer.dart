@@ -4,17 +4,21 @@ import 'package:archipelago/src/features/shared/data/topic_service.dart' show To
 
 class TopicDrawer extends StatefulWidget {
   final List<Topic> topics;
-  final Topic? initialSelectedTopic;
+  final Topic? initialSelectedTopic; // Deprecated, use initialSelectedTopics
+  final List<Topic> initialSelectedTopics;
   final int? userId;
-  final Function(Topic?) onTopicSelected;
+  final Function(Topic?)? onTopicSelected; // Deprecated, use onTopicsChanged
+  final Function(List<Topic>)? onTopicsChanged;
   final VoidCallback onTopicCreated;
 
   const TopicDrawer({
     super.key,
     required this.topics,
-    required this.initialSelectedTopic,
+    this.initialSelectedTopic,
+    this.initialSelectedTopics = const [],
     required this.userId,
-    required this.onTopicSelected,
+    this.onTopicSelected,
+    this.onTopicsChanged,
     required this.onTopicCreated,
   });
 
@@ -23,7 +27,7 @@ class TopicDrawer extends StatefulWidget {
 }
 
 class _TopicDrawerState extends State<TopicDrawer> {
-  late Topic? _selectedTopic;
+  late List<Topic> _selectedTopics;
   bool _isCreatingNew = false;
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -33,12 +37,17 @@ class _TopicDrawerState extends State<TopicDrawer> {
   final _editTitleController = TextEditingController();
   final _editDescriptionController = TextEditingController();
   final _editIconController = TextEditingController();
+  String? _editVisibility;
   bool _isUpdating = false;
 
   @override
   void initState() {
     super.initState();
-    _selectedTopic = widget.initialSelectedTopic;
+    _selectedTopics = widget.initialSelectedTopics.isNotEmpty
+        ? List.from(widget.initialSelectedTopics)
+        : (widget.initialSelectedTopic != null 
+            ? [widget.initialSelectedTopic!] 
+            : []);
   }
 
   @override
@@ -114,7 +123,7 @@ class _TopicDrawerState extends State<TopicDrawer> {
                     }
                     
                     final topic = widget.topics[index];
-                    final isSelected = _selectedTopic?.id == topic.id;
+                    final isSelected = _selectedTopics.any((t) => t.id == topic.id);
                     
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12.0),
@@ -122,10 +131,19 @@ class _TopicDrawerState extends State<TopicDrawer> {
                         onTap: () {
                           // Toggle selection: if already selected, deselect; otherwise select
                           setState(() {
-                            _selectedTopic = isSelected ? null : topic;
+                            if (isSelected) {
+                              _selectedTopics.removeWhere((t) => t.id == topic.id);
+                            } else {
+                              _selectedTopics.add(topic);
+                            }
                             _isCreatingNew = false;
                           });
-                          widget.onTopicSelected(_selectedTopic);
+                          // Call new callback if available, otherwise fall back to old one
+                          if (widget.onTopicsChanged != null) {
+                            widget.onTopicsChanged!(_selectedTopics);
+                          } else if (widget.onTopicSelected != null) {
+                            widget.onTopicSelected!(_selectedTopics.isNotEmpty ? _selectedTopics.first : null);
+                          }
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
@@ -414,9 +432,15 @@ class _TopicDrawerState extends State<TopicDrawer> {
       _iconController.clear();
       setState(() {
         _isCreatingNew = false;
-        _selectedTopic = newTopic;
+        if (!_selectedTopics.any((t) => t.id == newTopic.id)) {
+          _selectedTopics.add(newTopic);
+        }
       });
-      widget.onTopicSelected(newTopic);
+      if (widget.onTopicsChanged != null) {
+        widget.onTopicsChanged!(_selectedTopics);
+      } else if (widget.onTopicSelected != null) {
+        widget.onTopicSelected!(newTopic);
+      }
       widget.onTopicCreated();
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -440,6 +464,7 @@ class _TopicDrawerState extends State<TopicDrawer> {
     _editTitleController.text = topic.name;
     _editDescriptionController.text = topic.description ?? '';
     _editIconController.text = topic.icon ?? '';
+    _editVisibility = topic.visibility;
     _editingTopic = topic;
 
     showDialog(
@@ -493,6 +518,33 @@ class _TopicDrawerState extends State<TopicDrawer> {
                 minLines: 2,
                 maxLines: 4,
               ),
+              const SizedBox(height: 12),
+              // Visibility selector
+              DropdownButtonFormField<String>(
+                value: _editVisibility,
+                decoration: InputDecoration(
+                  labelText: 'Visibility',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'private',
+                    child: Text('Private'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'public',
+                    child: Text('Public'),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _editVisibility = value;
+                  });
+                },
+              ),
             ],
           ),
         ),
@@ -503,6 +555,7 @@ class _TopicDrawerState extends State<TopicDrawer> {
               _editTitleController.clear();
               _editDescriptionController.clear();
               _editIconController.clear();
+              _editVisibility = null;
               _editingTopic = null;
             },
             child: const Text('Cancel'),
@@ -554,6 +607,7 @@ class _TopicDrawerState extends State<TopicDrawer> {
       icon: _editIconController.text.trim().isNotEmpty
           ? _editIconController.text.trim()
           : null,
+      visibility: _editVisibility,
     );
 
     setState(() {
@@ -566,14 +620,20 @@ class _TopicDrawerState extends State<TopicDrawer> {
       _editTitleController.clear();
       _editDescriptionController.clear();
       _editIconController.clear();
+      _editVisibility = null;
       _editingTopic = null;
       
       // Update selected topic if it was the one being edited
-      if (_selectedTopic?.id == updatedTopic.id) {
+      final selectedIndex = _selectedTopics.indexWhere((t) => t.id == updatedTopic.id);
+      if (selectedIndex != -1) {
         setState(() {
-          _selectedTopic = updatedTopic;
+          _selectedTopics[selectedIndex] = updatedTopic;
         });
-        widget.onTopicSelected(updatedTopic);
+        if (widget.onTopicsChanged != null) {
+          widget.onTopicsChanged!(_selectedTopics);
+        } else if (widget.onTopicSelected != null) {
+          widget.onTopicSelected!(updatedTopic);
+        }
       }
       
       widget.onTopicCreated(); // Refresh the topics list

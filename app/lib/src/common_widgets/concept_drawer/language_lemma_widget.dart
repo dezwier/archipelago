@@ -13,7 +13,6 @@ class LanguageLemmaWidget extends StatefulWidget {
   final bool isEditing;
   final VoidCallback? onTranslationChanged;
   final String? partOfSpeech;
-  final String? topicName;
 
   const LanguageLemmaWidget({
     super.key,
@@ -25,7 +24,6 @@ class LanguageLemmaWidget extends StatefulWidget {
     this.isEditing = false,
     this.onTranslationChanged,
     this.partOfSpeech,
-    this.topicName,
   });
 
   @override
@@ -109,17 +107,6 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
                             text: titleText,
                             style: _getTitleTextStyle(context),
                           ),
-                          // Add space before tag/audio
-                          const TextSpan(text: ' '),
-                          // Topic tag - inline after text
-                          if (widget.topicName != null && widget.topicName!.isNotEmpty)
-                            WidgetSpan(
-                              alignment: PlaceholderAlignment.middle,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 4),
-                                child: _buildTopicTag(context),
-                              ),
-                            ),
                           // Add space before audio
                           const TextSpan(text: ' '),
                           // Play audio button - inline after text/tag
@@ -280,29 +267,6 @@ class _LanguageLemmaWidgetState extends State<LanguageLemmaWidget> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTopicTag(BuildContext context) {
-    final topicName = widget.topicName!;
-    final capitalizedName = topicName.isNotEmpty
-        ? topicName[0].toUpperCase() + topicName.substring(1)
-        : topicName;
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        capitalizedName,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-          color: Theme.of(context).colorScheme.onPrimaryContainer,
-        ),
-      ),
     );
   }
 

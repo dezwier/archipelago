@@ -12,9 +12,10 @@ class PairedDictionaryItem {
   final String? conceptDescription;
   final String? conceptLevel;
   final String? topicName;
-  final int? topicId; // Topic ID for image generation
+  final int? topicId; // Topic ID for image generation (deprecated, use topics)
   final String? topicDescription; // Topic description for image generation
-  final String? topicIcon; // Topic icon (emoji)
+  final String? topicIcon; // Topic icon (emoji, deprecated, use topics)
+  final List<Map<String, dynamic>> topics; // List of all topics with id, name, icon
 
   PairedDictionaryItem({
     required this.conceptId,
@@ -31,7 +32,9 @@ class PairedDictionaryItem {
     this.topicId,
     this.topicDescription,
     this.topicIcon,
-  }) : cards = cards ?? [];
+    List<Map<String, dynamic>>? topics,
+  }) : cards = cards ?? [],
+       topics = topics ?? [];
 
   /// Get the first available image URL, or null if no images are available
   String? get firstImageUrl {
@@ -89,6 +92,11 @@ class PairedDictionaryItem {
       topicId: json['topic_id'] as int?,
       topicDescription: json['topic_description'] as String?,
       topicIcon: json['topic_icon'] as String?,
+      topics: json['topics'] != null
+          ? (json['topics'] as List<dynamic>)
+              .map((t) => t as Map<String, dynamic>)
+              .toList()
+          : [],
     );
   }
 }

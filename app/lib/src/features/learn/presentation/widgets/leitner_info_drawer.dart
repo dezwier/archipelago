@@ -701,7 +701,7 @@ class _LeitnerInfoDrawerState extends State<LeitnerInfoDrawer> {
                         Text(
                           '• New cards start in Bin 1\n'
                           '• Correct answers move cards to the next bin\n'
-                          '• Incorrect answers move cards down by 2 bins (minimum Bin 1)\n'
+                          '• Incorrect answers move cards down by 2 bins (min. Bin 1)\n'
                           '• Using hints keeps cards in the same bin\n'
                           '• Higher bins have longer review intervals',
                           style: Theme.of(context).textTheme.bodyMedium,

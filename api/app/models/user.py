@@ -32,6 +32,7 @@ class User(SQLModel, table=True):
     # Relationships
     user_lemmas: List["UserLemma"] = Relationship(back_populates="user")
     lessons: List["Lesson"] = Relationship(back_populates="user")
+    user_topics: List["UserTopic"] = Relationship(back_populates="user")
     
     @staticmethod
     def hash_password(password: str) -> str:

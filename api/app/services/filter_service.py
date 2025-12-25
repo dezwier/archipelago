@@ -8,6 +8,7 @@ from typing import Optional, List
 from datetime import datetime
 from app.models.models import Concept, Lemma, CEFRLevel
 from app.models.user_lemma import UserLemma
+from app.models.concept_topic import ConceptTopic
 from app.schemas.filter import FilterConfig
 from app.schemas.utils import normalize_part_of_speech
 
@@ -164,16 +165,23 @@ def apply_lemmas_phrases_filter(query, include_lemmas: bool, include_phrases: bo
 
 
 def apply_topic_filter(query, topic_id_list: Optional[List[int]], include_without_topic: bool):
-    """Apply topic_ids filter to concept query."""
+    """Apply topic_ids filter to concept query using ConceptTopic junction table.
+    
+    Note: distinct() is NOT applied here to avoid issues with subsequent joins.
+    It should be applied at the end of the query building process.
+    """
     if topic_id_list is not None and len(topic_id_list) > 0:
-        # When filtering by topic(s), only show concepts with those topic IDs
+        # When filtering by topic(s), join ConceptTopic and filter by topic IDs
         # Always exclude concepts without a topic when topic_ids are provided
-        return query.where(Concept.topic_id.in_(topic_id_list))
+        query = query.join(ConceptTopic, Concept.id == ConceptTopic.concept_id)
+        return query.where(ConceptTopic.topic_id.in_(topic_id_list))
     else:
         # topic_id_list is None/empty (all topics selected in frontend)
         if not include_without_topic:
             # Exclude concepts without a topic (only show concepts with a topic)
-            return query.where(Concept.topic_id.isnot(None))
+            # Join ConceptTopic to find concepts that have at least one topic
+            query = query.join(ConceptTopic, Concept.id == ConceptTopic.concept_id)
+            return query
         # If include_without_topic is True, show ALL concepts (no topic filter)
         return query
 

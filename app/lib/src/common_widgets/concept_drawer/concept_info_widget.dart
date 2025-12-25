@@ -71,37 +71,42 @@ class ConceptInfoWidget extends StatelessWidget {
             ),
             const SizedBox(height: 6),
           ],
-          if (item.topicName != null && item.topicName!.isNotEmpty) ...[
+          // Topic tags
+          if (item.topics.isNotEmpty) ...[
             Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 6,
               children: [
                 Text(
-                  'Topic: ',
+                  'Topics: ',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                Text(
-                  item.topicName!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                  softWrap: true,
-                ),
+                ...item.topics.map((topic) {
+                  return Container(
+                    width: 24,
+                    height: 24,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Text(
+                        topic['icon'] != null && (topic['icon'] as String).isNotEmpty
+                            ? topic['icon'] as String
+                            : '📁',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ],
-            ),
-            const SizedBox(height: 6),
-          ],
-          if (item.topicDescription != null && item.topicDescription!.isNotEmpty) ...[
-            Text(
-              item.topicDescription!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              softWrap: true,
             ),
             const SizedBox(height: 6),
           ],

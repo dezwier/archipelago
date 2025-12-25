@@ -337,7 +337,7 @@ class ConceptService {
     }
   }
 
-  /// Create a concept record with term, description, and topic (if given).
+  /// Create a concept record with term, description, and topics (if given).
   /// This does NOT create any lemmas - use generateCardsForConcepts to create lemmas.
   /// 
   /// Returns a map with:
@@ -347,7 +347,8 @@ class ConceptService {
   static Future<Map<String, dynamic>> createConceptOnly({
     required String term,
     String? description,
-    int? topicId,
+    int? topicId, // Deprecated, use topicIds instead
+    List<int>? topicIds,
     int? userId,
   }) async {
     // Validate term is not empty
@@ -371,9 +372,11 @@ class ConceptService {
         body['description'] = description.trim();
       }
       
-      // Only include topic_id if provided
-      if (topicId != null) {
-        body['topic_id'] = topicId;
+      // Use topicIds if provided, otherwise fall back to topicId for backward compatibility
+      if (topicIds != null && topicIds.isNotEmpty) {
+        body['topic_ids'] = topicIds;
+      } else if (topicId != null) {
+        body['topic_ids'] = [topicId];
       }
       
       // Only include user_id if provided

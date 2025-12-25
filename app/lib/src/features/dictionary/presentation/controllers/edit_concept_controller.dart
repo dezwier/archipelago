@@ -1,10 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
 import 'package:archipelago/src/features/shared/domain/topic.dart';
-import 'package:archipelago/src/features/shared/domain/user.dart';
 import 'package:archipelago/src/features/shared/providers/topics_provider.dart';
 
 class EditConceptController extends ChangeNotifier {
@@ -12,7 +9,7 @@ class EditConceptController extends ChangeNotifier {
   final TopicsProvider topicsProvider;
   final TextEditingController termController;
   final TextEditingController descriptionController;
-  int? selectedTopicId;
+  List<Topic> selectedTopics = [];
   bool isLoading = false;
   String? errorMessage;
 
@@ -20,10 +17,18 @@ class EditConceptController extends ChangeNotifier {
     required this.item,
     required this.topicsProvider,
   }) : termController = TextEditingController(text: item.conceptTerm ?? ''),
-        descriptionController = TextEditingController(text: item.conceptDescription ?? ''),
-        selectedTopicId = item.topicId {
+        descriptionController = TextEditingController(text: item.conceptDescription ?? '') {
+    // Initialize selected topics from item.topics
+    _initializeSelectedTopics();
     topicsProvider.addListener(_onTopicsChanged);
     _updateTopics();
+  }
+  
+  void _initializeSelectedTopics() {
+    // Get topic IDs from item.topics (list of maps with id, name, icon)
+    final topicIds = item.topics.map((topicMap) => topicMap['id'] as int).toList();
+    // Find matching topics from topicsProvider
+    selectedTopics = topicsProvider.topics.where((topic) => topicIds.contains(topic.id)).toList();
   }
   
   List<Topic> get topics => topicsProvider.topics;
@@ -37,13 +42,27 @@ class EditConceptController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setSelectedTopicId(int? topicId) {
-    if (selectedTopicId != topicId) {
-      selectedTopicId = topicId;
+  void setSelectedTopics(List<Topic> topics) {
+    if (selectedTopics != topics) {
+      selectedTopics = List<Topic>.from(topics);
       notifyListeners();
     }
   }
 
+  void toggleTopic(Topic topic) {
+    final index = selectedTopics.indexWhere((t) => t.id == topic.id);
+    if (index >= 0) {
+      selectedTopics.removeAt(index);
+    } else {
+      selectedTopics.add(topic);
+    }
+    notifyListeners();
+  }
+
+  void removeSelectedTopic(Topic topic) {
+    selectedTopics.removeWhere((t) => t.id == topic.id);
+    notifyListeners();
+  }
 
   Future<bool> updateConcept() async {
     if (termController.text.trim().isEmpty) {
@@ -63,7 +82,7 @@ class EditConceptController extends ChangeNotifier {
         description: descriptionController.text.trim().isEmpty 
             ? null 
             : descriptionController.text.trim(),
-        topicId: selectedTopicId,
+        topicIds: selectedTopics.map((t) => t.id).toList(),
       );
 
       isLoading = false;

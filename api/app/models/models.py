@@ -16,6 +16,8 @@ from app.models.user import User
 from app.models.user_lemma import UserLemma
 from app.models.exercise import Exercise
 from app.models.lesson import Lesson
+from app.models.user_topic import UserTopic
+from app.models.concept_topic import ConceptTopic
 
 __all__ = [
     'CEFRLevel',
@@ -27,4 +29,6 @@ __all__ = [
     'UserLemma',
     'Exercise',
     'Lesson',
+    'UserTopic',
+    'ConceptTopic',
 ]

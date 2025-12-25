@@ -52,6 +52,7 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
   Map<String, dynamic>? _conceptData;
   List<dynamic>? _lemmasData;
   Map<String, dynamic>? _topicData;
+  List<Map<String, dynamic>> _topicsList = []; // List of all topics for the concept
 
   // Default language visibility - show all languages if not provided
   Map<String, bool> _getLanguageVisibility() {
@@ -122,6 +123,7 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
       _conceptData = null;
       _lemmasData = null;
       _topicData = null;
+      _topicsList = [];
     });
 
     // Get visible language codes for the API call
@@ -154,32 +156,42 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
         // Build partial item immediately with concept data
         _tryBuildItem();
         
-        // Start topic fetch if topic_id exists
-        final topicId = conceptData['topic_id'] as int?;
-        if (topicId != null) {
+        // Fetch all topics for this concept
+        final topicIds = (conceptData['topic_ids'] as List<dynamic>?)?.cast<int>() ?? [];
+        if (topicIds.isNotEmpty) {
           setState(() {
             _isLoadingTopic = true;
           });
           
-          DictionaryService.getTopicDataOnly(topicId).then((topicResult) {
+          // Fetch all topics in parallel
+          final topicFutures = topicIds.map((topicId) => 
+            DictionaryService.getTopicDataOnly(topicId)
+          ).toList();
+          
+          Future.wait(topicFutures).then((topicResults) {
             if (!mounted) return;
             
-            if (topicResult['success'] == true) {
-              final topicData = topicResult['data'] as Map<String, dynamic>?;
-              setState(() {
-                _topicData = topicData;
-                _isLoadingTopic = false;
-              });
-              
-              // Update item with topic data
-              _tryBuildItem();
-            } else {
-              setState(() {
-                _isLoadingTopic = false;
-                // Topic data failed to load, but still try to build item (topic fields will be null)
-                _tryBuildItem();
-              });
+            final topicsList = <Map<String, dynamic>>[];
+            for (final topicResult in topicResults) {
+              if (topicResult['success'] == true && topicResult['data'] != null) {
+                final topicData = topicResult['data'] as Map<String, dynamic>;
+                topicsList.add({
+                  'id': topicData['id'] as int,
+                  'name': topicData['name'] as String? ?? '',
+                  'icon': topicData['icon'] as String?,
+                });
+              }
             }
+            
+            setState(() {
+              _topicsList = topicsList;
+              // Set first topic for backward compatibility
+              _topicData = topicsList.isNotEmpty ? topicsList[0] : null;
+              _isLoadingTopic = false;
+            });
+            
+            // Update item with topic data
+            _tryBuildItem();
           }).catchError((e) {
             if (!mounted) return;
             setState(() {
@@ -291,6 +303,7 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
         'topic_name': topicName,
         'topic_description': topicDescription,
         'topic_icon': topicIcon,
+        'topics': _topicsList, // Include all topics list
       };
 
       if (mounted) {
@@ -490,15 +503,13 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
                                               // Concept info on top
                                               if (_item!.conceptTerm != null ||
                                                   _item!.conceptDescription != null ||
-                                                  _item!.topicName != null ||
-                                                  _item!.topicDescription != null)
+                                                  _item!.topics.isNotEmpty)
                                                 ConceptInfoWidget(
                                                   item: _item!,
                                                 ),
                                               if (_item!.conceptTerm != null ||
                                                   _item!.conceptDescription != null ||
-                                                  _item!.topicName != null ||
-                                                  _item!.topicDescription != null)
+                                                  _item!.topics.isNotEmpty)
                                                 const SizedBox(height: 12),
                                               // Action buttons below
                                               DictionaryActionButtons(
@@ -628,7 +639,6 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
           showDescription: true,
           showExtraInfo: true,
           partOfSpeech: _item?.partOfSpeech,
-          topicName: _item?.topicName,
           onRegenerate: () => _handleRetrieveLemma(languageCode),
           isRetrieving: _retrievingLanguages.contains(languageCode),
         ),

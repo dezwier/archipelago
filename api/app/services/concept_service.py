@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 from typing import Optional
 
 from app.models.models import Concept, Lemma, UserLemma
+from app.models.concept_topic import ConceptTopic
 from app.utils.assets_utils import get_assets_directory
 from app.services.image_service import delete_concept_image_file
 
@@ -20,6 +21,7 @@ def delete_concept_and_associated_resources(
     Delete a concept and all its associated resources.
     
     This function deletes:
+    - All ConceptTopic records for this concept
     - All UserLemmas that reference lemmas for this concept
     - All Lemmas for this concept
     - The concept's image file (if it exists)
@@ -39,6 +41,13 @@ def delete_concept_and_associated_resources(
     # Delete concept's image file if it exists
     if concept.image_url:
         delete_concept_image_file(concept.image_url)
+    
+    # Delete all ConceptTopic records for this concept
+    concept_topics = session.exec(
+        select(ConceptTopic).where(ConceptTopic.concept_id == concept_id)
+    ).all()
+    for concept_topic in concept_topics:
+        session.delete(concept_topic)
     
     # Get all lemmas for this concept
     lemmas = session.exec(

@@ -82,6 +82,7 @@ class TopicService {
     String? name,
     String? description,
     String? icon,
+    String? visibility,
   }) async {
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/topics/$topicId');
     
@@ -90,6 +91,7 @@ class TopicService {
       if (name != null) body['name'] = name.trim();
       if (description != null) body['description'] = description.trim().isNotEmpty ? description.trim() : null;
       if (icon != null) body['icon'] = icon.trim().isNotEmpty ? icon.trim() : null;
+      if (visibility != null) body['visibility'] = visibility;
       
       final response = await http.put(
         url,

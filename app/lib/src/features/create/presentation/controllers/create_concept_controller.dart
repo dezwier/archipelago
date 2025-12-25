@@ -35,7 +35,7 @@ class CreateConceptController extends ChangeNotifier {
   // Form state
   String _term = '';
   String _description = '';
-  Topic? _selectedTopic;
+  List<Topic> _selectedTopics = [];
   List<String> _selectedLanguages = [];
   File? _selectedImage;
 
@@ -80,14 +80,8 @@ class CreateConceptController extends ChangeNotifier {
   
   void _updateTopics() {
     final topics = _topicsProvider.topics;
-    // Clear selected topic if it's no longer in the available topics (e.g., private topic after logout)
-    if (_selectedTopic != null && !topics.any((t) => t.id == _selectedTopic!.id)) {
-      _selectedTopic = null;
-    }
-    // Set the most recent topic as default (first in list since sorted by created_at desc)
-    if (topics.isNotEmpty && _selectedTopic == null) {
-      _selectedTopic = topics.first;
-    }
+    // Remove selected topics that are no longer in the available topics (e.g., private topic after logout)
+    _selectedTopics.removeWhere((selected) => !topics.any((t) => t.id == selected.id));
     notifyListeners();
   }
   
@@ -107,7 +101,7 @@ class CreateConceptController extends ChangeNotifier {
   // Getters
   String get term => _term;
   String get description => _description;
-  Topic? get selectedTopic => _selectedTopic;
+  List<Topic> get selectedTopics => _selectedTopics;
   List<String> get selectedLanguages => _selectedLanguages;
   File? get selectedImage => _selectedImage;
   bool get isCreatingConcept => _isCreatingConcept;
@@ -136,10 +130,25 @@ class CreateConceptController extends ChangeNotifier {
   }
 
   void setSelectedTopic(Topic? topic) {
-    if (_selectedTopic != topic) {
-      _selectedTopic = topic;
+    // Add topic if not already selected, remove if already selected (toggle)
+    if (topic != null) {
+      if (_selectedTopics.any((t) => t.id == topic.id)) {
+        _selectedTopics.removeWhere((t) => t.id == topic.id);
+      } else {
+        _selectedTopics.add(topic);
+      }
       notifyListeners();
     }
+  }
+  
+  void setSelectedTopics(List<Topic> topics) {
+    _selectedTopics = List.from(topics);
+    notifyListeners();
+  }
+  
+  void removeSelectedTopic(Topic topic) {
+    _selectedTopics.removeWhere((t) => t.id == topic.id);
+    notifyListeners();
   }
 
   void setSelectedLanguages(List<String> languages) {
@@ -228,10 +237,11 @@ class CreateConceptController extends ChangeNotifier {
     notifyListeners();
 
     // Always create the concept first
+    final topicIds = _selectedTopics.map((t) => t.id).toList();
     final createResult = await FlashcardService.createConceptOnly(
       term: term,
       description: _description.trim().isNotEmpty ? _description.trim() : null,
-      topicId: _selectedTopic?.id,
+      topicIds: topicIds.isNotEmpty ? topicIds : null,
       userId: userId,
     );
 
@@ -362,7 +372,7 @@ class CreateConceptController extends ChangeNotifier {
     _description = '';
     _selectedImage = null;
     _selectedLanguages = [];
-    // Keep the selected topic (don't reset it)
+    // Keep the selected topics (don't reset them)
     notifyListeners();
   }
 

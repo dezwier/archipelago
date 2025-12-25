@@ -2,7 +2,7 @@
 Models package - imports all models for backward compatibility.
 """
 # Import enums first
-from app.models.enums import CEFRLevel
+from app.models.enums import CEFRLevel, TopicVisibility
 
 # Import all models
 from app.models.topic import Topic
@@ -13,6 +13,8 @@ from app.models.user import User
 from app.models.user_lemma import UserLemma
 from app.models.exercise import Exercise
 from app.models.lesson import Lesson
+from app.models.user_topic import UserTopic
+from app.models.concept_topic import ConceptTopic
 
 # For backward compatibility: allow importing from models.models
 # This maintains existing imports like "from app.models.models import Concept"
@@ -22,6 +24,7 @@ from types import ModuleType
 # Create a models module that mimics the old models.py structure
 _models_module = ModuleType('app.models.models')
 _models_module.CEFRLevel = CEFRLevel
+_models_module.TopicVisibility = TopicVisibility
 _models_module.Topic = Topic
 _models_module.Concept = Concept
 _models_module.Language = Language
@@ -30,12 +33,15 @@ _models_module.User = User
 _models_module.UserLemma = UserLemma
 _models_module.Exercise = Exercise
 _models_module.Lesson = Lesson
+_models_module.UserTopic = UserTopic
+_models_module.ConceptTopic = ConceptTopic
 
 # Add to sys.modules so imports work
 sys.modules['app.models.models'] = _models_module
 
 __all__ = [
     'CEFRLevel',
+    'TopicVisibility',
     'Topic',
     'Concept',
     'Language',
@@ -44,5 +50,7 @@ __all__ = [
     'UserLemma',
     'Exercise',
     'Lesson',
+    'UserTopic',
+    'ConceptTopic',
 ]
 

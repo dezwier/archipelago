@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, computed_field, field_validator
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List, TYPE_CHECKING, Any
 from datetime import datetime
 from app.schemas.utils import normalize_part_of_speech
 
@@ -29,7 +29,7 @@ class ImageResponse(BaseModel):
 class ConceptResponse(BaseModel):
     """Concept response schema."""
     id: int
-    topic_id: Optional[int] = None
+    topic_ids: List[int] = Field(default_factory=list)  # List of topic IDs this concept belongs to
     user_id: Optional[int] = None
     term: Optional[str] = None
     description: Optional[str] = None
@@ -54,6 +54,13 @@ class ConceptResponse(BaseModel):
     def image_path_1(self) -> Optional[str]:
         """Get image URL for backward compatibility."""
         return self.image_url
+    
+    # Backward compatibility: computed field for topic_id (returns first topic_id if any)
+    @computed_field
+    @property
+    def topic_id(self) -> Optional[int]:
+        """Get first topic ID for backward compatibility."""
+        return self.topic_ids[0] if self.topic_ids else None
 
     class Config:
         from_attributes = True
@@ -82,7 +89,7 @@ class UpdateConceptRequest(BaseModel):
     term: Optional[str] = Field(None, min_length=1, description="The term (cannot be empty if provided)")
     description: Optional[str] = None
     part_of_speech: Optional[str] = None
-    topic_id: Optional[int] = None
+    topic_ids: Optional[List[int]] = Field(None, description="List of topic IDs for the concept")
     
     @field_validator('part_of_speech')
     @classmethod
@@ -96,7 +103,7 @@ class GenerateImageRequest(BaseModel):
     concept_id: int = Field(..., description="The concept ID")
     term: Optional[str] = Field(None, description="The concept term (will use concept.term if not provided)")
     description: Optional[str] = Field(None, description="The concept description (will use concept.description if not provided)")
-    topic_id: Optional[int] = Field(None, description="The topic ID (will use concept.topic_id if not provided)")
+    topic_id: Optional[int] = Field(None, description="The topic ID (deprecated, will use first topic from concept.topic_ids if not provided)")
     topic_description: Optional[str] = Field(None, description="The topic description (will use topic.description if not provided)")
 
 
@@ -110,7 +117,7 @@ class GenerateImagePreviewRequest(BaseModel):
 class CreateConceptRequest(BaseModel):
     """Request schema for creating a concept with lemmas."""
     term: str = Field(..., min_length=1, description="The term to create a concept for")
-    topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
+    topic_ids: Optional[List[int]] = Field(None, description="List of topic IDs for the concept")
     user_id: Optional[int] = Field(None, description="User ID who created the concept")
     part_of_speech: Optional[str] = Field(None, description="Part of speech. Must be one of: Noun, Verb, Adjective, Adverb, Pronoun, Preposition, Conjunction, Determiner / Article, Interjection, Numeral. If not provided, will be inferred from the term.")
     core_meaning_en: Optional[str] = Field(None, description="Core meaning in English")
@@ -143,7 +150,7 @@ class CreateConceptOnlyRequest(BaseModel):
     """Request schema for creating only a concept (without lemmas)."""
     term: str = Field(..., min_length=1, description="The term")
     description: Optional[str] = Field(None, description="Description of the concept")
-    topic_id: Optional[int] = Field(None, description="Topic ID for the concept")
+    topic_ids: Optional[List[int]] = Field(None, description="List of topic IDs for the concept")
     user_id: Optional[int] = Field(None, description="User ID who created the concept")
 
 
@@ -215,9 +222,17 @@ class PairedDictionaryItem(BaseModel):
     concept_description: Optional[str] = None
     concept_level: Optional[str] = None
     topic_name: Optional[str] = None
-    topic_id: Optional[int] = None
+    topic_ids: List[int] = Field(default_factory=list)  # List of topic IDs this concept belongs to
     topic_description: Optional[str] = None
     topic_icon: Optional[str] = None
+    topics: List[dict[str, Any]] = Field(default_factory=list)  # List of topic info dicts with id, name, icon
+    
+    # Backward compatibility: computed field for topic_id (returns first topic_id if any)
+    @computed_field
+    @property
+    def topic_id(self) -> Optional[int]:
+        """Get first topic ID for backward compatibility."""
+        return self.topic_ids[0] if self.topic_ids else None
     
     # Backward compatibility: computed field for image_path_1
     @computed_field

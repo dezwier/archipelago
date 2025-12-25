@@ -91,9 +91,15 @@ def create_or_update_lemma_from_llm_data(
     if term:
         term = normalize_lemma_term(term)
     
-    # For concepts with topic_id, we can only have one lemma per language
+    # For concepts with topics (via ConceptTopic), we can only have one lemma per language
     # So we should UPDATE the existing lemma instead of deleting and inserting
-    if concept.topic_id is not None:
+    from app.models.concept_topic import ConceptTopic
+    concept_topics = session.exec(
+        select(ConceptTopic).where(ConceptTopic.concept_id == concept_id)
+    ).all()
+    has_topics = len(concept_topics) > 0
+    
+    if has_topics:
         # Find existing lemma for this concept and language (regardless of term)
         existing_lemma = session.exec(
             select(Lemma).where(
@@ -121,8 +127,9 @@ def create_or_update_lemma_from_llm_data(
                 session.add(existing_lemma)
                 session.commit()
                 session.refresh(existing_lemma)
-                logger.info("Lemma updated for concept %d, language %s (topic_id: %d)", 
-                           concept_id, language_code, concept.topic_id)
+                topic_ids = [ct.topic_id for ct in concept_topics]
+                logger.info("Lemma updated for concept %d, language %s (topic_ids: %s)", 
+                           concept_id, language_code, topic_ids)
                 return existing_lemma
             except Exception as e:
                 session.rollback()
@@ -153,8 +160,9 @@ def create_or_update_lemma_from_llm_data(
                 session.add(lemma)
                 session.commit()
                 session.refresh(lemma)
-                logger.info("Lemma created for concept %d, language %s (topic_id: %d)", 
-                           concept_id, language_code, concept.topic_id)
+                topic_ids = [ct.topic_id for ct in concept_topics]
+                logger.info("Lemma created for concept %d, language %s (topic_ids: %s)", 
+                           concept_id, language_code, topic_ids)
                 return lemma
             except Exception as e:
                 session.rollback()
@@ -226,7 +234,7 @@ def create_or_update_lemma_from_llm_data(
             # This should not happen with our new logic, but handle it gracefully
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Only one lemma per language is allowed for concepts with topic_id"
+                detail="Only one lemma per language is allowed for concepts with topics"
             ) from e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -239,7 +247,7 @@ def create_or_update_lemma_from_llm_data(
         if "only one lemma per language" in error_str or "check_lemma_uniqueness_for_topics" in error_str:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Only one lemma per language is allowed for concepts with topic_id"
+                detail="Only one lemma per language is allowed for concepts with topics"
             ) from e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -21,3 +21,9 @@ class CEFRLevel(str, Enum):
     C1 = "C1"
     C2 = "C2"
 
+
+class TopicVisibility(str, Enum):
+    """Topic visibility enum."""
+    PUBLIC = "public"
+    PRIVATE = "private"
+

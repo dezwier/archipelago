@@ -5,7 +5,8 @@ Dictionary endpoints for retrieving paired dictionary items.
 # pyright: reportCallIssue=false
 # pyright: reportArgumentType=false
 from fastapi import APIRouter, Depends
-from sqlmodel import Session, select, func, or_
+from sqlmodel import Session, select
+from sqlalchemy import func, or_
 from app.core.database import get_session
 from app.models.models import Concept, Lemma
 from app.schemas.concept import DictionaryResponse
@@ -50,13 +51,33 @@ async def get_dictionary(
 
     # Get total count before pagination (for concepts matching search)
     # Count distinct concepts to avoid any potential duplicates
-    # At this point, concept_query has all filters applied but no joins yet
-    # So we can safely count distinct concept IDs
+    # At this point, concept_query has all filters applied (may include joins from topic filter)
+    # So we need to count distinct concept IDs
     concept_subquery = concept_query.subquery()
     total_count_query = select(func.count(func.distinct(concept_subquery.c.id)))
     total = session.exec(total_count_query).one()
     
-    # Apply sorting
+    # Get distinct concept IDs first (needed when ConceptTopic join creates duplicates)
+    # When there's a join (e.g., from topic filter), we need to get distinct Concept.id values
+    # Create a subquery and explicitly select Concept.id with DISTINCT
+    concept_ids_subquery = concept_query.subquery()
+    # The subquery contains Concept columns, so 'id' refers to Concept.id
+    distinct_concept_ids_query = select(concept_ids_subquery.c.id).distinct()
+    distinct_concept_ids = session.exec(distinct_concept_ids_query).all()
+    
+    # Log for debugging
+    logger.debug(f"Topic filter: Found {len(distinct_concept_ids)} distinct concept IDs")
+    
+    # Rebuild query selecting concepts by their IDs
+    # This gives us unique concepts without DISTINCT in the final query
+    if distinct_concept_ids:
+        concept_query = select(Concept).where(Concept.id.in_(distinct_concept_ids))
+    else:
+        # No concepts match the filter
+        concept_query = select(Concept).where(Concept.id.in_([]))
+    
+    # Apply sorting (this may add joins for lemma sorting)
+    # Now we can safely use ORDER BY without DISTINCT issues
     concept_query = apply_sorting(concept_query, request.sort_by, visible_language_codes)
 
     # Apply pagination at database level
@@ -125,7 +146,8 @@ async def get_dictionary(
     paired_items = build_paired_dictionary_items(
         concepts,
         concept_lemmas_map,
-        visible_language_codes
+        visible_language_codes,
+        session
     )
 
     # Calculate pagination metadata

@@ -103,13 +103,15 @@ class DictionaryService {
     required int conceptId,
     String? term,
     String? description,
-    int? topicId,
+    int? topicId, // Deprecated, use topicIds instead
+    List<int>? topicIds,
   }) =>
       DictionaryMutationService.updateConcept(
         conceptId: conceptId,
         term: term,
         description: description,
         topicId: topicId,
+        topicIds: topicIds,
       );
 
   // Generation methods

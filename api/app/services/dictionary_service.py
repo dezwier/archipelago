@@ -5,7 +5,8 @@ from fastapi import HTTPException, status
 from sqlmodel import select, func
 from sqlalchemy.orm import aliased
 from typing import Optional, List
-from app.models.models import Concept, Lemma
+from app.models.models import Concept, Lemma, Topic
+from app.models.concept_topic import ConceptTopic
 from app.schemas.lemma import LemmaResponse
 from app.schemas.concept import PairedDictionaryItem
 from app.utils.text_utils import ensure_capitalized
@@ -175,32 +176,56 @@ def build_visible_lemmas_list(
     return visible_lemmas_list
 
 
-def get_topic_info(concept: Concept) -> tuple[Optional[str], Optional[int], Optional[str], Optional[str]]:
-    """Get topic information from concept safely."""
+def get_topic_info(concept: Concept, session) -> tuple[Optional[str], List[int], Optional[str], Optional[str], List[dict]]:
+    """Get topic information from concept safely.
+    
+    Returns:
+        tuple: (topic_name, topic_ids, topic_description, topic_icon, topics_list)
+        - topic_name: First topic name (for backward compatibility)
+        - topic_ids: List of all topic IDs
+        - topic_description: First topic description (for backward compatibility)
+        - topic_icon: First topic icon (for backward compatibility)
+        - topics_list: List of dicts with id, name, icon for all topics
+    """
     topic_name = None
-    topic_id = None
+    topic_ids = []
     topic_description = None
     topic_icon = None
+    topics_list = []
     
-    if concept.topic_id:
-        topic_id = concept.topic_id
-        # Access topic relationship - SQLModel will lazy load if needed
-        try:
-            if concept.topic:
-                topic_name = concept.topic.name
-                topic_description = concept.topic.description
-                topic_icon = concept.topic.icon
-        except Exception:  # noqa: BLE001
-            # If topic relationship is not loaded or doesn't exist, topic_name stays None
-            pass
+    # Get topics from ConceptTopic junction table
+    concept_topics = session.exec(
+        select(ConceptTopic).where(ConceptTopic.concept_id == concept.id)
+    ).all()
     
-    return topic_name, topic_id, topic_description, topic_icon
+    if concept_topics:
+        topic_ids = [ct.topic_id for ct in concept_topics]
+        
+        # Load all topics
+        for ct in concept_topics:
+            topic = session.get(Topic, ct.topic_id)
+            if topic:
+                topics_list.append({
+                    'id': topic.id,
+                    'name': topic.name,
+                    'icon': topic.icon,
+                })
+        
+        # Get first topic for backward compatibility (topic_id, topic_name, etc.)
+        if topics_list:
+            first_topic = topics_list[0]
+            topic_name = first_topic['name']
+            topic_description = None  # Not used in first topic, but kept for compatibility
+            topic_icon = first_topic['icon']
+    
+    return topic_name, topic_ids, topic_description, topic_icon, topics_list
 
 
 def build_paired_dictionary_items(
     concepts: List[Concept],
     concept_lemmas_map: dict,
-    visible_language_codes: Optional[List[str]]
+    visible_language_codes: Optional[List[str]],
+    session
 ) -> List[PairedDictionaryItem]:
     """Build list of PairedDictionaryItem from concepts and lemmas."""
     paired_items = []
@@ -214,7 +239,9 @@ def build_paired_dictionary_items(
         source_lemma_response = visible_lemmas_list[0] if len(visible_lemmas_list) > 0 else None
         target_lemma_response = visible_lemmas_list[1] if len(visible_lemmas_list) > 1 else None
         
-        topic_name, topic_id, topic_description, topic_icon = get_topic_info(concept)
+        topic_name, topic_ids, topic_description, topic_icon, topics_list = get_topic_info(concept, session)
+        # Get first topic_id for backward compatibility
+        topic_id = topic_ids[0] if topic_ids else None
         
         paired_items.append(
             PairedDictionaryItem(
@@ -228,9 +255,10 @@ def build_paired_dictionary_items(
                 concept_description=concept.description if concept.description and concept.description.strip() else None,
                 concept_level=concept.level.value if concept.level else None,
                 topic_name=topic_name,
-                topic_id=topic_id,
+                topic_ids=topic_ids,
                 topic_description=topic_description,
                 topic_icon=topic_icon,
+                topics=topics_list,
             )
         )
     

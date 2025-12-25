@@ -115,20 +115,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _loadTopics(TopicsProvider topicsProvider) {
+    final wasEmpty = _filterState.selectedTopicIds.isEmpty;
+    
     setState(() {
       _isLoadingTopics = topicsProvider.isLoading;
       _topics = topicsProvider.topics;
-      // Set all topics as selected by default if nothing is selected
-      if (_topics.isNotEmpty && _filterState.selectedTopicIds.isEmpty) {
-        final topicIds = _topics.map((t) => t.id).toSet();
-        _filterState.updateFilters(topicIds: topicIds);
-        // Reload statistics after initializing topics
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        if (authProvider.currentUser != null) {
-          _loadStatistics();
-        }
-      }
     });
+    
+    // Set all topics as selected by default if nothing is selected
+    // This ensures all topics are ON by default
+    if (_topics.isNotEmpty && wasEmpty) {
+      final topicIds = _topics.map((t) => t.id).toSet();
+      _filterState.updateFilters(topicIds: topicIds);
+      // Reload statistics after initializing topics
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.currentUser != null) {
+        _loadStatistics();
+      }
+    }
   }
 
   /// Extract available bins from Leitner distribution

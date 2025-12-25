@@ -64,12 +64,14 @@ class FlashcardService {
     required String term,
     String? description,
     int? topicId,
+    List<int>? topicIds,
     int? userId,
   }) =>
       ConceptService.createConceptOnly(
         term: term,
         description: description,
         topicId: topicId,
+        topicIds: topicIds,
         userId: userId,
       );
 

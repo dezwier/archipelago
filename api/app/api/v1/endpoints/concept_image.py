@@ -69,7 +69,15 @@ async def generate_concept_image(
     
     # Get topic information
     topic_description = request.topic_description
-    topic_id = request.topic_id if request.topic_id else concept.topic_id
+    # Get first topic_id from ConceptTopic if not provided in request
+    topic_id = request.topic_id
+    if not topic_id:
+        from app.models.concept_topic import ConceptTopic
+        concept_topic = session.exec(
+            select(ConceptTopic).where(ConceptTopic.concept_id == concept.id).limit(1)
+        ).first()
+        if concept_topic:
+            topic_id = concept_topic.topic_id
     
     if topic_id:
         topic = session.get(Topic, topic_id)

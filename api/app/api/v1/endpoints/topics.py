@@ -25,12 +25,22 @@ async def get_topics(
     session: Session = Depends(get_session)
 ):
     """Get topics, optionally filtered by user_id. Sorted by created_at descending (most recent first).
-    When user_id is None (logged out), returns empty list since all topics belong to users."""
-    if user_id is None:
-        # When logged out, return empty list (no topics visible)
-        return TopicsResponse(topics=[])
+    When user_id is None (logged out), returns only public topics.
+    When user_id is provided, returns topics created by that user plus public topics."""
+    from app.models.enums import TopicVisibility
+    from sqlalchemy import or_
     
-    query = select(Topic).where(Topic.user_id == user_id)
+    if user_id is None:
+        # When logged out, return only public topics
+        query = select(Topic).where(Topic.visibility == TopicVisibility.PUBLIC)
+    else:
+        # When logged in, return topics created by user OR public topics
+        query = select(Topic).where(
+            or_(
+                Topic.created_by_user_id == user_id,
+                Topic.visibility == TopicVisibility.PUBLIC
+            )
+        )
     query = query.order_by(Topic.created_at.desc())  # type: ignore
     topics = session.exec(query).all()
     return TopicsResponse(
@@ -44,13 +54,15 @@ async def create_topic(
     session: Session = Depends(get_session)
 ):
     """Create a new topic or return existing one if it already exists for this user."""
+    from app.models.enums import TopicVisibility
+    
     topic_name_lower = request.name.lower().strip()
     
     # Check if topic already exists for this user
     existing_topic = session.exec(
         select(Topic).where(
             Topic.name.ilike(topic_name_lower),  # type: ignore[attr-defined]
-            Topic.user_id == request.user_id
+            Topic.created_by_user_id == request.user_id
         )
     ).first()
     
@@ -62,7 +74,8 @@ async def create_topic(
         name=topic_name_lower,
         description=request.description,
         icon=request.icon,
-        user_id=request.user_id
+        created_by_user_id=request.user_id,
+        visibility=request.visibility or TopicVisibility.PRIVATE
     )
     session.add(topic)
     session.commit()
@@ -104,6 +117,8 @@ async def update_topic(
         topic.description = request.description if request.description.strip() else None
     if request.icon is not None:
         topic.icon = request.icon.strip() if request.icon.strip() else None
+    if request.visibility is not None:
+        topic.visibility = request.visibility
     
     session.add(topic)
     session.commit()

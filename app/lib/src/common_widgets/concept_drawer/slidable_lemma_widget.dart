@@ -9,7 +9,6 @@ class SlidableLemmaWidget extends StatelessWidget {
   final bool showDescription;
   final bool showExtraInfo;
   final String? partOfSpeech;
-  final String? topicName;
   final VoidCallback? onRegenerate;
   final bool isRetrieving;
 
@@ -20,7 +19,6 @@ class SlidableLemmaWidget extends StatelessWidget {
     this.showDescription = true,
     this.showExtraInfo = true,
     this.partOfSpeech,
-    this.topicName,
     this.onRegenerate,
     this.isRetrieving = false,
   });
@@ -178,7 +176,6 @@ class SlidableLemmaWidget extends StatelessWidget {
         showDescription: showDescription,
         showExtraInfo: showExtraInfo,
         partOfSpeech: partOfSpeech,
-        topicName: topicName,
       ),
     );
   }

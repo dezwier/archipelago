@@ -74,10 +74,14 @@ async def export_flashcards_pdf(
                    len(lemmas), concept_id, 
                    [l.id for l in lemmas[:10]] + (["..."] if len(lemmas) > 10 else []))
         
-        # Get topic if available
+        # Get topic if available (use first topic from ConceptTopic)
         topic = None
-        if concept.topic_id:
-            topic = session.get(Topic, concept.topic_id)
+        from app.models.concept_topic import ConceptTopic
+        concept_topic = session.exec(
+            select(ConceptTopic).where(ConceptTopic.concept_id == concept.id).limit(1)
+        ).first()
+        if concept_topic:
+            topic = session.get(Topic, concept_topic.topic_id)
         
         concepts.append((concept, lemmas, topic))
     

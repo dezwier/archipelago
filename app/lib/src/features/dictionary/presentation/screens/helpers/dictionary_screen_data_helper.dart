@@ -103,10 +103,11 @@ class DictionaryScreenDataHelper {
           // Keep only the valid selected topics
           controller.setTopicFilter(validSelectedIds);
         }
-      } else if (topics.isNotEmpty && controller.selectedTopicIds.isEmpty) {
-        // Set all topics as selected by default if nothing is selected
-        controller.setTopicFilter(topicIds);
       }
+      // Note: We don't auto-select all topics if selectedTopicIds is empty
+      // This allows the filter to work correctly - empty means "no filter" (show all)
+      // The filter sheet will default to all topics when opened, but we preserve
+      // the user's explicit selection (including empty = show all)
       
       setState();
     });
