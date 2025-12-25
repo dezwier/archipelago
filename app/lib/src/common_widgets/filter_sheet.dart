@@ -615,39 +615,44 @@ class _FilterSheetState extends State<FilterSheet> {
               _buildVerticalTitle('BINS'),
               const SizedBox(width: 8),
               Expanded(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ...allBins.map((bin) {
-                      final isSelected = currentBins.contains(bin);
-                      return _buildFilterChip(
-                        label: bin.toString(),
-                        isSelected: isSelected,
-                        onTap: () {
-                          setMenuState(() {
-                            final newSet = Set<int>.from(currentBins);
-                            if (isSelected) {
-                              newSet.remove(bin);
-                            } else {
-                              newSet.add(bin);
-                            }
-                            _pendingLeitnerBins = newSet;
-                          });
-                        },
-                      );
-                    }),
-                    _buildAllOnButton(
-                      allSelected: allBinsSelected,
-                      onPressed: () {
-                        setMenuState(() {
-                          if (allBinsSelected) {
-                            _pendingLeitnerBins = <int>{};
-                          } else {
-                            _pendingLeitnerBins = Set<int>.from(allBinsSet);
-                          }
-                        });
-                      },
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ...allBins.map((bin) {
+                          final isSelected = currentBins.contains(bin);
+                          return _buildFilterChip(
+                            label: bin.toString(),
+                            isSelected: isSelected,
+                            onTap: () {
+                              setMenuState(() {
+                                final newSet = Set<int>.from(currentBins);
+                                if (isSelected) {
+                                  newSet.remove(bin);
+                                } else {
+                                  newSet.add(bin);
+                                }
+                                _pendingLeitnerBins = newSet;
+                              });
+                            },
+                          );
+                        }),
+                        _buildAllOnButton(
+                          allSelected: allBinsSelected,
+                          onPressed: () {
+                            setMenuState(() {
+                              if (allBinsSelected) {
+                                _pendingLeitnerBins = <int>{};
+                              } else {
+                                _pendingLeitnerBins = Set<int>.from(allBinsSet);
+                              }
+                            });
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),

@@ -120,8 +120,17 @@ class _LearnScreenState extends State<LearnScreen> {
   Future<void> _handleFinishLesson() async {
     // Finish the lesson
     await _controller.finishLesson();
-      // Refresh Leitner distribution after lesson completion to show updated bin counts
-      await _loadLeitnerDistribution();
+    // Refresh user data to ensure we have the latest Leitner config
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.refreshUser();
+    // Refresh controller's user-dependent state
+    await _controller.refreshUser();
+    // Refresh Leitner distribution after lesson completion to show updated bin counts
+    await _loadLeitnerDistribution();
+    // Trigger UI update
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _loadTopics(TopicsProvider topicsProvider) {
