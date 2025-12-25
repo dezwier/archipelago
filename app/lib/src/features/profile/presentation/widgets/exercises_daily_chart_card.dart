@@ -185,16 +185,6 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
       );
     }
 
-    // Find max count for scaling
-    int maxCount = 1;
-    for (final langData in widget.practiceDaily!.languageData) {
-      for (final dailyData in langData.dailyData) {
-        if (dailyData.count > maxCount) {
-          maxCount = dailyData.count;
-        }
-      }
-    }
-
     // Create a map of language code to color
     final languageColorMap = <String, Color>{};
     final defaultColors = [
@@ -222,26 +212,57 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
       }
     }
 
-    // Build spots for each language
-    final languageSpots = <String, List<FlSpot>>{};
-    for (int i = 0; i < widget.practiceDaily!.languageData.length; i++) {
-      final langData = widget.practiceDaily!.languageData[i];
-      final spots = <FlSpot>[];
-      
-      // Create a map of date -> count for this language
+    // Build date -> count maps for each language
+    final languageDateCountMaps = <String, Map<String, int>>{};
+    for (final langData in widget.practiceDaily!.languageData) {
       final dateCountMap = <String, int>{};
       for (final dailyData in langData.dailyData) {
         dateCountMap[dailyData.date] = dailyData.count;
       }
+      languageDateCountMaps[langData.languageCode] = dateCountMap;
+    }
+
+    // Build stacked spots for each language (each language's line is cumulative)
+    final languageSpots = <String, List<FlSpot>>{};
+    final languageActualValues = <String, List<int>>{}; // Store actual values for tooltips
+    double maxStackedCount = 1.0;
+    
+    for (int i = 0; i < widget.practiceDaily!.languageData.length; i++) {
+      final langData = widget.practiceDaily!.languageData[i];
+      final spots = <FlSpot>[];
+      final actualValues = <int>[];
       
-      // Create spots for each date (use 0 if no data for that date)
+      // Create spots for each date with stacked values
       for (int j = 0; j < sortedDates.length; j++) {
         final date = sortedDates[j];
-        final count = dateCountMap[date] ?? 0;
-        spots.add(FlSpot(j.toDouble(), count.toDouble()));
+        
+        // Calculate cumulative value: sum of all previous languages + current language
+        double cumulativeValue = 0.0;
+        int actualValue = 0;
+        
+        for (int k = 0; k <= i; k++) {
+          final prevLangData = widget.practiceDaily!.languageData[k];
+          final prevDateCountMap = languageDateCountMaps[prevLangData.languageCode] ?? {};
+          final prevCount = prevDateCountMap[date] ?? 0;
+          
+          if (k == i) {
+            // This is the current language, store its actual value
+            actualValue = prevCount;
+          }
+          cumulativeValue += prevCount.toDouble();
+        }
+        
+        spots.add(FlSpot(j.toDouble(), cumulativeValue));
+        actualValues.add(actualValue);
+        
+        // Update max count for scaling
+        if (cumulativeValue > maxStackedCount) {
+          maxStackedCount = cumulativeValue;
+        }
       }
       
       languageSpots[langData.languageCode] = spots;
+      languageActualValues[langData.languageCode] = actualValues;
     }
 
     return Container(
@@ -466,7 +487,7 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                   minX: 0,
                   maxX: (sortedDates.length - 1).toDouble(),
                   minY: 0,
-                  maxY: maxCount * 1.1, // Add 10% padding
+                  maxY: maxStackedCount * 1.1, // Add 10% padding
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
                       getTooltipColor: (_) => Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -478,8 +499,16 @@ class _ExercisesDailyChartCardState extends State<ExercisesDailyChartCard> {
                             final langData = widget.practiceDaily!.languageData[touchedSpot.barIndex];
                             final languageCode = langData.languageCode;
                             final languageName = _getLanguageName(languageCode);
+                            
+                            // Get the actual value (not the stacked/cumulative value)
+                            final dateIndex = touchedSpot.x.round();
+                            final actualValues = languageActualValues[languageCode] ?? [];
+                            final actualValue = (dateIndex >= 0 && dateIndex < actualValues.length)
+                                ? actualValues[dateIndex]
+                                : touchedSpot.y.toInt();
+                            
                             return LineTooltipItem(
-                              '$languageName: ${touchedSpot.y.toInt()}',
+                              '$languageName: $actualValue',
                               TextStyle(
                                 color: languageColorMap[languageCode] ?? Colors.black,
                                 fontWeight: FontWeight.bold,
