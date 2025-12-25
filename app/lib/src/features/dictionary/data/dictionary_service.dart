@@ -74,9 +74,10 @@ class DictionaryService {
 
   static Future<Map<String, dynamic>> getLemmasOnly(
     int conceptId,
-    List<String> visibleLanguageCodes,
-  ) =>
-      DictionaryQueryService.getLemmasOnly(conceptId, visibleLanguageCodes);
+    List<String> visibleLanguageCodes, {
+    int? userId,
+  }) =>
+      DictionaryQueryService.getLemmasOnly(conceptId, visibleLanguageCodes, userId: userId);
 
   static Future<Map<String, dynamic>> getTopicDataOnly(int? topicId) =>
       DictionaryQueryService.getTopicDataOnly(topicId);

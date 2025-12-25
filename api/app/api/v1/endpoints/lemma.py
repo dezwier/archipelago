@@ -12,8 +12,8 @@ from datetime import datetime, timezone
 from typing import List, Optional
 import logging
 from app.core.database import get_session
-from app.models.models import Lemma, Concept
-from app.schemas.lemma import LemmaResponse, UpdateLemmaRequest
+from app.models.models import Lemma, Concept, UserLemma
+from app.schemas.lemma import LemmaResponse, LemmaWithUserDataResponse, UpdateLemmaRequest
 from app.schemas.concept import (
     CreateConceptRequest,
     CreateConceptResponse,
@@ -92,19 +92,21 @@ async def get_lemmas(
     ]
 
 
-@router.get("/concept/{concept_id}", response_model=List[LemmaResponse])
+@router.get("/concept/{concept_id}", response_model=List[LemmaWithUserDataResponse])
 async def get_lemmas_by_concept_id(
     concept_id: int,
+    user_id: Optional[int] = None,
     session: Session = Depends(get_session)
 ):
     """
-    Get all lemmas for a given concept ID.
+    Get all lemmas for a given concept ID, optionally with user lemma data.
     
     Args:
         concept_id: The concept ID
+        user_id: Optional user ID to include user lemma data (leitner_bin, last_review_time, next_review_at)
     
     Returns:
-        List of lemmas associated with the concept
+        List of lemmas associated with the concept, with optional user lemma data
     """
     # Verify that the concept exists
     concept = session.get(Concept, concept_id)
@@ -119,25 +121,51 @@ async def get_lemmas_by_concept_id(
         select(Lemma).where(Lemma.concept_id == concept_id).order_by(Lemma.created_at.desc())
     ).all()
     
-    return [
-        LemmaResponse(
-            id=lemma.id,
-            concept_id=lemma.concept_id,
-            language_code=lemma.language_code,
-            translation=ensure_capitalized(lemma.term),
-            description=lemma.description,
-            ipa=lemma.ipa,
-            audio_path=lemma.audio_url,
-            gender=lemma.gender,
-            article=lemma.article,
-            plural_form=lemma.plural_form,
-            verb_type=lemma.verb_type,
-            auxiliary_verb=lemma.auxiliary_verb,
-            formality_register=lemma.formality_register,
-            notes=lemma.notes
-        )
-        for lemma in lemmas
-    ]
+    # If user_id is provided, fetch user lemma data for each lemma
+    user_lemma_map = {}
+    if user_id is not None:
+        lemma_ids = [lemma.id for lemma in lemmas]
+        if lemma_ids:
+            user_lemmas = session.exec(
+                select(UserLemma).where(
+                    UserLemma.lemma_id.in_(lemma_ids),  # type: ignore
+                    UserLemma.user_id == user_id
+                )
+            ).all()
+            user_lemma_map = {ul.lemma_id: ul for ul in user_lemmas}
+    
+    # Build response with optional user lemma data
+    result = []
+    for lemma in lemmas:
+        user_lemma = user_lemma_map.get(lemma.id)
+        
+        lemma_data = {
+            'id': lemma.id,
+            'concept_id': lemma.concept_id,
+            'language_code': lemma.language_code,
+            'translation': ensure_capitalized(lemma.term),
+            'description': lemma.description,
+            'ipa': lemma.ipa,
+            'audio_path': lemma.audio_url,
+            'gender': lemma.gender,
+            'article': lemma.article,
+            'plural_form': lemma.plural_form,
+            'verb_type': lemma.verb_type,
+            'auxiliary_verb': lemma.auxiliary_verb,
+            'formality_register': lemma.formality_register,
+            'notes': lemma.notes,
+        }
+        
+        # Add user lemma data if available
+        if user_lemma:
+            lemma_data['user_lemma_id'] = user_lemma.id
+            lemma_data['leitner_bin'] = user_lemma.leitner_bin
+            lemma_data['last_review_time'] = user_lemma.last_review_time
+            lemma_data['next_review_at'] = user_lemma.next_review_at
+        
+        result.append(LemmaWithUserDataResponse(**lemma_data))
+    
+    return result
 
 
 @router.post("/generate")

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archipelago/src/utils/html_entity_decoder.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
 import 'package:archipelago/src/features/dictionary/domain/dictionary_card.dart';
 import 'package:archipelago/src/features/dictionary/data/dictionary_service.dart';
 import 'package:archipelago/src/features/create/data/flashcard_service.dart';
-import 'language_lemma_widget.dart';
+import 'slidable_lemma_widget.dart';
 import 'concept_image_widget.dart';
 import 'concept_image_buttons.dart';
 import 'concept_info_widget.dart';
@@ -19,6 +21,7 @@ class ConceptDrawer extends StatefulWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onItemUpdated; // Called when item is updated (for parent to refresh)
+  final int? userId; // Optional user ID, will be loaded from SharedPreferences if not provided
 
   const ConceptDrawer({
     super.key,
@@ -28,6 +31,7 @@ class ConceptDrawer extends StatefulWidget {
     this.onEdit,
     this.onDelete,
     this.onItemUpdated,
+    this.userId,
   });
 
   @override
@@ -42,6 +46,7 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
   String? _errorMessage;
   bool _isEditing = false;
   final Set<String> _retrievingLanguages = {};
+  int? _userId;
   
   // Partial data for progressive loading
   Map<String, dynamic>? _conceptData;
@@ -85,7 +90,27 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
   @override
   void initState() {
     super.initState();
-    _loadConcept();
+    _loadUserId().then((_) => _loadConcept());
+  }
+
+  Future<void> _loadUserId() async {
+    // Use provided userId or load from SharedPreferences
+    if (widget.userId != null) {
+      _userId = widget.userId;
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString('current_user');
+      if (userJson != null) {
+        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
+        _userId = userMap['id'] as int?;
+      }
+    } catch (e) {
+      // If loading fails, continue without userId
+      _userId = null;
+    }
   }
 
   Future<void> _loadConcept() async {
@@ -110,7 +135,11 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
 
     // Start all API calls in parallel for faster loading
     final conceptFuture = DictionaryService.getConceptDataOnly(widget.conceptId);
-    final lemmasFuture = DictionaryService.getLemmasOnly(widget.conceptId, visibleLanguageCodes);
+    final lemmasFuture = DictionaryService.getLemmasOnly(
+      widget.conceptId,
+      visibleLanguageCodes,
+      userId: _userId,
+    );
     
     // Handle concept data (needed first to check for topic_id)
     conceptFuture.then((result) {
@@ -561,59 +590,15 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: LanguageLemmaWidget(
-                card: card,
-                languageCode: languageCode,
-                showDescription: true,
-                showExtraInfo: true,
-                translationController: null,
-                isEditing: false,
-                partOfSpeech: _item?.partOfSpeech,
-              ),
-            ),
-            // Retrieve button on the right
-            if (_retrievingLanguages.contains(languageCode))
-              Padding(
-                padding: const EdgeInsets.only(left: 8.0, top: 4.0),
-                child: SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
-                    ),
-                  ),
-                ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(left: 8.0, top: 4.0),
-                child: IconButton(
-                  onPressed: () => _handleRetrieveLemma(languageCode),
-                  icon: const Icon(Icons.auto_awesome, size: 16),
-                  style: IconButton.styleFrom(
-                    foregroundColor: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
-                    backgroundColor:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                    padding: const EdgeInsets.all(8),
-                    minimumSize: const Size(32, 32),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  tooltip: 'Retrieve lemma',
-                ),
-              ),
-          ],
+        SlidableLemmaWidget(
+          card: card,
+          languageCode: languageCode,
+          showDescription: true,
+          showExtraInfo: true,
+          partOfSpeech: _item?.partOfSpeech,
+          topicName: _item?.topicName,
+          onRegenerate: () => _handleRetrieveLemma(languageCode),
+          isRetrieving: _retrievingLanguages.contains(languageCode),
         ),
         // Notes
         if (card.notes != null &&
@@ -691,7 +676,7 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
             ),
           ),
         ),
-        // Button or spinner on the right
+        // Retrieve button - still visible for placeholders since there's no card to slide
         if (_retrievingLanguages.contains(languageCode))
           Padding(
             padding: const EdgeInsets.only(top: 4.0),
@@ -710,21 +695,24 @@ class _ConceptDrawerState extends State<ConceptDrawer> {
             ),
           )
         else
-          IconButton(
-            onPressed: () => _handleRetrieveLemma(languageCode),
-            icon: const Icon(Icons.auto_awesome, size: 16),
-            style: IconButton.styleFrom(
-              foregroundColor: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.6),
-              backgroundColor:
-                  Theme.of(context).colorScheme.surfaceContainerHighest,
-              padding: const EdgeInsets.all(8),
-              minimumSize: const Size(32, 32),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          Padding(
+            padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+            child: IconButton(
+              onPressed: () => _handleRetrieveLemma(languageCode),
+              icon: const Icon(Icons.auto_awesome, size: 16),
+              style: IconButton.styleFrom(
+                foregroundColor: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.6),
+                backgroundColor:
+                    Theme.of(context).colorScheme.surfaceContainerHighest,
+                padding: const EdgeInsets.all(8),
+                minimumSize: const Size(32, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              tooltip: 'Retrieve lemma',
             ),
-            tooltip: 'Retrieve lemma',
           ),
       ],
     );
@@ -824,6 +812,7 @@ void showConceptDrawer(
   VoidCallback? onEdit,
   VoidCallback? onDelete,
   VoidCallback? onItemUpdated,
+  int? userId,
 }) {
   showModalBottomSheet(
     context: context,
@@ -836,6 +825,7 @@ void showConceptDrawer(
       onEdit: onEdit,
       onDelete: onDelete,
       onItemUpdated: onItemUpdated,
+      userId: userId,
     ),
   );
 }

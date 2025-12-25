@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
+from datetime import datetime
 from app.schemas.utils import normalize_part_of_speech
 
 
@@ -19,6 +20,17 @@ class LemmaResponse(BaseModel):
     auxiliary_verb: Optional[str] = None
     formality_register: Optional[str] = None
     notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class LemmaWithUserDataResponse(LemmaResponse):
+    """Lemma response schema with optional user lemma data."""
+    user_lemma_id: Optional[int] = None
+    leitner_bin: Optional[int] = None
+    last_review_time: Optional[datetime] = None
+    next_review_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -165,9 +165,10 @@ class DictionaryQueryService {
   static Future<Map<String, dynamic>> getConceptById({
     required int conceptId,
     List<String> visibleLanguageCodes = const [],
+    int? userId,
   }) async {
     // Fetch concept and lemmas separately and construct the PairedDictionaryItem
-    return await _getConceptByIdFallback(conceptId, visibleLanguageCodes);
+    return await _getConceptByIdFallback(conceptId, visibleLanguageCodes, userId: userId);
   }
 
   /// Get concept data only (for progressive loading)
@@ -192,10 +193,11 @@ class DictionaryQueryService {
   /// Returns: {'success': bool, 'data': List<dynamic>?, 'message': String?}
   static Future<Map<String, dynamic>> getLemmasOnly(
     int conceptId,
-    List<String> visibleLanguageCodes,
-  ) async {
+    List<String> visibleLanguageCodes, {
+    int? userId,
+  }) async {
     try {
-      final lemmasData = await _fetchLemmas(conceptId, visibleLanguageCodes);
+      final lemmasData = await _fetchLemmas(conceptId, visibleLanguageCodes, userId: userId);
       return {
         'success': true,
         'data': lemmasData,
@@ -253,9 +255,16 @@ class DictionaryQueryService {
   }
 
   /// Fetch lemmas for a concept
-  static Future<List<dynamic>> _fetchLemmas(int conceptId, List<String> visibleLanguageCodes) async {
+  static Future<List<dynamic>> _fetchLemmas(
+    int conceptId,
+    List<String> visibleLanguageCodes, {
+    int? userId,
+  }) async {
     try {
-      final lemmasUrl = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/concept/$conceptId');
+      final uri = Uri.parse('${ApiConfig.apiBaseUrl}/lemmas/concept/$conceptId');
+      final lemmasUrl = userId != null
+          ? uri.replace(queryParameters: {'user_id': userId.toString()})
+          : uri;
       final lemmasResponse = await http.get(
         lemmasUrl,
         headers: {'Content-Type': 'application/json'},
@@ -312,12 +321,13 @@ class DictionaryQueryService {
   /// Now uses parallel API calls for better performance
   static Future<Map<String, dynamic>> _getConceptByIdFallback(
     int conceptId,
-    List<String> visibleLanguageCodes,
-  ) async {
+    List<String> visibleLanguageCodes, {
+    int? userId,
+  }) async {
     try {
       // Start all API calls in parallel
       final conceptFuture = _fetchConceptData(conceptId);
-      final lemmasFuture = _fetchLemmas(conceptId, visibleLanguageCodes);
+      final lemmasFuture = _fetchLemmas(conceptId, visibleLanguageCodes, userId: userId);
       
       // Wait for concept data first (needed to check for topic_id)
       final conceptData = await conceptFuture;

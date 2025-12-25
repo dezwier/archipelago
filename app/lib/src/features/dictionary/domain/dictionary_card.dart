@@ -13,6 +13,10 @@ class DictionaryCard {
   final String? auxiliaryVerb;
   final String? formalityRegister;
   final String? notes;
+  final int? userLemmaId;
+  final int? leitnerBin;
+  final DateTime? lastReviewTime;
+  final DateTime? nextReviewAt;
 
   DictionaryCard({
     required this.id,
@@ -29,9 +33,25 @@ class DictionaryCard {
     this.auxiliaryVerb,
     this.formalityRegister,
     this.notes,
+    this.userLemmaId,
+    this.leitnerBin,
+    this.lastReviewTime,
+    this.nextReviewAt,
   });
 
   factory DictionaryCard.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDateTime(dynamic value) {
+      if (value == null) return null;
+      if (value is String) {
+        try {
+          return DateTime.parse(value);
+        } catch (e) {
+          return null;
+        }
+      }
+      return null;
+    }
+
     return DictionaryCard(
       id: json['id'] as int,
       conceptId: json['concept_id'] as int,
@@ -47,6 +67,10 @@ class DictionaryCard {
       auxiliaryVerb: json['auxiliary_verb'] as String?,
       formalityRegister: json['formality_register'] as String?,
       notes: json['notes'] as String?,
+      userLemmaId: json['user_lemma_id'] as int?,
+      leitnerBin: json['leitner_bin'] as int?,
+      lastReviewTime: parseDateTime(json['last_review_time']),
+      nextReviewAt: parseDateTime(json['next_review_at']),
     );
   }
 }
