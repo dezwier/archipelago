@@ -1,67 +1,51 @@
-## Vision
-- A useful app to actually learn a language
-    - Starting languages: English, Italian, French, Spanish, German, Japanese, Lithuanian, Dutch
-- Uses concepts
-    - Pronunciation first
-    - Don't translate
-    - Spaced repetition (SRS)
+# Archipelago
 
-## Technical Breakdown
-- A frontend app made with flutter to generate both in iOS, Android and web
-    - Screen to generate flashcards
-        - Enter a word or phrase, services will retrieve a description, ipa, audio recording, google images etc
-        - Entering can also be long, then it will be considered a topic island, which will be broken down in flashcards same as above
-        - Entering can be written or speech
-    - Screen to practice flashcards
-        - Either new, or seen ones depending on availability, according SRS
-        - Showing the image and description of the target language, the translation of native language hidden
-        - Showing estimated retention curve afterwards
-    - Screen with profile and stats
-        - What languages, words learned
-        - bin distribution of words according SRS
+A language learning application with spaced repetition (Leitner system) for vocabulary acquisition.
 
+## Project Structure
 
-- A backend using Postgres and Railway to have single point of truths for all platforms
-- Database model
-    - Concept
-        - id (pk, bigint)
-        - internal_name
-        - topic_id (fk, int)
-        - Note: Images are stored in a separate images table (one image max per concept)
+- **Frontend**: Flutter app (`app/`)
+- **Backend**: FastAPI Python API (`api/`)
+- **Database**: PostgreSQL
 
-    - Language
-        - code (PK, char(2)) - e.g., 'en', 'fr', 'es', 'jp'
-        - name (string) - English, French, etc.
+## Documentation
 
-    - Card
-        - id (PK, bigint)
-        - concept_id (FK) - Links back to the concept.
-        - language_code (FK) - Links to Language table.
-        - translation (string) - The world in the target language
-        - description (string) - A description in the target language
-        - ipa (string) - Pronunciation in IPA symbols
-        - audio_path (string) - Pronunciation file.
-        - gender (string, nullable) - Crucial for French/Spanish/German.
-        - notes (string) - Context specific to this language.
+Comprehensive documentation is available in the [`docs/`](./docs/) directory:
 
-    - UserCard
-        - id (PK, bigint)
-        - user_id (FK)
-        - card_id (FK)
-        - image_path (string)
-        - created_time (timestamp)
-        - last_review_time (timestamp)
-        - status (enum)
-        - next_review_at (timestamp) - Calculated by SRS.
+- **[Documentation Index](./docs/README.md)** - Overview of all documentation
+- **[Data Model](./docs/data-model.md)** - Database schema and entity relationships
+- **[API Flows](./docs/api-flows.md)** - Frontend-to-backend interaction flows
+- **[Architecture](./docs/architecture.md)** - System architecture and design
+- **[API Documentation](./docs/api-documentation.md)** - API endpoint reference
 
-    - User
-        - id (PK)
-        - lang_native (string)
-        - lang_learning (string)
+## Quick Start
 
-    - UserPractice
-        - id (PK)
-        - user_id (fk)
-        - created_time (time)
-        - success (bool)
-        - feedback (int)
+### Backend
+
+```bash
+cd api
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+# Set up database and run migrations
+uvicorn app.main:app --reload
+```
+
+API docs available at: http://localhost:8000/docs
+
+### Frontend
+
+```bash
+cd app
+flutter pub get
+flutter run
+```
+
+## Database ERD
+
+See [`api/ERD.md`](./api/ERD.md) for the Entity Relationship Diagram (Mermaid format).
+
+## Keeping Documentation Updated
+
+See [`docs/README.md`](./docs/README.md) for information on tools and processes to keep documentation up-to-date.
+
