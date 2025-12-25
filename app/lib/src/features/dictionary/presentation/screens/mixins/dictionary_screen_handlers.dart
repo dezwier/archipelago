@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/dictionary_controller.dart';
 import 'package:archipelago/src/features/dictionary/presentation/controllers/language_visibility_manager.dart';
 import 'package:archipelago/src/features/dictionary/domain/paired_dictionary_item.dart';
-import 'package:archipelago/src/features/dictionary/presentation/widgets/sheets/dictionary_filter_sheet.dart';
+import 'package:archipelago/src/common_widgets/filter_sheet.dart';
 import 'package:archipelago/src/features/dictionary/presentation/widgets/sheets/visibility_options_sheet.dart';
 import 'package:archipelago/src/features/dictionary/presentation/screens/edit_concept_screen.dart';
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_drawer.dart';
 import 'package:archipelago/src/common_widgets/concept_drawer/concept_delete.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/features/create/domain/topic.dart';
+import 'package:archipelago/src/features/profile/data/statistics_service.dart';
+import 'package:archipelago/src/features/profile/domain/statistics.dart';
 
 /// Mixin for event handlers in DictionaryScreen
 mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {
@@ -22,12 +24,87 @@ mixin DictionaryScreenHandlers<T extends StatefulWidget> on State<T> {
   void setShowDescription(bool value);
   void setShowExtraInfo(bool value);
 
-  void showFilteringMenu(BuildContext context) {
-    showDictionaryFilterSheet(
+  Future<void> showFilteringMenu(BuildContext context) async {
+    // Load Leitner distribution if user and learning language are available
+    List<int> availableBins = [];
+    if (controller.currentUser?.id != null && 
+        controller.currentUser?.langLearning != null &&
+        controller.currentUser!.langLearning!.isNotEmpty) {
+      try {
+        final result = await StatisticsService.getLeitnerDistribution(
+          userId: controller.currentUser!.id,
+          languageCode: controller.currentUser!.langLearning!,
+          includeLemmas: controller.includeLemmas,
+          includePhrases: controller.includePhrases,
+          topicIds: controller.getEffectiveTopicIds(),
+          includeWithoutTopic: controller.showLemmasWithoutTopic,
+          levels: controller.getEffectiveLevels(),
+          partOfSpeech: controller.getEffectivePartOfSpeech(),
+          hasImages: controller.getEffectiveHasImages(),
+          hasAudio: controller.getEffectiveHasAudio(),
+          isComplete: controller.getEffectiveIsComplete(),
+        );
+        
+        if (result['success'] == true) {
+          final distribution = result['data'] as LeitnerDistribution;
+          availableBins = distribution.distribution
+              .where((binData) => binData.count > 0)
+              .map((binData) => binData.bin)
+              .toList()
+            ..sort();
+          // Set available bins in controller
+          controller.setAvailableBins(availableBins);
+          // Initialize selected bins if empty
+          if (controller.selectedLeitnerBins.isEmpty && availableBins.isNotEmpty) {
+            controller.batchUpdateFilters(leitnerBins: availableBins.toSet());
+          }
+        }
+      } catch (e) {
+        // Silently fail - just don't show bins
+      }
+    }
+    
+    showFilterSheet(
       context: context,
-      controller: controller,
+      filterState: controller,
+      onApplyFilters: ({
+        Set<int>? topicIds,
+        bool? showLemmasWithoutTopic,
+        Set<String>? levels,
+        Set<String>? partOfSpeech,
+        bool? includeLemmas,
+        bool? includePhrases,
+        bool? hasImages,
+        bool? hasNoImages,
+        bool? hasAudio,
+        bool? hasNoAudio,
+        bool? isComplete,
+        bool? isIncomplete,
+        Set<int>? leitnerBins,
+        Set<String>? learningStatus,
+      }) {
+        controller.batchUpdateFilters(
+          topicIds: topicIds,
+          showLemmasWithoutTopic: showLemmasWithoutTopic,
+          levels: levels,
+          partOfSpeech: partOfSpeech,
+          includeLemmas: includeLemmas,
+          includePhrases: includePhrases,
+          hasImages: hasImages,
+          hasNoImages: hasNoImages,
+          hasAudio: hasAudio,
+          hasNoAudio: hasNoAudio,
+          isComplete: isComplete,
+          isIncomplete: isIncomplete,
+          leitnerBins: leitnerBins,
+          learningStatus: learningStatus,
+        );
+      },
       topics: allTopics,
       isLoadingTopics: isLoadingTopics,
+      availableBins: availableBins,
+      userId: controller.currentUser?.id,
+      maxBins: controller.currentUser?.leitnerMaxBins ?? 7,
     );
   }
 

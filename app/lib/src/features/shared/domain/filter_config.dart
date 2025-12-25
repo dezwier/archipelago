@@ -15,6 +15,8 @@ class FilterConfig {
   final int? hasAudio; // 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
   final int? isComplete; // 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
   final String? search; // Optional search query for concept.term and lemma.term
+  final String? leitnerBins; // Comma-separated list of bin numbers (e.g., "0,1,2,3"), or null if all bins selected
+  final String? learningStatus; // Comma-separated list (e.g., "new,due,learned"), or null if all statuses selected
 
   const FilterConfig({
     this.userId,
@@ -29,6 +31,8 @@ class FilterConfig {
     this.hasAudio,
     this.isComplete,
     this.search,
+    this.leitnerBins,
+    this.learningStatus,
   });
 
   /// Create FilterConfig from JSON
@@ -46,6 +50,8 @@ class FilterConfig {
       hasAudio: json['has_audio'] as int?,
       isComplete: json['is_complete'] as int?,
       search: json['search'] as String?,
+      leitnerBins: json['leitner_bins'] as String?,
+      learningStatus: json['learning_status'] as String?,
     );
   }
 
@@ -64,6 +70,8 @@ class FilterConfig {
     if (hasAudio != null) json['has_audio'] = hasAudio;
     if (isComplete != null) json['is_complete'] = isComplete;
     if (search != null) json['search'] = search;
+    if (leitnerBins != null) json['leitner_bins'] = leitnerBins;
+    if (learningStatus != null) json['learning_status'] = learningStatus;
     return json;
   }
 
@@ -81,6 +89,8 @@ class FilterConfig {
     int? hasAudio,
     int? isComplete,
     String? search,
+    String? leitnerBins,
+    String? learningStatus,
   }) {
     return FilterConfig(
       userId: userId ?? this.userId,
@@ -95,6 +105,8 @@ class FilterConfig {
       hasAudio: hasAudio ?? this.hasAudio,
       isComplete: isComplete ?? this.isComplete,
       search: search ?? this.search,
+      leitnerBins: leitnerBins ?? this.leitnerBins,
+      learningStatus: learningStatus ?? this.learningStatus,
     );
   }
 }

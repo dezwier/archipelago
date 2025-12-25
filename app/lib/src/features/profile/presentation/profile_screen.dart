@@ -118,10 +118,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Extract available bins from Leitner distribution
+  List<int> _getAvailableBins() {
+    if (_leitnerDistribution == null) return [];
+    // Get bins that have count > 0
+    return _leitnerDistribution!.distribution
+        .where((binData) => binData.count > 0)
+        .map((binData) => binData.bin)
+        .toList()
+      ..sort();
+  }
+
   void _showFilterSheet() {
     showFilterSheet(
       context: context,
       filterState: _filterState,
+      availableBins: _getAvailableBins(),
+      userId: _currentUser?.id,
+      maxBins: _currentUser?.leitnerMaxBins ?? 7,
       onApplyFilters: ({
         Set<int>? topicIds,
         bool? showLemmasWithoutTopic,
@@ -135,6 +149,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         bool? hasNoAudio,
         bool? isComplete,
         bool? isIncomplete,
+        Set<int>? leitnerBins,
+        Set<String>? learningStatus,
       }) {
         // Update filter state
         _filterState.updateFilters(
@@ -150,6 +166,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           hasNoAudio: hasNoAudio,
           isComplete: isComplete,
           isIncomplete: isIncomplete,
+          leitnerBins: leitnerBins,
+          learningStatus: learningStatus,
         );
         // Reload statistics with new filters
         _loadStatistics();
@@ -182,6 +200,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() {
             _currentUser = User.fromJson(userMap);
             _isInitializing = false;
+            // Initialize all bins by default if empty
+            _filterState.initializeBinsIfEmpty(_currentUser!.leitnerMaxBins ?? 7);
           });
           widget.onLoginStateChanged?.call(true);
           // Load statistics when user is loaded
@@ -385,8 +405,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _refreshProfile() async {
+    // Refresh user data from API if logged in
+    if (_currentUser != null) {
+      try {
+        // Use update-languages endpoint to get fresh user data (it returns full user object)
+        final result = await AuthService.updateUserLanguages(
+          _currentUser!.id,
+          null, // Don't change native language
+          null, // Don't change learning language
+        );
+        if (result['success'] == true) {
+          final updatedUser = result['user'] as User;
+          setState(() {
+            _currentUser = updatedUser;
+          });
+          await _saveUser(updatedUser);
+        }
+      } catch (e) {
+        // If refresh fails, just reload from cache
+        await _loadSavedUser(force: true);
+      }
+    } else {
+      await _loadSavedUser(force: true);
+    }
+    
     await Future.wait([
-      _loadSavedUser(force: true),
       _loadTopics(),
       _loadStatistics(isRefresh: true),
     ]);
@@ -438,12 +481,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _currentUser!.username,
+                              _currentUser!.fullName ?? _currentUser!.username,
                               style: Theme.of(context).textTheme.headlineSmall,
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              _currentUser!.email,
+                              '${_currentUser!.email} @${_currentUser!.username}',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ],
@@ -710,6 +753,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
+      // Get maxBins from user
+      final maxBins = _currentUser!.leitnerMaxBins ?? 7;
+
       // Load summary stats with current filter state
       final summaryResult = await StatisticsService.getLanguageSummaryStats(
         userId: _currentUser!.id,
@@ -722,6 +768,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         hasImages: _filterState.hasImagesParam,
         hasAudio: _filterState.hasAudioParam,
         isComplete: _filterState.isCompleteParam,
+        leitnerBins: _filterState.getLeitnerBinsParam(maxBins),
+        learningStatus: _filterState.getLearningStatusParam(),
       );
 
       // Load Leitner distribution for learning language
@@ -739,6 +787,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           hasImages: _filterState.hasImagesParam,
           hasAudio: _filterState.hasAudioParam,
           isComplete: _filterState.isCompleteParam,
+          leitnerBins: _filterState.getLeitnerBinsParam(maxBins),
+          learningStatus: _filterState.getLearningStatusParam(),
         );
 
         if (leitnerResult['success'] == true) {
@@ -759,6 +809,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         hasImages: _filterState.hasImagesParam,
         hasAudio: _filterState.hasAudioParam,
         isComplete: _filterState.isCompleteParam,
+        leitnerBins: _filterState.getLeitnerBinsParam(maxBins),
+        learningStatus: _filterState.getLearningStatusParam(),
       );
 
       PracticeDaily? practiceDaily;

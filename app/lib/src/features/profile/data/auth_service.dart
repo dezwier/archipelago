@@ -161,6 +161,54 @@ class AuthService {
     }
   }
 
+  static Future<Map<String, dynamic>> updateLeitnerConfig(
+    int userId,
+    int? maxBins,
+    String? algorithm,
+    int? intervalStartHours,
+  ) async {
+    final url = Uri.parse('${ApiConfig.apiBaseUrl}/auth/update-leitner-config?user_id=$userId');
+    
+    try {
+      final body = <String, dynamic>{};
+      if (maxBins != null) {
+        body['leitner_max_bins'] = maxBins;
+      }
+      if (algorithm != null) {
+        body['leitner_algorithm'] = algorithm;
+      }
+      if (intervalStartHours != null) {
+        body['leitner_interval_start'] = intervalStartHours;
+      }
+
+      final response = await http.patch(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': true,
+          'user': User.fromJson(data['user'] as Map<String, dynamic>),
+          'message': data['message'] as String,
+        };
+      } else {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'success': false,
+          'message': error['detail'] as String? ?? 'Update failed',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
   static Future<Map<String, dynamic>> deleteUserData(int userId) async {
     final url = Uri.parse('${ApiConfig.apiBaseUrl}/auth/delete-user-data?user_id=$userId');
     

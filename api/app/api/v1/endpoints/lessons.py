@@ -46,11 +46,6 @@ async def recompute_srs(
     Returns:
         Dict with message and counts of updated records
     """
-    # SRS parameters (same as complete_lesson)
-    FIRST_DAY_INTERVAL = 1
-    INTERVAL_STYLE = 'fibonacci'
-    MAX_BINS = 7
-    
     # Validate user exists
     user = session.get(User, user_id)
     if not user:
@@ -59,14 +54,19 @@ async def recompute_srs(
             detail=f"User with id {user_id} not found"
         )
     
+    # Use user's Leitner configuration
+    interval_style = user.leitner_algorithm
+    max_bins = user.leitner_max_bins
+    interval_start_hours = user.leitner_interval_start
+    
     # Recompute SRS for all exercises (or filtered by lemma_id)
     updated_count = recompute_user_lemma_srs(
         session,
         user_id,
         lemma_id=lemma_id,
-        first_day_interval=FIRST_DAY_INTERVAL,
-        interval_style=INTERVAL_STYLE,
-        max_bins=MAX_BINS
+        interval_style=interval_style,
+        max_bins=max_bins,
+        interval_start_hours=interval_start_hours
     )
     
     # Commit changes
@@ -111,11 +111,6 @@ async def complete_lesson(
     Returns:
         CompleteLessonResponse with counts of created/updated records
     """
-    # SRS parameters
-    FIRST_DAY_INTERVAL = 1
-    INTERVAL_STYLE = 'fibonacci'
-    MAX_BINS = 7
-    
     # Validate user exists
     user = session.get(User, request.user_id)
     if not user:
@@ -269,6 +264,11 @@ async def complete_lesson(
             lemma_ids_to_update.add(exercise_data.lemma_id)
     
     # Update SRS for each user lemma using lesson-based logic
+    # Use user's Leitner configuration
+    interval_style = user.leitner_algorithm
+    max_bins = user.leitner_max_bins
+    interval_start_hours = user.leitner_interval_start
+    
     for lemma_id in lemma_ids_to_update:
         user_lemma = user_lemma_map.get(lemma_id)
         if user_lemma:
@@ -276,9 +276,9 @@ async def complete_lesson(
                 session=session,
                 user_lemma=user_lemma,
                 lesson_id=lesson.id,
-                first_day_interval=FIRST_DAY_INTERVAL,
-                interval_style=INTERVAL_STYLE,
-                max_bins=MAX_BINS
+                interval_style=interval_style,
+                max_bins=max_bins,
+                interval_start_hours=interval_start_hours
             )
             updated_user_lemmas_count += 1
     

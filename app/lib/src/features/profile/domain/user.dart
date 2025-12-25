@@ -5,6 +5,10 @@ class User {
   final String langNative;
   final String? langLearning;
   final String createdAt;
+  final String? fullName;
+  final int leitnerMaxBins;
+  final String leitnerAlgorithm;
+  final int leitnerIntervalStart;
 
   User({
     required this.id,
@@ -13,6 +17,10 @@ class User {
     required this.langNative,
     this.langLearning,
     required this.createdAt,
+    this.fullName,
+    this.leitnerMaxBins = 7,
+    this.leitnerAlgorithm = 'fibonacci',
+    this.leitnerIntervalStart = 23,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -23,6 +31,10 @@ class User {
       langNative: json['lang_native'] as String,
       langLearning: json['lang_learning'] as String?,
       createdAt: json['created_at'] as String,
+      fullName: json['full_name'] as String?,
+      leitnerMaxBins: json['leitner_max_bins'] as int? ?? 7,
+      leitnerAlgorithm: json['leitner_algorithm'] as String? ?? 'fibonacci',
+      leitnerIntervalStart: json['leitner_interval_start'] as int? ?? 23,
     );
   }
 
@@ -34,6 +46,10 @@ class User {
       'lang_native': langNative,
       'lang_learning': langLearning,
       'created_at': createdAt,
+      'full_name': fullName,
+      'leitner_max_bins': leitnerMaxBins,
+      'leitner_algorithm': leitnerAlgorithm,
+      'leitner_interval_start': leitnerIntervalStart,
     };
   }
 }

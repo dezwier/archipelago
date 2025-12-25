@@ -12,6 +12,8 @@ abstract class FilterState {
   bool get hasNoAudio;
   bool get isComplete;
   bool get isIncomplete;
+  Set<int> get selectedLeitnerBins;
+  Set<String> get selectedLearningStatus; // Values: "new", "due", "learned"
 }
 
 /// Callback interface for applying filter changes
@@ -28,5 +30,7 @@ typedef FilterUpdateCallback = void Function({
   bool? hasNoAudio,
   bool? isComplete,
   bool? isIncomplete,
+  Set<int>? leitnerBins,
+  Set<String>? learningStatus,
 });
 

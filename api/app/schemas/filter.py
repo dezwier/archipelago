@@ -23,6 +23,8 @@ class FilterConfig(BaseModel):
     has_audio: Optional[int] = None  # 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
     is_complete: Optional[int] = None  # 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
     search: Optional[str] = None  # Optional search query for concept.term and lemma.term
+    leitner_bins: Optional[str] = None  # Comma-separated list of bin numbers (e.g., "0,1,2,3"), or null if all bins selected
+    learning_status: Optional[str] = None  # Comma-separated list (e.g., "new,due,learned"), or null if all statuses selected
 
     class Config:
         """Pydantic config."""
@@ -39,7 +41,9 @@ class FilterConfig(BaseModel):
                 "has_images": 1,
                 "has_audio": 0,
                 "is_complete": 1,
-                "search": "hello"
+                "search": "hello",
+                "leitner_bins": "0,1,2",
+                "learning_status": "new,due"
             }
         }
 

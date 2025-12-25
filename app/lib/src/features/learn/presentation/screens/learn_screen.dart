@@ -58,6 +58,7 @@ class _LearnScreenState extends State<LearnScreen> {
 
   Future<void> _handleRefresh() async {
     // Get current widget settings if available, otherwise use controller's current state
+    // Refresh uses current filter state (including Leitner bins and learning status)
     if (_getCurrentWidgetSettings != null) {
       final settings = _getCurrentWidgetSettings!();
       await _controller.refresh(
@@ -67,8 +68,19 @@ class _LearnScreenState extends State<LearnScreen> {
     } else {
       await _controller.refresh();
     }
-    // Also refresh Leitner distribution when refreshing
-    _loadLeitnerDistribution();
+    // Also refresh Leitner distribution when refreshing (with current filters)
+    await _loadLeitnerDistribution();
+  }
+
+  Future<void> _handleConfigUpdated() async {
+    // Reload user data from SharedPreferences to get updated Leitner config
+    await _controller.refreshUser();
+    // Refresh Leitner distribution with new config
+    await _loadLeitnerDistribution();
+    // Trigger UI update
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _loadTopics() async {
@@ -84,6 +96,12 @@ class _LearnScreenState extends State<LearnScreen> {
         _topics = topics;
         _isLoadingTopics = false;
       });
+      
+      // Initialize all topics as selected by default if no topics are currently selected
+      if (_controller.selectedTopicIds.isEmpty && topics.isNotEmpty) {
+        final allTopicIds = topics.map((t) => t.id).toSet();
+        _controller.batchUpdateFilters(topicIds: allTopicIds);
+      }
     }
   }
 
@@ -128,12 +146,28 @@ class _LearnScreenState extends State<LearnScreen> {
         hasImages: _controller.getEffectiveHasImages(),
         hasAudio: _controller.getEffectiveHasAudio(),
         isComplete: _controller.getEffectiveIsComplete(),
+        leitnerBins: _controller.getEffectiveLeitnerBins(),
+        learningStatus: _controller.getEffectiveLearningStatus(),
       );
 
       if (mounted) {
         if (result['success'] == true) {
+          final distribution = result['data'] as LeitnerDistribution;
+          // Extract available bins and set them in controller
+          final availableBins = distribution.distribution
+              .where((binData) => binData.count > 0)
+              .map((binData) => binData.bin)
+              .toList()
+            ..sort();
+          _controller.setAvailableBins(availableBins);
+          
+          // If selected bins is empty, initialize with all available bins
+          if (_controller.selectedLeitnerBins.isEmpty && availableBins.isNotEmpty) {
+            _controller.batchUpdateFilters(leitnerBins: availableBins.toSet());
+          }
+          
           setState(() {
-            _leitnerDistribution = result['data'] as LeitnerDistribution;
+            _leitnerDistribution = distribution;
             _isLoadingLeitner = false;
           });
         } else {
@@ -153,6 +187,17 @@ class _LearnScreenState extends State<LearnScreen> {
     }
   }
 
+  /// Extract available bins from Leitner distribution
+  List<int> _getAvailableBins() {
+    if (_leitnerDistribution == null) return [];
+    // Get bins that have count > 0
+    return _leitnerDistribution!.distribution
+        .where((binData) => binData.count > 0)
+        .map((binData) => binData.bin)
+        .toList()
+      ..sort();
+  }
+
   void _showFilterSheet() {
     // Reload topics if they're empty (in case they weren't loaded yet)
     if (_topics.isEmpty && !_isLoadingTopics) {
@@ -162,6 +207,9 @@ class _LearnScreenState extends State<LearnScreen> {
     showFilterSheet(
       context: context,
       filterState: _controller,
+      availableBins: _getAvailableBins(),
+      userId: _controller.currentUser?.id,
+      maxBins: _controller.currentUser?.leitnerMaxBins ?? 7,
       onApplyFilters: ({
         Set<int>? topicIds,
         bool? showLemmasWithoutTopic,
@@ -175,6 +223,8 @@ class _LearnScreenState extends State<LearnScreen> {
         bool? hasNoAudio,
         bool? isComplete,
         bool? isIncomplete,
+        Set<int>? leitnerBins,
+        Set<String>? learningStatus,
       }) async {
         _controller.batchUpdateFilters(
           topicIds: topicIds,
@@ -189,8 +239,10 @@ class _LearnScreenState extends State<LearnScreen> {
           hasNoAudio: hasNoAudio,
           isComplete: isComplete,
           isIncomplete: isIncomplete,
+          leitnerBins: leitnerBins,
+          learningStatus: learningStatus,
         );
-        // Update counters after filters are applied
+        // Update counters after filters are applied - reload immediately to reflect filter changes
         if (_getCurrentWidgetSettings != null) {
           final settings = _getCurrentWidgetSettings!();
           await _controller.refresh(
@@ -200,8 +252,8 @@ class _LearnScreenState extends State<LearnScreen> {
         } else {
           await _controller.refresh();
         }
-        // Also reload Leitner distribution when filters change
-        _loadLeitnerDistribution();
+        // Also reload Leitner distribution when filters change (with updated filters)
+        await _loadLeitnerDistribution();
       },
       topics: _topics,
       isLoadingTopics: _isLoadingTopics,
@@ -427,6 +479,10 @@ class _LearnScreenState extends State<LearnScreen> {
               userId: _controller.currentUser?.id,
               onRefreshLeitner: () => _loadLeitnerDistribution(),
               isLoadingLeitner: _isLoadingLeitner,
+              maxBins: _controller.currentUser?.leitnerMaxBins,
+              algorithm: _controller.currentUser?.leitnerAlgorithm,
+              intervalStartHours: _controller.currentUser?.leitnerIntervalStart,
+              onConfigUpdated: _handleConfigUpdated,
             ),
           );
         },

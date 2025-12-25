@@ -33,6 +33,8 @@ class DictionaryQueryService {
     int? hasImages, // 1 = include only concepts with images, 0 = include only concepts without images, null = include all
     int? hasAudio, // 1 = include only concepts with audio, 0 = include only concepts without audio, null = include all
     int? isComplete, // 1 = include only complete concepts, 0 = include only incomplete concepts, null = include all
+    String? leitnerBins, // Comma-separated list of bin numbers, or null if all bins selected
+    String? learningStatus, // Comma-separated list, or null if all statuses selected
   }) async {
     // Create FilterConfig from parameters
     final filterConfig = FilterConfig(
@@ -48,6 +50,8 @@ class DictionaryQueryService {
       hasAudio: hasAudio,
       isComplete: isComplete,
       search: search,
+      leitnerBins: leitnerBins,
+      learningStatus: learningStatus,
     );
     
     // Create request body

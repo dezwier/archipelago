@@ -4,6 +4,10 @@ import 'package:archipelago/src/features/profile/domain/statistics.dart';
 import 'package:archipelago/src/features/profile/domain/language.dart';
 import 'package:archipelago/src/utils/language_emoji.dart';
 import 'package:archipelago/src/features/profile/data/statistics_service.dart';
+import 'package:archipelago/src/features/profile/data/auth_service.dart';
+import 'package:archipelago/src/features/profile/domain/user.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 /// Widget displaying Leitner bin distribution as a bar chart.
 class LeitnerDistributionCard extends StatefulWidget {
@@ -11,6 +15,10 @@ class LeitnerDistributionCard extends StatefulWidget {
   final List<Language> languages;
   final int userId;
   final VoidCallback? onRefresh;
+  final int maxBins;
+  final String algorithm;
+  final int intervalStartHours;
+  final VoidCallback? onConfigUpdated;
 
   const LeitnerDistributionCard({
     super.key,
@@ -18,6 +26,10 @@ class LeitnerDistributionCard extends StatefulWidget {
     required this.languages,
     required this.userId,
     this.onRefresh,
+    this.maxBins = 7,
+    this.algorithm = 'fibonacci',
+    this.intervalStartHours = 23,
+    this.onConfigUpdated,
   });
 
   @override
@@ -26,6 +38,41 @@ class LeitnerDistributionCard extends StatefulWidget {
 
 class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
   bool _isRecomputing = false;
+  
+  // Local state for configuration (to update UI immediately)
+  late int _localMaxBins;
+  late String _localAlgorithm;
+  late int _localIntervalStartHours;
+  
+  // Callback to update modal state
+  StateSetter? _modalStateSetter;
+  
+  @override
+  void initState() {
+    super.initState();
+    _localMaxBins = widget.maxBins;
+    _localAlgorithm = widget.algorithm;
+    _localIntervalStartHours = widget.intervalStartHours;
+  }
+  
+  @override
+  void didUpdateWidget(LeitnerDistributionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.maxBins != widget.maxBins) {
+      _localMaxBins = widget.maxBins;
+    }
+    if (oldWidget.algorithm != widget.algorithm) {
+      _localAlgorithm = widget.algorithm;
+    }
+    if (oldWidget.intervalStartHours != widget.intervalStartHours) {
+      _localIntervalStartHours = widget.intervalStartHours;
+    }
+  }
+  
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   String _getLanguageName(String code) {
     final language = widget.languages.firstWhere(
@@ -34,6 +81,441 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
     );
     return language.name;
   }
+
+  /// Calculate Fibonacci interval for a given bin number
+  int _calculateFibonacciInterval(int binNumber, int intervalStartHours) {
+    if (binNumber <= 0) return intervalStartHours;
+    if (binNumber == 1) return intervalStartHours;
+    if (binNumber == 2) return intervalStartHours;
+    
+    int fibPrev = intervalStartHours;
+    int fibCurr = intervalStartHours;
+    
+    for (int i = 3; i <= binNumber; i++) {
+      final fibNext = fibPrev + fibCurr;
+      fibPrev = fibCurr;
+      fibCurr = fibNext;
+    }
+    
+    return fibCurr;
+  }
+
+  /// Format hours to a human-readable string with 2 most significant intervals
+  String _formatInterval(int hours) {
+    final parts = <String>[];
+    
+    // Calculate all time units
+    final totalMonths = hours ~/ 720;
+    final remainingAfterMonths = hours % 720;
+    final totalWeeks = remainingAfterMonths ~/ 168;
+    final remainingAfterWeeks = remainingAfterMonths % 168;
+    final totalDays = remainingAfterWeeks ~/ 24;
+    final remainingHours = remainingAfterWeeks % 24;
+    
+    // Add the 2 most significant non-zero units
+    if (totalMonths > 0) {
+      parts.add('$totalMonths ${totalMonths == 1 ? 'month' : 'months'}');
+      if (parts.length < 2 && totalWeeks > 0) {
+        parts.add('$totalWeeks ${totalWeeks == 1 ? 'week' : 'weeks'}');
+      } else if (parts.length < 2 && totalDays > 0) {
+        parts.add('$totalDays ${totalDays == 1 ? 'day' : 'days'}');
+      } else if (parts.length < 2 && remainingHours > 0) {
+        parts.add('$remainingHours ${remainingHours == 1 ? 'hour' : 'hours'}');
+      }
+    } else if (totalWeeks > 0) {
+      parts.add('$totalWeeks ${totalWeeks == 1 ? 'week' : 'weeks'}');
+      if (parts.length < 2 && totalDays > 0) {
+        parts.add('$totalDays ${totalDays == 1 ? 'day' : 'days'}');
+      } else if (parts.length < 2 && remainingHours > 0) {
+        parts.add('$remainingHours ${remainingHours == 1 ? 'hour' : 'hours'}');
+      }
+    } else if (totalDays > 0) {
+      parts.add('$totalDays ${totalDays == 1 ? 'day' : 'days'}');
+      if (parts.length < 2 && remainingHours > 0) {
+        parts.add('$remainingHours ${remainingHours == 1 ? 'hour' : 'hours'}');
+      }
+    } else {
+      // Only hours
+      parts.add('$remainingHours ${remainingHours == 1 ? 'hour' : 'hours'}');
+    }
+    
+    return parts.join(' ');
+  }
+
+  void _showInfoDrawer() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: true,
+      enableDrag: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          // Store modal state setter for later use
+          _modalStateSetter = setModalState;
+          return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) => Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                // Header with title and refresh button
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'About Leitner Bins',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.refresh,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        onPressed: _isRecomputing ? null : _handleRecompute,
+                        tooltip: 'Recompute SRS',
+                      ),
+                    ],
+                  ),
+                ),
+                // Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // What is Leitner system
+                        Text(
+                          'What is the Leitner System?',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'The Leitner System is a spaced repetition learning method. Cards are organized into bins based on how well you know them. When you answer correctly, cards move to higher bins with longer review intervals. When you answer incorrectly, cards move to lower bins for more frequent review.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 24),
+                        // Number of bins
+                        Text(
+                          'Your Configuration',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildEditableField(
+                          'Number of Bins',
+                          'maxBins',
+                          setModalState: setModalState,
+                        ),
+                        _buildEditableField(
+                          'Starting Interval',
+                          'intervalStart',
+                          setModalState: setModalState,
+                        ),
+                        _buildEditableField(
+                          'Algorithm',
+                          'algorithm',
+                          setModalState: setModalState,
+                        ),
+                        const SizedBox(height: 24),
+                        // Review intervals
+                        Text(
+                          'Review Intervals',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...List.generate(_localMaxBins, (index) {
+                          final binNumber = index + 1;
+                          final intervalHours = _calculateFibonacciInterval(binNumber, _localIntervalStartHours);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Bin $binNumber',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  _formatInterval(intervalHours),
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 24),
+                        // How it works
+                        Text(
+                          'How It Works',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '• New cards start in Bin 1\n'
+                          '• Correct answers move cards to the next bin\n'
+                          '• Incorrect answers move cards down by 2 bins (minimum Bin 1)\n'
+                          '• Using hints keeps cards in the same bin\n'
+                          '• Higher bins have longer review intervals',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEditableField(String label, String fieldKey, {StateSetter? setModalState}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (fieldKey == 'algorithm') ...[
+                  DropdownButton<String>(
+                    value: _localAlgorithm,
+                    items: const [
+                      DropdownMenuItem(value: 'fibonacci', child: Text('Fibonacci')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _localAlgorithm = value;
+                        });
+                        setModalState?.call(() {}); // Update modal state
+                        _handleSaveDirectly('algorithm', value);
+                      }
+                    },
+                  ),
+                ] else if (fieldKey == 'maxBins') ...[
+                  DropdownButton<int>(
+                    value: _localMaxBins,
+                    items: List.generate(16, (index) {
+                      final value = index + 5; // 5 to 20
+                      return DropdownMenuItem<int>(
+                        value: value,
+                        child: Text('$value'),
+                      );
+                    }),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _localMaxBins = value;
+                        });
+                        setModalState?.call(() {}); // Update modal state
+                        _handleSaveDirectly('maxBins', value.toString());
+                      }
+                    },
+                  ),
+                ] else if (fieldKey == 'intervalStart') ...[
+                  DropdownButton<int>(
+                    value: _localIntervalStartHours,
+                    items: List.generate(24, (index) {
+                      final value = index + 1; // 1 to 24
+                      return DropdownMenuItem<int>(
+                        value: value,
+                        child: Text('$value'),
+                      );
+                    }),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _localIntervalStartHours = value;
+                        });
+                        setModalState?.call(() {}); // Update modal state
+                        _handleSaveDirectly('intervalStart', value.toString());
+                      }
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleSaveDirectly(String fieldKey, String value) async {
+    
+    try {
+      int? maxBins;
+      String? algorithm;
+      int? intervalStartHours;
+      
+      if (fieldKey == 'maxBins') {
+        final intValue = int.tryParse(value);
+        if (intValue == null || intValue < 5 || intValue > 20) {
+          throw Exception('Must be between 5 and 20');
+        }
+        maxBins = intValue;
+      } else if (fieldKey == 'algorithm') {
+        if (value != 'fibonacci') {
+          throw Exception('Only Fibonacci is supported');
+        }
+        algorithm = value;
+      } else if (fieldKey == 'intervalStart') {
+        final intValue = int.tryParse(value);
+        if (intValue == null || intValue < 1 || intValue > 24) {
+          throw Exception('Must be between 1 and 24 hours');
+        }
+        intervalStartHours = intValue;
+      }
+      
+      final result = await AuthService.updateLeitnerConfig(
+        widget.userId,
+        maxBins,
+        algorithm,
+        intervalStartHours,
+      );
+      
+      if (mounted) {
+        if (result['success'] == true) {
+          // Update local state
+          if (maxBins != null) {
+            _localMaxBins = maxBins;
+          }
+          if (algorithm != null) {
+            _localAlgorithm = algorithm;
+          }
+          if (intervalStartHours != null) {
+            _localIntervalStartHours = intervalStartHours;
+          }
+          
+          // Update modal state to reflect changes
+          _modalStateSetter?.call(() {});
+          
+          // Save updated user to SharedPreferences
+          try {
+            final updatedUser = result['user'] as User;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('current_user', jsonEncode(updatedUser.toJson()));
+          } catch (e) {
+            // Ignore save errors
+          }
+          
+          // Notify parent to refresh user data
+          widget.onConfigUpdated?.call();
+          
+          // Recompute SRS after configuration update
+          setState(() {
+            _isRecomputing = true;
+          });
+          
+          try {
+            final recomputeResult = await StatisticsService.recomputeSRS(
+              userId: widget.userId,
+            );
+            
+            if (mounted) {
+              setState(() {
+                _isRecomputing = false;
+              });
+              
+              if (recomputeResult['success'] == true) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Configuration updated and SRS recomputed successfully'),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+                // Refresh the data
+                widget.onRefresh?.call();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Configuration updated, but SRS recomputation failed: ${recomputeResult['message']}'),
+                    backgroundColor: Colors.orange,
+                    duration: const Duration(seconds: 4),
+                  ),
+                );
+              }
+            }
+          } catch (e) {
+            if (mounted) {
+              setState(() {
+                _isRecomputing = false;
+              });
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Configuration updated, but SRS recomputation error: ${e.toString()}'),
+                  backgroundColor: Colors.orange,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] as String? ?? 'Failed to update configuration'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
 
   Future<void> _handleRecompute() async {
     // Get user ID from somewhere - we'll need to pass it or get it from context
@@ -125,24 +607,13 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                     ),
                   ),
                   IconButton(
-                    icon: _isRecomputing
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                          )
-                        : Icon(
-                            Icons.refresh,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                    onPressed: _isRecomputing ? null : _handleRecompute,
-                    tooltip: 'Recompute SRS',
+                    icon: Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                    onPressed: _showInfoDrawer,
+                    tooltip: 'About Leitner Bins',
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -162,13 +633,10 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
     }
 
     final emoji = LanguageEmoji.getEmoji(widget.distribution.languageCode);
-    final languageName = _getLanguageName(widget.distribution.languageCode);
     
-    // Determine bin range: minimum 0-7, extend if higher bins exist
-    final binsInData = widget.distribution.distribution.map((d) => d.bin).toList();
-    final minBin = 1; // Include bin 0 (new/unpracticed lemmas)
-    final maxBinInData = binsInData.isEmpty ? 7 : binsInData.reduce((a, b) => a > b ? a : b);
-    final maxBin = maxBinInData > 7 ? maxBinInData : 7;
+    // Always show bins from 1 to user's max_bins
+    final minBin = 1;
+    final maxBin = _localMaxBins;
     
     // Create a map of bin -> LeitnerBinData for quick lookup
     final binDataMap = <int, LeitnerBinData>{};
@@ -239,24 +707,13 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                   ),
                 ),
                 IconButton(
-                  icon: _isRecomputing
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                        )
-                      : Icon(
-                          Icons.refresh,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                        ),
-                  onPressed: _isRecomputing ? null : _handleRecompute,
-                  tooltip: 'Recompute SRS',
+                  icon: Icon(
+                    Icons.info_outline,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                  onPressed: _showInfoDrawer,
+                  tooltip: 'About Leitner Bins',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   visualDensity: VisualDensity.compact,
@@ -327,7 +784,7 @@ class _LeitnerDistributionCardState extends State<LeitnerDistributionCard> {
                             return Padding(
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
-                                'Bin $binValue',
+                                'B$binValue',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             );

@@ -28,6 +28,9 @@ class FilterSheet extends StatefulWidget {
   final FilterUpdateCallback onApplyFilters;
   final List<Topic> topics;
   final bool isLoadingTopics;
+  final List<int> availableBins; // Available Leitner bins for the user
+  final int? userId; // User ID for determining available bins
+  final int maxBins; // Maximum number of bins (from User.leitner_max_bins)
 
   const FilterSheet({
     super.key,
@@ -35,6 +38,9 @@ class FilterSheet extends StatefulWidget {
     required this.onApplyFilters,
     required this.topics,
     this.isLoadingTopics = false,
+    this.availableBins = const [],
+    this.userId,
+    this.maxBins = 7, // Default to 7 if not provided
   });
 
   @override
@@ -55,6 +61,8 @@ class _FilterSheetState extends State<FilterSheet> {
   bool? _pendingHasNoAudio;
   bool? _pendingIsComplete;
   bool? _pendingIsIncomplete;
+  Set<int>? _pendingLeitnerBins;
+  Set<String>? _pendingLearningStatus;
 
   // Helper method to capitalize words in a string
   String _capitalizeWords(String text) {
@@ -81,6 +89,20 @@ class _FilterSheetState extends State<FilterSheet> {
     _pendingHasNoAudio = widget.filterState.hasNoAudio;
     _pendingIsComplete = widget.filterState.isComplete;
     _pendingIsIncomplete = widget.filterState.isIncomplete;
+    
+    // Initialize Leitner bins - if empty, select all bins (1 to maxBins)
+    if (widget.filterState.selectedLeitnerBins.isEmpty) {
+      _pendingLeitnerBins = Set<int>.from(List.generate(widget.maxBins, (index) => index + 1));
+    } else {
+      _pendingLeitnerBins = Set<int>.from(widget.filterState.selectedLeitnerBins);
+    }
+    
+    // Initialize learning status - default to all if empty
+    if (widget.filterState.selectedLearningStatus.isEmpty) {
+      _pendingLearningStatus = {'new', 'due', 'learned'};
+    } else {
+      _pendingLearningStatus = Set<String>.from(widget.filterState.selectedLearningStatus);
+    }
   }
 
   void _applyPendingChanges() {
@@ -100,6 +122,8 @@ class _FilterSheetState extends State<FilterSheet> {
       hasNoAudio: _pendingHasNoAudio ?? widget.filterState.hasNoAudio,
       isComplete: _pendingIsComplete ?? widget.filterState.isComplete,
       isIncomplete: _pendingIsIncomplete ?? widget.filterState.isIncomplete,
+      leitnerBins: _pendingLeitnerBins ?? widget.filterState.selectedLeitnerBins,
+      learningStatus: _pendingLearningStatus ?? widget.filterState.selectedLearningStatus,
     );
   }
 
@@ -174,6 +198,10 @@ class _FilterSheetState extends State<FilterSheet> {
                     _buildLevelsFilter(),
                     const Divider(height: 1),
                     _buildPartOfSpeechFilter(),
+                    const Divider(height: 1),
+                    _buildLeitnerBinsFilter(),
+                    const Divider(height: 1),
+                    _buildLearningStatusFilter(),
                     // Bottom padding
                     SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
                   ],
@@ -192,69 +220,51 @@ class _FilterSheetState extends State<FilterSheet> {
         final currentIncludeLemmas = _pendingIncludeLemmas ?? widget.filterState.includeLemmas;
         final currentIncludePhrases = _pendingIncludePhrases ?? widget.filterState.includePhrases;
         final allSelected = currentIncludeLemmas && currentIncludePhrases;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-              child: Row(
-                children: [
-                  Text(
-                    'Type',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+        return Padding(
+          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildVerticalTitle('TYPE'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildFilterChip(
+                      label: 'Lemmas',
+                      isSelected: currentIncludeLemmas,
+                      onTap: () {
+                        setMenuState(() {
+                          _pendingIncludeLemmas = !currentIncludeLemmas;
+                        });
+                      },
                     ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {
-                      setMenuState(() {
-                        final newValue = !allSelected;
-                        _pendingIncludeLemmas = newValue;
-                        _pendingIncludePhrases = newValue;
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    _buildFilterChip(
+                      label: 'Phrases',
+                      isSelected: currentIncludePhrases,
+                      onTap: () {
+                        setMenuState(() {
+                          _pendingIncludePhrases = !currentIncludePhrases;
+                        });
+                      },
                     ),
-                    child: Text(
-                      allSelected ? 'All Off' : 'All On',
-                      style: Theme.of(context).textTheme.bodySmall,
+                    _buildAllOnButton(
+                      allSelected: allSelected,
+                      onPressed: () {
+                        setMenuState(() {
+                          final newValue = !allSelected;
+                          _pendingIncludeLemmas = newValue;
+                          _pendingIncludePhrases = newValue;
+                        });
+                      },
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildFilterChip(
-                    label: 'Lemmas',
-                    isSelected: currentIncludeLemmas,
-                    onTap: () {
-                      setMenuState(() {
-                        _pendingIncludeLemmas = !currentIncludeLemmas;
-                      });
-                    },
-                  ),
-                  _buildFilterChip(
-                    label: 'Phrases',
-                    isSelected: currentIncludePhrases,
-                    onTap: () {
-                      setMenuState(() {
-                        _pendingIncludePhrases = !currentIncludePhrases;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -269,82 +279,94 @@ class _FilterSheetState extends State<FilterSheet> {
         final currentHasNoAudio = _pendingHasNoAudio ?? widget.filterState.hasNoAudio;
         final currentIsComplete = _pendingIsComplete ?? widget.filterState.isComplete;
         final currentIsIncomplete = _pendingIsIncomplete ?? widget.filterState.isIncomplete;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-              child: Text(
-                'To Include',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+        final allSelected = currentHasImages && currentHasNoImages && 
+            currentHasAudio && currentHasNoAudio && 
+            currentIsComplete && currentIsIncomplete;
+        return Padding(
+          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildVerticalTitle('INCLUDE'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildFilterChip(
+                      label: 'Image',
+                      isSelected: currentHasImages,
+                      onTap: () {
+                        setMenuState(() {
+                          _pendingHasImages = !currentHasImages;
+                        });
+                      },
+                    ),
+                    _buildFilterChip(
+                      label: 'No Image',
+                      isSelected: currentHasNoImages,
+                      onTap: () {
+                        setMenuState(() {
+                          _pendingHasNoImages = !currentHasNoImages;
+                        });
+                      },
+                    ),
+                    _buildFilterChip(
+                      label: 'Audio',
+                      isSelected: currentHasAudio,
+                      onTap: () {
+                        setMenuState(() {
+                          _pendingHasAudio = !currentHasAudio;
+                        });
+                      },
+                    ),
+                    _buildFilterChip(
+                      label: 'No Audio',
+                      isSelected: currentHasNoAudio,
+                      onTap: () {
+                        setMenuState(() {
+                          _pendingHasNoAudio = !currentHasNoAudio;
+                        });
+                      },
+                    ),
+                    _buildFilterChip(
+                      label: 'Complete',
+                      isSelected: currentIsComplete,
+                      onTap: () {
+                        setMenuState(() {
+                          _pendingIsComplete = !currentIsComplete;
+                        });
+                      },
+                    ),
+                    _buildFilterChip(
+                      label: 'Incomplete',
+                      isSelected: currentIsIncomplete,
+                      onTap: () {
+                        setMenuState(() {
+                          _pendingIsIncomplete = !currentIsIncomplete;
+                        });
+                      },
+                    ),
+                    _buildAllOnButton(
+                      allSelected: allSelected,
+                      onPressed: () {
+                        setMenuState(() {
+                          final newValue = !allSelected;
+                          _pendingHasImages = newValue;
+                          _pendingHasNoImages = newValue;
+                          _pendingHasAudio = newValue;
+                          _pendingHasNoAudio = newValue;
+                          _pendingIsComplete = newValue;
+                          _pendingIsIncomplete = newValue;
+                        });
+                      },
+                    ),
+                  ],
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildFilterChip(
-                    label: 'Image',
-                    isSelected: currentHasImages,
-                    onTap: () {
-                      setMenuState(() {
-                        _pendingHasImages = !currentHasImages;
-                      });
-                    },
-                  ),
-                  _buildFilterChip(
-                    label: 'No Image',
-                    isSelected: currentHasNoImages,
-                    onTap: () {
-                      setMenuState(() {
-                        _pendingHasNoImages = !currentHasNoImages;
-                      });
-                    },
-                  ),
-                  _buildFilterChip(
-                    label: 'Audio',
-                    isSelected: currentHasAudio,
-                    onTap: () {
-                      setMenuState(() {
-                        _pendingHasAudio = !currentHasAudio;
-                      });
-                    },
-                  ),
-                  _buildFilterChip(
-                    label: 'No Audio',
-                    isSelected: currentHasNoAudio,
-                    onTap: () {
-                      setMenuState(() {
-                        _pendingHasNoAudio = !currentHasNoAudio;
-                      });
-                    },
-                  ),
-                  _buildFilterChip(
-                    label: 'Complete',
-                    isSelected: currentIsComplete,
-                    onTap: () {
-                      setMenuState(() {
-                        _pendingIsComplete = !currentIsComplete;
-                      });
-                    },
-                  ),
-                  _buildFilterChip(
-                    label: 'Incomplete',
-                    isSelected: currentIsIncomplete,
-                    onTap: () {
-                      setMenuState(() {
-                        _pendingIsIncomplete = !currentIsIncomplete;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -352,47 +374,43 @@ class _FilterSheetState extends State<FilterSheet> {
 
   Widget _buildTopicsFilter() {
     if (widget.isLoadingTopics) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-            child: Text(
-              'Topics',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+      return Padding(
+        padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildVerticalTitle('TOPICS'),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(child: CircularProgressIndicator()),
               ),
             ),
-          ),
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-        ],
+          ],
+        ),
       );
     } else if (widget.topics.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-            child: Text(
-              'Topics',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+      return Padding(
+        padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildVerticalTitle('TOPICS'),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: Text(
+                  'No topics available',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 16.0, bottom: 16.0),
-            child: Text(
-              'No topics available',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       );
     } else {
       return StatefulBuilder(
@@ -402,69 +420,53 @@ class _FilterSheetState extends State<FilterSheet> {
           final allSelected = allTopicIds.isNotEmpty && 
               currentTopicIds.length == allTopicIds.length &&
               currentTopicIds.containsAll(allTopicIds);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-                child: Row(
-                  children: [
-                    Text(
-                      'Topics',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+          return Padding(
+            padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildVerticalTitle('TOPICS'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ...widget.topics.map((topic) {
+                        final isSelected = currentTopicIds.contains(topic.id);
+                        return _buildFilterChip(
+                          label: _capitalizeWords(topic.name),
+                          isSelected: isSelected,
+                          onTap: () {
+                            setMenuState(() {
+                              final newSet = Set<int>.from(currentTopicIds);
+                              if (isSelected) {
+                                newSet.remove(topic.id);
+                              } else {
+                                newSet.add(topic.id);
+                              }
+                              _pendingTopicIds = newSet;
+                            });
+                          },
+                        );
+                      }),
+                      _buildAllOnButton(
+                        allSelected: allSelected,
+                        onPressed: () {
+                          setMenuState(() {
+                            if (allSelected) {
+                              _pendingTopicIds = <int>{};
+                            } else {
+                              _pendingTopicIds = Set<int>.from(allTopicIds);
+                            }
+                          });
+                        },
                       ),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () {
-                        setMenuState(() {
-                          if (allSelected) {
-                            _pendingTopicIds = <int>{};
-                          } else {
-                            _pendingTopicIds = Set<int>.from(allTopicIds);
-                          }
-                        });
-                      },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        allSelected ? 'All Off' : 'All On',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: widget.topics.map((topic) {
-                    final isSelected = currentTopicIds.contains(topic.id);
-                    return _buildFilterChip(
-                      label: _capitalizeWords(topic.name),
-                      isSelected: isSelected,
-                      onTap: () {
-                        setMenuState(() {
-                          final newSet = Set<int>.from(currentTopicIds);
-                          if (isSelected) {
-                            newSet.remove(topic.id);
-                          } else {
-                            newSet.add(topic.id);
-                          }
-                          _pendingTopicIds = newSet;
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       );
@@ -478,69 +480,53 @@ class _FilterSheetState extends State<FilterSheet> {
         final allLevels = FilterConstants.cefrLevels.toSet();
         final allSelected = currentLevels.length == allLevels.length &&
             currentLevels.containsAll(allLevels);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-              child: Row(
-                children: [
-                  Text(
-                    'CEFR Levels',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+        return Padding(
+          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildVerticalTitle('CEFR'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ...FilterConstants.cefrLevels.map((level) {
+                      final isSelected = currentLevels.contains(level);
+                      return _buildFilterChip(
+                        label: level,
+                        isSelected: isSelected,
+                        onTap: () {
+                          setMenuState(() {
+                            final newSet = Set<String>.from(currentLevels);
+                            if (isSelected) {
+                              newSet.remove(level);
+                            } else {
+                              newSet.add(level);
+                            }
+                            _pendingLevels = newSet;
+                          });
+                        },
+                      );
+                    }),
+                    _buildAllOnButton(
+                      allSelected: allSelected,
+                      onPressed: () {
+                        setMenuState(() {
+                          if (allSelected) {
+                            _pendingLevels = <String>{};
+                          } else {
+                            _pendingLevels = Set<String>.from(allLevels);
+                          }
+                        });
+                      },
                     ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {
-                      setMenuState(() {
-                        if (allSelected) {
-                          _pendingLevels = <String>{};
-                        } else {
-                          _pendingLevels = Set<String>.from(allLevels);
-                        }
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      allSelected ? 'All Off' : 'All On',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: FilterConstants.cefrLevels.map((level) {
-                  final isSelected = currentLevels.contains(level);
-                  return _buildFilterChip(
-                    label: level,
-                    isSelected: isSelected,
-                    onTap: () {
-                      setMenuState(() {
-                        final newSet = Set<String>.from(currentLevels);
-                        if (isSelected) {
-                          newSet.remove(level);
-                        } else {
-                          newSet.add(level);
-                        }
-                        _pendingLevels = newSet;
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -553,101 +539,295 @@ class _FilterSheetState extends State<FilterSheet> {
         final allPOS = FilterConstants.partOfSpeechValues.toSet();
         final allSelected = currentPartOfSpeech.length == allPOS.length &&
             currentPartOfSpeech.containsAll(allPOS);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
-              child: Row(
-                children: [
-                  Text(
-                    'Part of Speech',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+        return Padding(
+          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildVerticalTitle('PART OF SPEECH'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ...FilterConstants.partOfSpeechValues.map((pos) {
+                      final isSelected = currentPartOfSpeech.contains(pos);
+                      return _buildFilterChip(
+                        label: pos,
+                        isSelected: isSelected,
+                        onTap: () {
+                          setMenuState(() {
+                            final newSet = Set<String>.from(currentPartOfSpeech);
+                            if (isSelected) {
+                              newSet.remove(pos);
+                            } else {
+                              newSet.add(pos);
+                            }
+                            _pendingPartOfSpeech = newSet;
+                          });
+                        },
+                      );
+                    }),
+                    _buildAllOnButton(
+                      allSelected: allSelected,
+                      onPressed: () {
+                        setMenuState(() {
+                          if (allSelected) {
+                            _pendingPartOfSpeech = <String>{};
+                          } else {
+                            _pendingPartOfSpeech = Set<String>.from(allPOS);
+                          }
+                        });
+                      },
                     ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {
-                      setMenuState(() {
-                        if (allSelected) {
-                          _pendingPartOfSpeech = <String>{};
-                        } else {
-                          _pendingPartOfSpeech = Set<String>.from(allPOS);
-                        }
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      allSelected ? 'All Off' : 'All On',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: FilterConstants.partOfSpeechValues.map((pos) {
-                  final isSelected = currentPartOfSpeech.contains(pos);
-                  return _buildFilterChip(
-                    label: pos,
-                    isSelected: isSelected,
-                    onTap: () {
-                      setMenuState(() {
-                        final newSet = Set<String>.from(currentPartOfSpeech);
-                        if (isSelected) {
-                          newSet.remove(pos);
-                        } else {
-                          newSet.add(pos);
-                        }
-                        _pendingPartOfSpeech = newSet;
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
+    );
+  }
+
+  Widget _buildLeitnerBinsFilter() {
+    // Show all bins from 1 to maxBins, all selectable
+    
+    return StatefulBuilder(
+      builder: (context, setMenuState) {
+        final currentBins = _pendingLeitnerBins ?? widget.filterState.selectedLeitnerBins;
+        
+        // Generate all bins from 1 to maxBins
+        final allBins = List.generate(widget.maxBins, (index) => index + 1);
+        final allBinsSet = allBins.toSet();
+        
+        // Check if all bins are selected
+        final allBinsSelected = allBinsSet.isNotEmpty && 
+            currentBins.length == allBinsSet.length &&
+            currentBins.containsAll(allBinsSet);
+        
+        return Padding(
+          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildVerticalTitle('BINS'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ...allBins.map((bin) {
+                      final isSelected = currentBins.contains(bin);
+                      return _buildFilterChip(
+                        label: bin.toString(),
+                        isSelected: isSelected,
+                        onTap: () {
+                          setMenuState(() {
+                            final newSet = Set<int>.from(currentBins);
+                            if (isSelected) {
+                              newSet.remove(bin);
+                            } else {
+                              newSet.add(bin);
+                            }
+                            _pendingLeitnerBins = newSet;
+                          });
+                        },
+                      );
+                    }),
+                    _buildAllOnButton(
+                      allSelected: allBinsSelected,
+                      onPressed: () {
+                        setMenuState(() {
+                          if (allBinsSelected) {
+                            _pendingLeitnerBins = <int>{};
+                          } else {
+                            _pendingLeitnerBins = Set<int>.from(allBinsSet);
+                          }
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLearningStatusFilter() {
+    return StatefulBuilder(
+      builder: (context, setMenuState) {
+        final currentStatus = _pendingLearningStatus ?? widget.filterState.selectedLearningStatus;
+        final allStatuses = {'new', 'due', 'learned'};
+        final allSelected = currentStatus.length == allStatuses.length &&
+            currentStatus.containsAll(allStatuses);
+        return Padding(
+          padding: const EdgeInsets.only(top: 12.0, bottom: 16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildVerticalTitle('STATUS'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildFilterChip(
+                      label: 'New',
+                      isSelected: currentStatus.contains('new'),
+                      onTap: () {
+                        setMenuState(() {
+                          final newSet = Set<String>.from(currentStatus);
+                          if (currentStatus.contains('new')) {
+                            newSet.remove('new');
+                          } else {
+                            newSet.add('new');
+                          }
+                          _pendingLearningStatus = newSet;
+                        });
+                      },
+                    ),
+                    _buildFilterChip(
+                      label: 'Due',
+                      isSelected: currentStatus.contains('due'),
+                      onTap: () {
+                        setMenuState(() {
+                          final newSet = Set<String>.from(currentStatus);
+                          if (currentStatus.contains('due')) {
+                            newSet.remove('due');
+                          } else {
+                            newSet.add('due');
+                          }
+                          _pendingLearningStatus = newSet;
+                        });
+                      },
+                    ),
+                    _buildFilterChip(
+                      label: 'Learned',
+                      isSelected: currentStatus.contains('learned'),
+                      onTap: () {
+                        setMenuState(() {
+                          final newSet = Set<String>.from(currentStatus);
+                          if (currentStatus.contains('learned')) {
+                            newSet.remove('learned');
+                          } else {
+                            newSet.add('learned');
+                          }
+                          _pendingLearningStatus = newSet;
+                        });
+                      },
+                    ),
+                    _buildAllOnButton(
+                      allSelected: allSelected,
+                      onPressed: () {
+                        setMenuState(() {
+                          if (allSelected) {
+                            _pendingLearningStatus = <String>{};
+                          } else {
+                            _pendingLearningStatus = Set<String>.from(allStatuses);
+                          }
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildVerticalTitle(String title) {
+    return RotatedBox(
+      quarterTurns: -1, // 90 degrees counter-clockwise for vertical text reading top to bottom
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAllOnButton({
+    required bool allSelected,
+    required VoidCallback? onPressed,
+    bool isEnabled = true,
+  }) {
+    final isDisabled = !isEnabled || onPressed == null;
+    
+    return GestureDetector(
+      onTap: isDisabled ? null : onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0),
+            width: 1,
+            style: BorderStyle.solid,
+          ),
+        ),
+        child: Text(
+          allSelected ? 'All Off' : 'All On',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: isDisabled
+                ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
+                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+            fontSize: 12,
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildFilterChip({
     required String label,
     required bool isSelected,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
+    bool isEnabled = true,
   }) {
+    final isDisabled = !isEnabled || onTap == null;
+    
     return GestureDetector(
-      onTap: onTap,
+      onTap: isDisabled ? null : onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
+          color: isDisabled
+              ? Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
+              : isSelected
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+            color: isDisabled
+                ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)
+                : isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected
-                ? Theme.of(context).colorScheme.onPrimaryContainer
-                : Theme.of(context).colorScheme.onSurface,
+            color: isDisabled
+                ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)
+                : isSelected
+                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                    : Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ),
@@ -662,6 +842,9 @@ void showFilterSheet({
   required FilterUpdateCallback onApplyFilters,
   required List<Topic> topics,
   bool isLoadingTopics = false,
+  List<int> availableBins = const [],
+  int? userId,
+  int maxBins = 7, // Default to 7 if not provided
 }) {
   showModalBottomSheet(
     context: context,
@@ -674,6 +857,9 @@ void showFilterSheet({
       onApplyFilters: onApplyFilters,
       topics: topics,
       isLoadingTopics: isLoadingTopics,
+      availableBins: availableBins,
+      userId: userId,
+      maxBins: maxBins,
     ),
   );
 }

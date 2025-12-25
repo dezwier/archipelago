@@ -35,6 +35,8 @@ class LearnService {
     int? isComplete,
     bool includeWithUserLemma = false, // Include concepts that have a user lemma
     bool includeWithoutUserLemma = true, // Include concepts that don't have a user lemma
+    String? leitnerBins, // Comma-separated list of bin numbers, or null if all bins selected
+    String? learningStatus, // Comma-separated list, or null if all statuses selected
   }) async {
     // Create FilterConfig from parameters
     final filterConfig = FilterConfig(
@@ -50,6 +52,8 @@ class LearnService {
       hasAudio: hasAudio,
       isComplete: isComplete,
       search: search,
+      leitnerBins: leitnerBins,
+      learningStatus: learningStatus,
     );
     
     // Create request body

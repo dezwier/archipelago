@@ -19,6 +19,16 @@ class User(SQLModel, table=True):
     lang_learning: str  # Learning language code
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
+    # Profile fields
+    full_name: Optional[str] = Field(default=None)  # User's full name
+    image_url: Optional[str] = Field(default=None)  # Profile image URL
+    
+    # Leitner algorithm configuration
+    leitner_max_bins: int = Field(default=7)  # Maximum bins for Leitner algorithm
+    leitner_algorithm: str = Field(default='fibonacci')  # Algorithm type
+    leitner_interval_factor: Optional[float] = Field(default=None)  # Interval factor
+    leitner_interval_start: int = Field(default=23)  # Starting interval in hours
+    
     # Relationships
     user_lemmas: List["UserLemma"] = Relationship(back_populates="user")
     lessons: List["Lesson"] = Relationship(back_populates="user")

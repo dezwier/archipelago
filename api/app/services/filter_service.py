@@ -5,7 +5,9 @@ from fastapi import HTTPException, status
 from sqlmodel import select, func, or_
 from sqlalchemy import and_
 from typing import Optional, List
+from datetime import datetime
 from app.models.models import Concept, Lemma, CEFRLevel
+from app.models.user_lemma import UserLemma
 from app.schemas.filter import FilterConfig
 from app.schemas.utils import normalize_part_of_speech
 
@@ -70,6 +72,34 @@ def parse_part_of_speech(part_of_speech: Optional[str]) -> Optional[List[str]]:
     return pos_list
 
 
+def parse_leitner_bins(leitner_bins: Optional[str]) -> Optional[List[int]]:
+    """Parse leitner_bins parameter into a list of bin numbers."""
+    if not leitner_bins:
+        return None
+    try:
+        return [int(bin_str.strip()) for bin_str in leitner_bins.split(',') if bin_str.strip()]
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="leitner_bins must be comma-separated integers"
+        ) from exc
+
+
+def parse_learning_status(learning_status: Optional[str]) -> Optional[List[str]]:
+    """Parse learning_status parameter into a list of status values."""
+    if not learning_status:
+        return None
+    status_list = [s.strip().lower() for s in learning_status.split(',') if s.strip()]
+    valid_statuses = {'new', 'due', 'learned'}
+    for s in status_list:
+        if s not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid learning_status: {s}. Must be one of: new, due, learned"
+            )
+    return status_list
+
+
 def parse_filter_config(filter_config: FilterConfig) -> dict:
     """Parse FilterConfig into internal representation with parsed values.
     
@@ -92,6 +122,8 @@ def parse_filter_config(filter_config: FilterConfig) -> dict:
         "has_audio": filter_config.has_audio,
         "is_complete": filter_config.is_complete,
         "search": filter_config.search,
+        "leitner_bin_list": parse_leitner_bins(filter_config.leitner_bins),
+        "learning_status_list": parse_learning_status(filter_config.learning_status),
     }
 
 
@@ -332,6 +364,153 @@ def apply_search_filter(query, search: Optional[str], visible_language_codes: Op
     )
 
 
+def apply_leitner_bins_filter(query, leitner_bin_list: Optional[List[int]], user_id: Optional[int], visible_language_codes: Optional[List[str]]):
+    """Apply leitner_bins filter to concept query.
+    
+    Optimization: If leitner_bin_list is None or empty, return query unchanged (skip join).
+    Otherwise, filters concepts where at least one lemma has a user_lemma with the specified bin.
+    """
+    if not leitner_bin_list or len(leitner_bin_list) == 0:
+        # All bins selected - skip join
+        return query
+    
+    if user_id is None:
+        # Cannot filter by bins without user_id
+        return query
+    
+    # Build subquery to find concept_ids with lemmas that have user_lemmas with specified bins
+    # Join: Concept -> Lemma -> UserLemma
+    lemma_subquery = select(Lemma.concept_id).distinct()
+    
+    if visible_language_codes:
+        lemma_subquery = lemma_subquery.where(Lemma.language_code.in_(visible_language_codes))
+    
+    # Join with UserLemma to filter by bin
+    user_lemma_subquery = (
+        select(Lemma.concept_id)
+        .join(
+            UserLemma,
+            and_(
+                UserLemma.lemma_id == Lemma.id,
+                UserLemma.user_id == user_id,
+                func.coalesce(UserLemma.leitner_bin, 0).in_(leitner_bin_list)
+            )
+        )
+        .distinct()
+    )
+    
+    if visible_language_codes:
+        user_lemma_subquery = user_lemma_subquery.where(Lemma.language_code.in_(visible_language_codes))
+    
+    # Filter concepts that have at least one lemma with user_lemma in specified bins
+    return query.where(Concept.id.in_(user_lemma_subquery))
+
+
+def apply_learning_status_filter(query, learning_status_list: Optional[List[str]], user_id: Optional[int], visible_language_codes: Optional[List[str]]):
+    """Apply learning_status filter to concept query.
+    
+    Optimization: If learning_status_list is None or empty, return query unchanged (skip join).
+    Otherwise, filters concepts based on user_lemma status:
+    - "new": concepts with lemmas that have NO user_lemma record
+    - "due": concepts with lemmas that have user_lemma with next_review_at < current_time
+    - "learned": concepts with lemmas that have user_lemma with next_review_at > current_time or next_review_at IS NULL
+    
+    Uses OR logic - include concept if any lemma matches any selected status.
+    """
+    if not learning_status_list or len(learning_status_list) == 0:
+        # All statuses selected - skip join
+        return query
+    
+    if user_id is None:
+        # Cannot filter by status without user_id
+        return query
+    
+    current_time = datetime.utcnow()
+    
+    # Build subqueries for each status and combine with OR
+    status_conditions = []
+    
+    if 'new' in learning_status_list:
+        # Concepts with lemmas that have NO user_lemma record
+        new_subquery = (
+            select(Lemma.concept_id)
+            .outerjoin(
+                UserLemma,
+                and_(
+                    UserLemma.lemma_id == Lemma.id,
+                    UserLemma.user_id == user_id
+                )
+            )
+            .where(
+                UserLemma.id.is_(None),
+                Lemma.term.isnot(None),
+                Lemma.term != ""
+            )
+            .distinct()
+        )
+        if visible_language_codes:
+            new_subquery = new_subquery.where(Lemma.language_code.in_(visible_language_codes))
+        
+        status_conditions.append(Concept.id.in_(new_subquery))
+    
+    if 'due' in learning_status_list:
+        # Concepts with lemmas that have user_lemma with next_review_at < current_time
+        due_subquery = (
+            select(Lemma.concept_id)
+            .join(
+                UserLemma,
+                and_(
+                    UserLemma.lemma_id == Lemma.id,
+                    UserLemma.user_id == user_id,
+                    UserLemma.next_review_at.isnot(None),
+                    UserLemma.next_review_at <= current_time
+                )
+            )
+            .where(
+                Lemma.term.isnot(None),
+                Lemma.term != ""
+            )
+            .distinct()
+        )
+        if visible_language_codes:
+            due_subquery = due_subquery.where(Lemma.language_code.in_(visible_language_codes))
+        
+        status_conditions.append(Concept.id.in_(due_subquery))
+    
+    if 'learned' in learning_status_list:
+        # Concepts with lemmas that have user_lemma with next_review_at > current_time or next_review_at IS NULL
+        learned_subquery = (
+            select(Lemma.concept_id)
+            .join(
+                UserLemma,
+                and_(
+                    UserLemma.lemma_id == Lemma.id,
+                    UserLemma.user_id == user_id,
+                    or_(
+                        UserLemma.next_review_at.is_(None),
+                        UserLemma.next_review_at > current_time
+                    )
+                )
+            )
+            .where(
+                Lemma.term.isnot(None),
+                Lemma.term != ""
+            )
+            .distinct()
+        )
+        if visible_language_codes:
+            learned_subquery = learned_subquery.where(Lemma.language_code.in_(visible_language_codes))
+        
+        status_conditions.append(Concept.id.in_(learned_subquery))
+    
+    if not status_conditions:
+        return query
+    
+    # Combine all conditions with OR
+    combined_condition = or_(*status_conditions)
+    return query.where(combined_condition)
+
+
 def build_filtered_query(filter_config: FilterConfig):
     """Build base filtered concept query with all filters applied from FilterConfig.
     
@@ -353,6 +532,8 @@ def build_filtered_query(filter_config: FilterConfig):
     query = apply_has_audio_filter(query, parsed["has_audio"], parsed["visible_language_codes"])
     query = apply_is_complete_filter(query, parsed["is_complete"], parsed["visible_language_codes"])
     query = apply_search_filter(query, parsed["search"], parsed["visible_language_codes"])
+    query = apply_leitner_bins_filter(query, parsed["leitner_bin_list"], parsed["user_id"], parsed["visible_language_codes"])
+    query = apply_learning_status_filter(query, parsed["learning_status_list"], parsed["user_id"], parsed["visible_language_codes"])
     return query
 
 

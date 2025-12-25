@@ -72,6 +72,8 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     'Noun', 'Verb', 'Adjective', 'Adverb', 'Pronoun', 'Preposition', 
     'Conjunction', 'Determiner / Article', 'Interjection', 'Numeral'
   }; // Selected part of speech values (default: all selected)
+  Set<int> _selectedLeitnerBins = {}; // Will be populated with available bins
+  Set<String> _selectedLearningStatus = {'new', 'due', 'learned'}; // All enabled by default
   
   // Concept counts - fetched separately and not affected by search
   int? _totalConceptCount; // Total count of all concepts (doesn't change during search)
@@ -124,6 +126,12 @@ class DictionaryController extends ChangeNotifier implements FilterState {
   bool get showLemmasWithoutTopic => _showLemmasWithoutTopic;
   Set<String> get selectedLevels => _selectedLevels;
   Set<String> get selectedPartOfSpeech => _selectedPartOfSpeech;
+
+  @override
+  Set<int> get selectedLeitnerBins => _selectedLeitnerBins;
+
+  @override
+  Set<String> get selectedLearningStatus => _selectedLearningStatus;
   
   // Set language filter (used for limiting search only, not for filtering concepts)
   void setLanguageCodes(List<String> languageCodes) {
@@ -317,6 +325,8 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     bool? hasNoAudio,
     bool? isComplete,
     bool? isIncomplete,
+    Set<int>? leitnerBins,
+    Set<String>? learningStatus,
   }) {
     bool hasChanges = false;
     
@@ -366,6 +376,14 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     }
     if (isIncomplete != null && _isIncomplete != isIncomplete) {
       _isIncomplete = isIncomplete;
+      hasChanges = true;
+    }
+    if (leitnerBins != null && _selectedLeitnerBins != leitnerBins) {
+      _selectedLeitnerBins = leitnerBins;
+      hasChanges = true;
+    }
+    if (learningStatus != null && _selectedLearningStatus != learningStatus) {
+      _selectedLearningStatus = learningStatus;
       hasChanges = true;
     }
     
@@ -433,6 +451,50 @@ class DictionaryController extends ChangeNotifier implements FilterState {
     }
     // Otherwise return the selected POS
     return _selectedPartOfSpeech.toList();
+  }
+
+  List<int> _availableBins = []; // Available bins from Leitner distribution
+
+  /// Set available bins from Leitner distribution
+  void setAvailableBins(List<int> bins) {
+    _availableBins = bins;
+    // If selected bins is empty, initialize with all bins (1 to maxBins)
+    if (_selectedLeitnerBins.isEmpty) {
+      final maxBins = _currentUser?.leitnerMaxBins ?? 7;
+      _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
+    }
+  }
+
+  /// Get effective leitner_bins filter (comma-separated string, or null if all bins selected)
+  /// Optimization: Returns null if all bins (1 to maxBins) are selected to skip backend joins
+  String? getEffectiveLeitnerBins() {
+    if (_selectedLeitnerBins.isEmpty) return null; // All bins selected (empty set means all)
+    
+    // Get maxBins from user, default to 7
+    final maxBins = _currentUser?.leitnerMaxBins ?? 7;
+    final allBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
+    
+    // If all bins (1 to maxBins) are selected, return null (no filtering)
+    if (_selectedLeitnerBins.length == allBins.length && 
+        _selectedLeitnerBins.containsAll(allBins)) {
+      return null; // All bins selected
+    }
+    
+    final sortedBins = _selectedLeitnerBins.toList()..sort();
+    return sortedBins.join(',');
+  }
+
+  /// Get effective learning_status filter (comma-separated string, or null if all statuses selected)
+  /// Optimization: Returns null if all statuses are selected to skip backend joins
+  String? getEffectiveLearningStatus() {
+    final allStatuses = {'new', 'due', 'learned'};
+    if (_selectedLearningStatus.isEmpty) return null; // All statuses selected (empty set means all)
+    if (_selectedLearningStatus.length == allStatuses.length &&
+        _selectedLearningStatus.containsAll(allStatuses)) {
+      return null; // All statuses selected
+    }
+    final sortedStatuses = _selectedLearningStatus.toList()..sort();
+    return sortedStatuses.join(',');
   }
   
   // Filtered items - when searching, items are already filtered by API
@@ -528,6 +590,12 @@ class DictionaryController extends ChangeNotifier implements FilterState {
         _currentUser = User.fromJson(userMap);
         _sourceLanguageCode = _currentUser!.langNative;
         _targetLanguageCode = _currentUser!.langLearning;
+        
+        // Initialize all bins by default if empty
+        if (_selectedLeitnerBins.isEmpty) {
+          final maxBins = _currentUser!.leitnerMaxBins ?? 7;
+          _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
+        }
       } else {
         // When logged out, default to English
         _currentUser = null;
@@ -557,6 +625,8 @@ class DictionaryController extends ChangeNotifier implements FilterState {
         hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
         hasAudio: getEffectiveHasAudio(), // Pass has_audio filter (1, 0, or null)
         isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
+        leitnerBins: getEffectiveLeitnerBins(), // Pass leitner_bins filter
+        learningStatus: getEffectiveLearningStatus(), // Pass learning_status filter
       );
 
       if (result['success'] == true) {
@@ -621,6 +691,8 @@ class DictionaryController extends ChangeNotifier implements FilterState {
         hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
         hasAudio: getEffectiveHasAudio(), // Pass has_audio filter (1, 0, or null)
         isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
+        leitnerBins: getEffectiveLeitnerBins(), // Pass leitner_bins filter
+        learningStatus: getEffectiveLearningStatus(), // Pass learning_status filter
       );
 
       if (result['success'] == true) {
@@ -830,6 +902,8 @@ class DictionaryController extends ChangeNotifier implements FilterState {
         hasImages: getEffectiveHasImages(), // Pass has_images filter (1, 0, or null)
         hasAudio: getEffectiveHasAudio(), // Pass has_audio filter (1, 0, or null)
         isComplete: getEffectiveIsComplete(), // Pass is_complete filter (1, 0, or null)
+        leitnerBins: getEffectiveLeitnerBins(), // Pass leitner_bins filter
+        learningStatus: getEffectiveLearningStatus(), // Pass learning_status filter
       );
       
       if (result['success'] == true) {

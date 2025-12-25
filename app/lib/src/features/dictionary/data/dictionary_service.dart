@@ -34,6 +34,8 @@ class DictionaryService {
     int? hasImages,
     int? hasAudio,
     int? isComplete,
+    String? leitnerBins, // Comma-separated list of bin numbers, or null if all bins selected
+    String? learningStatus, // Comma-separated list, or null if all statuses selected
   }) =>
       DictionaryQueryService.getDictionary(
         userId: userId,
@@ -51,6 +53,8 @@ class DictionaryService {
         hasImages: hasImages,
         hasAudio: hasAudio,
         isComplete: isComplete,
+        leitnerBins: leitnerBins,
+        learningStatus: learningStatus,
       );
 
   static Future<Map<String, dynamic>> getConceptCountTotal({int? userId}) =>

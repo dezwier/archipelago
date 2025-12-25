@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from app.core.database import get_session
 from app.models.models import User, Language
-from app.schemas.auth import LoginRequest, RegisterRequest, AuthResponse, UserResponse, UpdateUserLanguagesRequest
+from app.schemas.auth import LoginRequest, RegisterRequest, AuthResponse, UserResponse, UpdateUserLanguagesRequest, UpdateLeitnerConfigRequest
 from app.services.user_service import delete_user_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -40,7 +40,13 @@ async def login(
             email=user.email,
             lang_native=user.lang_native,
             lang_learning=user.lang_learning,
-            created_at=user.created_at.isoformat()
+            created_at=user.created_at.isoformat(),
+            full_name=user.full_name,
+            image_url=user.image_url,
+            leitner_max_bins=user.leitner_max_bins,
+            leitner_algorithm=user.leitner_algorithm,
+            leitner_interval_factor=user.leitner_interval_factor,
+            leitner_interval_start=user.leitner_interval_start
         ),
         message="Login successful"
     )
@@ -93,7 +99,13 @@ async def register(
         email=register_data.email,
         password=hashed_password,
         lang_native=register_data.native_language,
-        lang_learning=learning_lang_code
+        lang_learning=learning_lang_code,
+        full_name=register_data.full_name,
+        image_url=None,
+        leitner_max_bins=7,
+        leitner_algorithm='fibonacci',
+        leitner_interval_factor=None,
+        leitner_interval_start=23
     )
     
     session.add(new_user)
@@ -107,7 +119,13 @@ async def register(
             email=new_user.email,
             lang_native=new_user.lang_native,
             lang_learning=new_user.lang_learning,
-            created_at=new_user.created_at.isoformat()
+            created_at=new_user.created_at.isoformat(),
+            full_name=new_user.full_name,
+            image_url=new_user.image_url,
+            leitner_max_bins=new_user.leitner_max_bins,
+            leitner_algorithm=new_user.leitner_algorithm,
+            leitner_interval_factor=new_user.leitner_interval_factor,
+            leitner_interval_start=new_user.leitner_interval_start
         ),
         message="Registration successful"
     )
@@ -160,9 +178,80 @@ async def update_user_languages(
             email=user.email,
             lang_native=user.lang_native,
             lang_learning=user.lang_learning,
-            created_at=user.created_at.isoformat()
+            created_at=user.created_at.isoformat(),
+            full_name=user.full_name,
+            image_url=user.image_url,
+            leitner_max_bins=user.leitner_max_bins,
+            leitner_algorithm=user.leitner_algorithm,
+            leitner_interval_factor=user.leitner_interval_factor,
+            leitner_interval_start=user.leitner_interval_start
         ),
         message="Languages updated successfully"
+    )
+
+
+@router.patch("/update-leitner-config", response_model=AuthResponse)
+async def update_leitner_config(
+    user_id: int,
+    update_data: UpdateLeitnerConfigRequest,
+    session: Session = Depends(get_session)
+):
+    """Update user's Leitner algorithm configuration."""
+    # Find user
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Validate and update max_bins if provided
+    if update_data.leitner_max_bins is not None:
+        if update_data.leitner_max_bins < 5 or update_data.leitner_max_bins > 20:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="leitner_max_bins must be between 5 and 20"
+            )
+        user.leitner_max_bins = update_data.leitner_max_bins
+    
+    # Validate and update algorithm if provided
+    if update_data.leitner_algorithm is not None:
+        if update_data.leitner_algorithm != 'fibonacci':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only 'fibonacci' algorithm is currently supported"
+            )
+        user.leitner_algorithm = update_data.leitner_algorithm
+    
+    # Validate and update interval_start if provided
+    if update_data.leitner_interval_start is not None:
+        if update_data.leitner_interval_start < 1 or update_data.leitner_interval_start > 24:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="leitner_interval_start must be between 1 and 24"
+            )
+        user.leitner_interval_start = update_data.leitner_interval_start
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    return AuthResponse(
+        user=UserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            lang_native=user.lang_native,
+            lang_learning=user.lang_learning,
+            created_at=user.created_at.isoformat(),
+            full_name=user.full_name,
+            image_url=user.image_url,
+            leitner_max_bins=user.leitner_max_bins,
+            leitner_algorithm=user.leitner_algorithm,
+            leitner_interval_factor=user.leitner_interval_factor,
+            leitner_interval_start=user.leitner_interval_start
+        ),
+        message="Leitner configuration updated successfully"
     )
 
 

@@ -57,6 +57,9 @@ class LearnController extends ChangeNotifier implements FilterState {
   bool _hasNoAudio = true;
   bool _isComplete = true;
   bool _isIncomplete = true;
+  Set<int> _selectedLeitnerBins = {}; // Will be populated with available bins
+  Set<String> _selectedLearningStatus = {'new', 'due', 'learned'}; // All enabled by default
+  List<int> _availableBins = []; // Available bins from Leitner distribution
   
   // Getters
   User? get currentUser => _currentUser;
@@ -123,6 +126,12 @@ class LearnController extends ChangeNotifier implements FilterState {
   
   @override
   bool get isIncomplete => _isIncomplete;
+
+  @override
+  Set<int> get selectedLeitnerBins => _selectedLeitnerBins;
+
+  @override
+  Set<String> get selectedLearningStatus => _selectedLearningStatus;
   
   /// Initialize the controller and load user
   Future<void> initialize() async {
@@ -145,11 +154,23 @@ class LearnController extends ChangeNotifier implements FilterState {
       if (userJson != null) {
         final userMap = jsonDecode(userJson) as Map<String, dynamic>;
         _currentUser = User.fromJson(userMap);
+        
+        // Initialize all bins by default if empty
+        if (_selectedLeitnerBins.isEmpty) {
+          final maxBins = _currentUser!.leitnerMaxBins ?? 7;
+          _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
+        }
+        
         notifyListeners();
       }
     } catch (e) {
       // Ignore errors
     }
+  }
+  
+  /// Refresh user data from SharedPreferences (public method)
+  Future<void> refreshUser() async {
+    await _loadCurrentUser();
   }
   
   /// Batch update filters (without reloading cards - cards are only loaded when Generate Workout is pressed)
@@ -166,6 +187,8 @@ class LearnController extends ChangeNotifier implements FilterState {
     bool? hasNoAudio,
     bool? isComplete,
     bool? isIncomplete,
+    Set<int>? leitnerBins,
+    Set<String>? learningStatus,
   }) {
     bool hasChanges = false;
     
@@ -215,6 +238,14 @@ class LearnController extends ChangeNotifier implements FilterState {
     }
     if (isIncomplete != null && _isIncomplete != isIncomplete) {
       _isIncomplete = isIncomplete;
+      hasChanges = true;
+    }
+    if (leitnerBins != null && _selectedLeitnerBins != leitnerBins) {
+      _selectedLeitnerBins = leitnerBins;
+      hasChanges = true;
+    }
+    if (learningStatus != null && _selectedLearningStatus != learningStatus) {
+      _selectedLearningStatus = learningStatus;
       hasChanges = true;
     }
     
@@ -274,6 +305,48 @@ class LearnController extends ChangeNotifier implements FilterState {
     if (!_isComplete && _isIncomplete) return 0; // Only incomplete
     return null; // Both false means include all
   }
+
+  /// Set available bins from Leitner distribution
+  void setAvailableBins(List<int> bins) {
+    _availableBins = bins;
+    // If selected bins is empty, initialize with all bins (1 to maxBins)
+    if (_selectedLeitnerBins.isEmpty) {
+      final maxBins = _currentUser?.leitnerMaxBins ?? 7;
+      _selectedLeitnerBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
+    }
+  }
+
+  /// Get effective leitner_bins filter (comma-separated string, or null if all bins selected)
+  /// Optimization: Returns null if all bins (1 to maxBins) are selected to skip backend joins
+  String? getEffectiveLeitnerBins() {
+    if (_selectedLeitnerBins.isEmpty) return null; // All bins selected (empty set means all)
+    
+    // Get maxBins from user, default to 7
+    final maxBins = _currentUser?.leitnerMaxBins ?? 7;
+    final allBins = Set<int>.from(List.generate(maxBins, (index) => index + 1));
+    
+    // If all bins (1 to maxBins) are selected, return null (no filtering)
+    if (_selectedLeitnerBins.length == allBins.length && 
+        _selectedLeitnerBins.containsAll(allBins)) {
+      return null; // All bins selected
+    }
+    
+    final sortedBins = _selectedLeitnerBins.toList()..sort();
+    return sortedBins.join(',');
+  }
+
+  /// Get effective learning_status filter (comma-separated string, or null if all statuses selected)
+  /// Optimization: Returns null if all statuses are selected to skip backend joins
+  String? getEffectiveLearningStatus() {
+    final allStatuses = {'new', 'due', 'learned'};
+    if (_selectedLearningStatus.isEmpty) return null; // All statuses selected (empty set means all)
+    if (_selectedLearningStatus.length == allStatuses.length &&
+        _selectedLearningStatus.containsAll(allStatuses)) {
+      return null; // All statuses selected
+    }
+    final sortedStatuses = _selectedLearningStatus.toList()..sort();
+    return sortedStatuses.join(',');
+  }
   
   /// Load new cards based on current filters
   Future<void> loadNewCards({
@@ -323,6 +396,8 @@ class LearnController extends ChangeNotifier implements FilterState {
         isComplete: getEffectiveIsComplete(),
         includeWithUserLemma: includeLearnedCards,
         includeWithoutUserLemma: includeNewCards,
+        leitnerBins: getEffectiveLeitnerBins(),
+        learningStatus: getEffectiveLearningStatus(),
       );
       
       _isLoading = false;

@@ -25,6 +25,8 @@ class StatisticsService {
     int? hasAudio,
     int? isComplete,
     String? search,
+    String? leitnerBins, // Comma-separated list of bin numbers, or null if all bins selected
+    String? learningStatus, // Comma-separated list, or null if all statuses selected
   }) async {
     // Create FilterConfig from parameters
     final filterConfig = FilterConfig(
@@ -42,6 +44,8 @@ class StatisticsService {
       hasAudio: hasAudio,
       isComplete: isComplete,
       search: search,
+      leitnerBins: leitnerBins,
+      learningStatus: learningStatus,
     );
     
     // Create request body
@@ -105,6 +109,8 @@ class StatisticsService {
     int? hasAudio,
     int? isComplete,
     String? search,
+    String? leitnerBins, // Comma-separated list of bin numbers, or null if all bins selected
+    String? learningStatus, // Comma-separated list, or null if all statuses selected
   }) async {
     // Create FilterConfig from parameters
     final filterConfig = FilterConfig(
@@ -120,6 +126,8 @@ class StatisticsService {
       hasAudio: hasAudio,
       isComplete: isComplete,
       search: search,
+      leitnerBins: leitnerBins,
+      learningStatus: learningStatus,
     );
     
     // Create request body
@@ -187,6 +195,8 @@ class StatisticsService {
     int? hasAudio,
     int? isComplete,
     String? search,
+    String? leitnerBins, // Comma-separated list of bin numbers, or null if all bins selected
+    String? learningStatus, // Comma-separated list, or null if all statuses selected
   }) async {
     // Create FilterConfig from parameters
     final filterConfig = FilterConfig(
@@ -204,6 +214,8 @@ class StatisticsService {
       hasAudio: hasAudio,
       isComplete: isComplete,
       search: search,
+      leitnerBins: leitnerBins,
+      learningStatus: learningStatus,
     );
     
     // Create request body

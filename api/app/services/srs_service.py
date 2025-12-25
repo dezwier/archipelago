@@ -21,33 +21,36 @@ MAX_BIN = 5
 MIN_BIN = 0
 
 
-def calculate_fibonacci_interval(bin_number: int, first_day_interval: int = 1) -> int:
+def calculate_fibonacci_interval(bin_number: int, interval_start_hours: int) -> int:
     """
-    Calculate review interval in days using Fibonacci sequence.
+    Calculate review interval in hours using Fibonacci sequence.
     
-    Fibonacci intervals: Bin 1 = 1 day, Bin 2 = 1 day, Bin 3 = 2 days, 
-    Bin 4 = 3 days, Bin 5 = 5 days, Bin 6 = 8 days, Bin 7 = 13 days
+    Fibonacci intervals starting from interval_start_hours:
+    Bin 1 = interval_start_hours, Bin 2 = interval_start_hours, 
+    Bin 3 = 2*interval_start_hours, Bin 4 = 3*interval_start_hours, etc.
+    
+    Example with interval_start_hours=23: Bin 1=23h, Bin 2=23h, Bin 3=46h, Bin 4=69h, Bin 5=115h, etc.
     
     Args:
         bin_number: Current bin number (1-based, minimum 1)
-        first_day_interval: First day interval (default 1)
+        interval_start_hours: Starting interval in hours (e.g., 23)
     
     Returns:
-        Interval in days
+        Interval in hours
     """
     # Ensure bin_number is at least 1
     bin_number = max(1, bin_number)
     
-    # Fibonacci sequence: [1, 1, 2, 3, 5, 8, 13, ...]
-    # For bins 1-7: [1, 1, 2, 3, 5, 8, 13]
+    # Fibonacci sequence starting from [interval_start_hours, interval_start_hours]
+    # For bins 1-7 with start=23: [23, 23, 46, 69, 115, 184, 299]
     if bin_number == 1:
-        return first_day_interval
+        return interval_start_hours
     elif bin_number == 2:
-        return first_day_interval
+        return interval_start_hours
     
-    # Generate Fibonacci sequence starting from [1, 1]
-    fib_prev = first_day_interval  # F(1) = 1
-    fib_curr = first_day_interval  # F(2) = 1
+    # Generate Fibonacci sequence starting from [interval_start_hours, interval_start_hours]
+    fib_prev = interval_start_hours  # F(1) = interval_start_hours
+    fib_curr = interval_start_hours  # F(2) = interval_start_hours
     
     # Calculate up to the requested bin
     for _ in range(3, bin_number + 1):
@@ -113,9 +116,9 @@ def update_srs_for_lesson(
     session: Session,
     user_lemma: UserLemma,
     lesson_id: int,
-    first_day_interval: int = 1,
     interval_style: str = 'fibonacci',
-    max_bins: int = 7
+    max_bins: int = 7,
+    interval_start_hours: int = 23
 ) -> None:
     """
     Update UserLemma SRS fields based on exercises in a specific lesson.
@@ -136,9 +139,9 @@ def update_srs_for_lesson(
         session: Database session
         user_lemma: UserLemma instance to update
         lesson_id: ID of the lesson to process
-        first_day_interval: First day interval (default 1)
         interval_style: Interval style ('fibonacci' or other, default 'fibonacci')
         max_bins: Maximum bin number (default 7)
+        interval_start_hours: Starting interval in hours for bin 1 (default 23)
     """
     # Get all exercises for this user_lemma in the specific lesson
     lesson_exercises = session.exec(
@@ -171,10 +174,10 @@ def update_srs_for_lesson(
     is_new = previous_exercises is None and user_lemma.leitner_bin == 0
     
     if is_new:
-        # First occurrence: hardcode with bin=1, last_review_time, next_review_at = last_review_time + 23h
+        # First occurrence: hardcode with bin=1, last_review_time, next_review_at = last_review_time + interval_start_hours
         user_lemma.leitner_bin = 1
         user_lemma.last_review_time = last_exercise_end_time
-        user_lemma.next_review_at = last_exercise_end_time + timedelta(hours=23)
+        user_lemma.next_review_at = last_exercise_end_time + timedelta(hours=interval_start_hours)
         return
     
     # Lemma already exists: check if we should update
@@ -218,23 +221,24 @@ def update_srs_for_lesson(
     
     # Calculate next_review_at based on bin and fibonacci
     if interval_style == 'fibonacci':
-        interval_days = calculate_fibonacci_interval(new_bin, first_day_interval)
+        interval_hours = calculate_fibonacci_interval(new_bin, interval_start_hours)
     else:
-        # Fallback to old Leitner intervals if needed
+        # Fallback to old Leitner intervals if needed (convert days to hours)
         bin_index = max(0, min(5, new_bin))
         interval_days = LEITNER_INTERVALS[bin_index]
+        interval_hours = interval_days * 24  # Convert days to hours
     
-    # Use 23 hours per day to account for users doing exercises around the same time each day
-    user_lemma.next_review_at = last_exercise_end_time + timedelta(hours=interval_days * 23)
+    # Use fibonacci interval directly in hours
+    user_lemma.next_review_at = last_exercise_end_time + timedelta(hours=interval_hours)
 
 
 def recompute_user_lemma_srs(
     session: Session,
     user_id: int,
     lemma_id: Optional[int] = None,
-    first_day_interval: int = 1,
     interval_style: str = 'fibonacci',
-    max_bins: int = 7
+    max_bins: int = 7,
+    interval_start_hours: int = 23
 ) -> int:
     """
     Recompute UserLemma SRS fields (last_review_time, leitner_bin, next_review_at)
@@ -245,7 +249,7 @@ def recompute_user_lemma_srs(
     - For each lesson, retrieves unique lemmas and their exercises
     - For each lemma in the lesson:
       - If it's the first occurrence of the lemma: creates/updates with bin=1, 
-        last_review_time=last exercise end_time, next_review_at=last_review_time+23h
+        last_review_time=last exercise end_time, next_review_at=last_review_time+interval_start_hours
       - If lemma already exists: only updates if last_exercise_end_time >= next_review_at
         - Updates last_review_time to last exercise end_time (regardless of result)
         - Updates bin: -2 if any fail, +0 if any hint (no fail), +1 if all success
@@ -255,9 +259,9 @@ def recompute_user_lemma_srs(
         session: Database session
         user_id: User ID to recompute SRS for
         lemma_id: Optional lemma ID to filter by. If provided, only processes exercises for that lemma.
-        first_day_interval: First day interval (default 1)
         interval_style: Interval style ('fibonacci' or other, default 'fibonacci')
         max_bins: Maximum bin number (default 7)
+        interval_start_hours: Starting interval in hours for bin 1 (default 23)
     
     Returns:
         Number of UserLemma records processed/updated
@@ -352,15 +356,16 @@ def recompute_user_lemma_srs(
             is_first_occurrence = lemma_id_in_lesson not in seen_lemma_ids
             
             if is_first_occurrence:
-                # First occurrence: hardcode with bin=1, last_review_time, next_review_at = last_review_time + 23h
+                # First occurrence: hardcode with bin=1, last_review_time, next_review_at = last_review_time + interval_start_hours
+                next_review = last_exercise_end_time + timedelta(hours=interval_start_hours)
                 logger.info(
                     f"  Lesson {lesson.id}, Lemma {lemma_id_in_lesson}: First occurrence - "
                     f"initializing with bin=1, last_review_time={last_exercise_end_time}, "
-                    f"next_review_at={last_exercise_end_time + timedelta(hours=23)}"
+                    f"next_review_at={next_review}"
                 )
                 user_lemma.leitner_bin = 1
                 user_lemma.last_review_time = last_exercise_end_time
-                user_lemma.next_review_at = last_exercise_end_time + timedelta(hours=23)
+                user_lemma.next_review_at = next_review
                 seen_lemma_ids.add(lemma_id_in_lesson)
                 processed_count += 1
             else:
@@ -431,20 +436,21 @@ def recompute_user_lemma_srs(
                 
                 # Calculate next_review_at based on bin and fibonacci
                 if interval_style == 'fibonacci':
-                    interval_days = calculate_fibonacci_interval(new_bin, first_day_interval)
+                    interval_hours = calculate_fibonacci_interval(new_bin, interval_start_hours)
                 else:
-                    # Fallback to old Leitner intervals if needed
+                    # Fallback to old Leitner intervals if needed (convert days to hours)
                     bin_index = max(0, min(5, new_bin))
                     interval_days = LEITNER_INTERVALS[bin_index]
+                    interval_hours = interval_days * 24  # Convert days to hours
                 
-                # Use 23 hours per day to account for users doing exercises around the same time each day
-                new_next_review_at = last_exercise_end_time + timedelta(hours=interval_days * 23)
+                # Use fibonacci interval directly in hours
+                new_next_review_at = last_exercise_end_time + timedelta(hours=interval_hours)
                 user_lemma.next_review_at = new_next_review_at
                 
                 logger.info(
                     f"  Lesson {lesson.id}, Lemma {lemma_id_in_lesson}: Updated - bin={bin_change}, "
                     f"last_review_time={last_exercise_end_time}, "
-                    f"next_review_at={new_next_review_at} (interval={interval_days} days)"
+                    f"next_review_at={new_next_review_at} (interval={interval_hours} hours)"
                 )
                 processed_count += 1
     

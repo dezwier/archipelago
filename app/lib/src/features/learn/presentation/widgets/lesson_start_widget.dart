@@ -22,6 +22,10 @@ class LessonStartWidget extends StatefulWidget {
   final int? userId;
   final VoidCallback? onRefreshLeitner;
   final bool isLoadingLeitner;
+  final int? maxBins;
+  final String? algorithm;
+  final int? intervalStartHours;
+  final VoidCallback? onConfigUpdated;
 
   const LessonStartWidget({
     super.key,
@@ -42,6 +46,10 @@ class LessonStartWidget extends StatefulWidget {
     this.userId,
     this.onRefreshLeitner,
     this.isLoadingLeitner = false,
+    this.maxBins,
+    this.algorithm,
+    this.intervalStartHours,
+    this.onConfigUpdated,
   });
 
   @override
@@ -404,6 +412,10 @@ class _LessonStartWidgetState extends State<LessonStartWidget> {
                 languages: widget.languages,
                 userId: widget.userId!,
                 onRefresh: widget.onRefreshLeitner,
+                maxBins: widget.maxBins ?? 7,
+                algorithm: widget.algorithm ?? 'fibonacci',
+                intervalStartHours: widget.intervalStartHours ?? 23,
+                onConfigUpdated: widget.onConfigUpdated,
               )
             else if (widget.isLoadingLeitner)
               Container(
