@@ -76,9 +76,10 @@ class LanguageVisibilityManager {
   }
 
   List<String> getVisibleLanguageCodes() {
-    return _languageVisibility.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
+    // Return languages in the order they were added to visibility (languagesToShow)
+    // This preserves the order in which languages were enabled, which is important for sorting
+    return _languagesToShow
+        .where((langCode) => _languageVisibility[langCode] == true)
         .toList();
   }
 }

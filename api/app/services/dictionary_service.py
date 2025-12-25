@@ -78,10 +78,13 @@ def apply_recent_sorting(query, visible_language_codes: Optional[List[str]]):
 
 
 def apply_alphabetical_sorting(query, visible_language_codes: Optional[List[str]]):
-    """Apply alphabetical sorting."""
+    """Apply alphabetical sorting.
+    
+    Always uses the first visible language for sorting when available.
+    If no visible languages are specified, falls back to Concept.term.
+    """
     if visible_language_codes and len(visible_language_codes) > 0:
-        # Use a subquery to get one lemma per concept for the first visible language
-        # This prevents duplicates when a concept has multiple lemmas for the same language
+        # Always use the first visible language for alphabetical sorting
         first_lang = visible_language_codes[0]
         lemma_sort_subquery = (
             select(
@@ -114,7 +117,8 @@ def apply_alphabetical_sorting(query, visible_language_codes: Optional[List[str]
             )
         )
     else:
-        # Sort by concept.term
+        # No visible languages specified - fallback to concept.term
+        # This should rarely happen as visible languages should always be set
         return query.order_by(func.lower(Concept.term).asc())
 
 

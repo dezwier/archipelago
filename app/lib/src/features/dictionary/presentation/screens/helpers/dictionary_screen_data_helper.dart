@@ -115,17 +115,15 @@ class DictionaryScreenDataHelper {
 
   void handleControllerChanged(List<Language> allLanguages) {
     // Update language visibility defaults when user data is loaded
+    // Only initialize if languagesToShow is empty (first time or after hot restart)
+    // Once user has made a selection, respect it - don't override with native/target
     if (controller.currentUser != null && allLanguages.isNotEmpty) {
       final sourceCode = controller.sourceLanguageCode;
       final targetCode = controller.targetLanguageCode;
       
-      // Always initialize if we have user data and languages (handles hot restart)
-      // Check if we need to initialize (either empty or doesn't match current user languages)
-      final needsInitialization = languageVisibilityManager.languagesToShow.isEmpty ||
-          (sourceCode != null && !languageVisibilityManager.languagesToShow.contains(sourceCode)) ||
-          (targetCode != null && !languageVisibilityManager.languagesToShow.contains(targetCode));
-      
-      if (needsInitialization && (sourceCode != null || targetCode != null)) {
+      // Only initialize if empty - don't override user's visibility selection
+      // Native/target languages are only used as defaults when opening the app
+      if (languageVisibilityManager.languagesToShow.isEmpty && (sourceCode != null || targetCode != null)) {
         languageVisibilityManager.initializeForLoggedInUser(
           allLanguages,
           sourceCode,
@@ -150,9 +148,8 @@ class DictionaryScreenDataHelper {
       }
     } else if (controller.currentUser == null && allLanguages.isNotEmpty) {
       // When logged out, default to English only
-      // Always initialize if empty (handles hot restart)
-      if (languageVisibilityManager.languagesToShow.isEmpty || 
-          !languageVisibilityManager.languagesToShow.contains('en')) {
+      // Only initialize if empty (handles hot restart)
+      if (languageVisibilityManager.languagesToShow.isEmpty) {
         languageVisibilityManager.initializeForLoggedOutUser(allLanguages);
         // Defer controller updates to avoid calling notifyListeners() during build
         WidgetsBinding.instance.addPostFrameCallback((_) {

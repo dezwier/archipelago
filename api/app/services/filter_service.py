@@ -6,9 +6,8 @@ from sqlmodel import select, func, or_
 from sqlalchemy import and_
 from typing import Optional, List
 from datetime import datetime
-from app.models.models import Concept, Lemma, CEFRLevel
+from app.models.models import Concept, Lemma, CEFRLevel, ConceptTopic
 from app.models.user_lemma import UserLemma
-from app.models.concept_topic import ConceptTopic
 from app.schemas.filter import FilterConfig
 from app.schemas.utils import normalize_part_of_speech
 
@@ -165,23 +164,30 @@ def apply_lemmas_phrases_filter(query, include_lemmas: bool, include_phrases: bo
 
 
 def apply_topic_filter(query, topic_id_list: Optional[List[int]], include_without_topic: bool):
-    """Apply topic_ids filter to concept query using ConceptTopic junction table.
+    """Apply topic_ids filter to concept query.
     
-    Note: distinct() is NOT applied here to avoid issues with subsequent joins.
-    It should be applied at the end of the query building process.
+    Uses ConceptTopic junction table to filter concepts by topic(s).
+    Since Concept has a many-to-many relationship with Topic through ConceptTopic,
+    we use a subquery to find concepts that have ConceptTopic entries matching the criteria.
     """
     if topic_id_list is not None and len(topic_id_list) > 0:
-        # When filtering by topic(s), join ConceptTopic and filter by topic IDs
+        # When filtering by topic(s), only show concepts with those topic IDs
         # Always exclude concepts without a topic when topic_ids are provided
-        query = query.join(ConceptTopic, Concept.id == ConceptTopic.concept_id)
-        return query.where(ConceptTopic.topic_id.in_(topic_id_list))
+        topic_subquery = (
+            select(ConceptTopic.concept_id)
+            .where(ConceptTopic.topic_id.in_(topic_id_list))
+            .distinct()
+        )
+        return query.where(Concept.id.in_(topic_subquery))
     else:
         # topic_id_list is None/empty (all topics selected in frontend)
         if not include_without_topic:
             # Exclude concepts without a topic (only show concepts with a topic)
-            # Join ConceptTopic to find concepts that have at least one topic
-            query = query.join(ConceptTopic, Concept.id == ConceptTopic.concept_id)
-            return query
+            concepts_with_topics_subquery = (
+                select(ConceptTopic.concept_id)
+                .distinct()
+            )
+            return query.where(Concept.id.in_(concepts_with_topics_subquery))
         # If include_without_topic is True, show ALL concepts (no topic filter)
         return query
 
